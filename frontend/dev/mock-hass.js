@@ -199,6 +199,16 @@ const hass = {
     console.log("callWS", msg);
     if (msg.type === "laeutwerk/preview") return preview;
     if (msg.type === "laeutwerk/rules/list") return { rules };
+    if (msg.type === "laeutwerk/templates/list") {
+      return {
+        templates: [
+          { id: "builtin_muell", name: "Müll rausstellen", description: "Abfallkalender: am Vorabend erinnern, bis die Tonne draußen steht.", builtin: true, rule: { name: "Müll rausstellen", icon: "mdi:trash-can-outline", color: "#4ad295", reminders: [{ at: "-1d 18:00" }] } },
+          { id: "builtin_geburtstag", name: "Geburtstage", description: "Geburtstagskalender: eine Woche vorher und am Tag selbst.", builtin: true, rule: { name: "Geburtstage", icon: "mdi:cake-variant-outline", color: "#c58cff", reminders: [{ at: "-7d 09:00" }] } },
+          { id: "builtin_wartung", name: "Wartung", description: "Alle 90 Tage nach dem letzten Erledigen, täglich bis erledigt.", builtin: true, rule: { name: "Filter tauschen", icon: "mdi:air-filter", color: "#6fa8ff", interval: { every: 90 }, reminders: [{ at: "18:00" }] } },
+          { id: "user_tonnen", name: "Meine Tonnen", description: "", builtin: false, rule: { name: "Tonnen", reminders: [{ at: "-1d 17:00" }] } },
+        ],
+      };
+    }
     if (msg.type === "laeutwerk/history") {
       return {
         history: [
@@ -221,6 +231,22 @@ await customElements.whenDefined("laeutwerk-card");
 card.setConfig({ type: "custom:laeutwerk-card", compact: page === "compact", ...(page === "rule" ? { view: "rule", rule: "muell" } : {}) });
 card.hass = hass;
 document.body.dataset.ready = "1";
+if (page === "templates") {
+  await new Promise((r) => setTimeout(r, 50));
+  card._picking = true;
+}
+if (page === "advanced") {
+  muell.escalation = [{ after: "2h" }, { after: "21:30" }];
+  muell.assignee = { persons: ["person.steven", "person.anna"], rotation: "per_event" };
+  muell.activation = { conditions: [], match: "all", season: { from: "04-01", to: "11-30" } };
+  muell.status.assignee_stats = { Steven: 5, Anna: 3 };
+  await new Promise((r) => setTimeout(r, 50));
+  card._editing = muell;
+  await card.updateComplete;
+  const editor = card.shadowRoot.querySelector("laeutwerk-rule-editor");
+  await editor.updateComplete;
+  editor.shadowRoot.querySelectorAll("section")[6]?.scrollIntoView();
+}
 if (page === "editor" || page === "signal") {
   await new Promise((r) => setTimeout(r, 50));
   card._editing = muell;

@@ -181,7 +181,12 @@ export function renderTemplate(
 export function availableVariables(rule: Rule, opportunity = false): string[] {
   const fixed = ["wann", "titel", "rest", "datum", "uhrzeit", "ort", "beschreibung", "kalender"];
   const columns = rule.filter.keywords.columns.flatMap((c) => [c, `${c}n`]);
-  return [...columns, ...fixed, ...(opportunity ? ["person"] : [])];
+  return [
+    ...columns,
+    ...fixed,
+    ...(rule.assignee?.persons.length ? ["zustaendig"] : []),
+    ...(opportunity ? ["person"] : []),
+  ];
 }
 
 /** "blinkt bei Gelegenheit · max. 1× · nicht 0–10 Uhr". */
@@ -190,15 +195,17 @@ export function signalSummary(signal: Signal, l: Localizer): string {
   bits.push(signal.when === "now" ? l.t("s_now") : l.t("s_opportunity"));
   if (signal.type === "notify") {
     const who =
-      signal.audience === "all"
-        ? l.t("audience_all")
-        : signal.audience === "present"
-          ? l.t("audience_present")
-          : signal.audience === "persons"
-            ? (signal.persons ?? []).map((p) => p.replace("person.", "")).join(", ")
-            : (signal.targets ?? [])
-                .map((t) => t.replace(/^notify\.(mobile_app_)?/, ""))
-                .join(", ");
+      signal.audience === "assignee"
+        ? l.t("audience_assignee")
+        : signal.audience === "all"
+          ? l.t("audience_all")
+          : signal.audience === "present"
+            ? l.t("audience_present")
+            : signal.audience === "persons"
+              ? (signal.persons ?? []).map((p) => p.replace("person.", "")).join(", ")
+              : (signal.targets ?? [])
+                  .map((t) => t.replace(/^notify\.(mobile_app_)?/, ""))
+                  .join(", ");
     if (who) bits.push(l.t("s_to", { who }));
   }
   if (signal.type === "light_signal") {
@@ -206,6 +213,7 @@ export function signalSummary(signal: Signal, l: Localizer): string {
       `${l.t(signal.pattern?.effect === "pulse" ? "effect_pulse" : "effect_blink")} ${signal.pattern?.count ?? 3}×`,
     );
   }
+  if (signal.stage) bits.push(l.t("stage_n", { n: signal.stage }));
   if (signal.limit?.per_reminder) bits.push(l.t("s_max", { n: signal.limit.per_reminder }));
   for (const quiet of signal.quiet ?? []) {
     bits.push(l.t("s_quiet", { from: shortClock(quiet.from), to: shortClock(quiet.to) }));
@@ -275,7 +283,36 @@ export function emptyRule(): Rule {
     repeat: "none",
     bundle: true,
     expire: "event_end",
+    interval: null,
+    activation: null,
+    on_done: [],
+    assignee: null,
+    escalation: [],
   };
+}
+
+/** A new rule from a template: template values over the empty rule. */
+export function ruleFromTemplate(template: { rule: Partial<Rule> }): Rule {
+  const base = emptyRule();
+  const rule = JSON.parse(JSON.stringify(template.rule)) as Partial<Rule>;
+  return {
+    ...base,
+    ...rule,
+    filter: {
+      all_day: rule.filter?.all_day ?? false,
+      keywords: {
+        columns: rule.filter?.keywords?.columns ?? [],
+        rows: rule.filter?.keywords?.rows ?? [],
+      },
+    },
+    sources: rule.sources ?? [],
+    enabled: true,
+  };
+}
+
+/** Whether a rule can be saved (name, a time, and a source or an interval). */
+export function ruleComplete(rule: Rule): boolean {
+  return !!(rule.name.trim() && rule.reminders.length && (rule.sources.length || rule.interval));
 }
 
 /** Rename a keyword column in the table and wherever signals refer to it. */

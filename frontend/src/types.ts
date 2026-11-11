@@ -34,7 +34,8 @@ export interface Signal {
   quiet?: QuietTime[];
   // notify
   targets?: string[];
-  audience?: "all" | "present" | "persons";
+  audience?: "all" | "present" | "persons" | "assignee";
+  stage?: number;
   persons?: string[];
   title?: string;
   title_plural?: string;
@@ -83,6 +84,9 @@ export interface Reminder {
   acknowledged_via: string | null;
   snoozed_until: string | null;
   next_reminder_at?: string | null;
+  assignee?: string | null;
+  assignee_name?: string | null;
+  stage?: number;
   expires_at?: string;
 }
 
@@ -113,6 +117,8 @@ export interface UpcomingEvent {
 }
 
 export interface RuleStatus {
+  active?: boolean;
+  assignee_stats?: Record<string, number>;
   state: ReminderState | "inactive";
   current: string | null;
   reminders: Reminder[];
@@ -135,7 +141,26 @@ export interface Rule {
   repeat: "none" | { every: number | string; max?: number };
   bundle: boolean;
   expire: string;
+  interval?: { every: number | string; start?: string } | null;
+  activation?: {
+    conditions: HaConfig[];
+    match?: "all" | "any";
+    season?: { from: string; to: string };
+  } | null;
+  on_done?: HaConfig[];
+  assignee?: { persons: string[]; rotation?: Rotation } | null;
+  escalation?: { after: string }[];
   status?: RuleStatus;
+}
+
+export type Rotation = "fixed" | "weekly" | "per_event" | "after_last";
+
+export interface RuleTemplate {
+  id: string;
+  name: string;
+  description: string;
+  builtin: boolean;
+  rule: Partial<Rule>;
 }
 
 export interface RuleEvent {

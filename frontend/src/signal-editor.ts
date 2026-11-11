@@ -193,7 +193,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
       <div class="panel">
         <div class="step">${l.t("sig_limits")}</div>
-        ${this._limits()}
+        ${this._stage()} ${this._limits()}
       </div>
 
       ${this._footer()}
@@ -253,7 +253,9 @@ export class LaeutwerkSignalEditor extends LitElement {
               audience: ((e.target as HTMLSelectElement).value || undefined) as Signal["audience"],
             })}
         >
-          ${(["", "all", "present", "persons"] as const).map(
+          ${(
+            ["", "all", "present", "persons", ...(this.rule.assignee ? ["assignee"] : [])] as const
+          ).map(
             (a) =>
               html`<option value=${a} ?selected=${(s.audience ?? "") === a}>
                 ${l.t(a ? (`audience_${a}` as StringKey) : "audience_none")}
@@ -497,6 +499,28 @@ export class LaeutwerkSignalEditor extends LitElement {
           html`<button class="chip" @click=${() => this._insertVariable(name)}>{${name}}</button>`,
       )}
     </div>`;
+  }
+
+  private _stage(): TemplateResult | typeof nothing {
+    const stages = this.rule.escalation?.length ?? 0;
+    if (!stages) return nothing;
+    const l = this._l;
+    return html`<label class="field"
+      >${l.t("stage")}
+      <select
+        @change=${(e: Event) => {
+          const stage = Number((e.target as HTMLSelectElement).value);
+          this._set({ stage: stage || undefined });
+        }}
+      >
+        ${Array.from({ length: stages + 1 }, (_, n) => n).map(
+          (n) =>
+            html`<option value=${n} ?selected=${(this.signal.stage ?? 0) === n}>
+              ${n ? `${l.t("stage_n", { n })} · ${this.rule.escalation![n - 1].after}` : l.t("stage_0")}
+            </option>`,
+        )}
+      </select>
+    </label>`;
   }
 
   private _limits(): TemplateResult {

@@ -6,7 +6,6 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { property, state } from "lit/decorators.js";
 import {
   buildOverview,
-  emptyRule,
   finishedLine,
   formatDate,
   openStatus,
@@ -21,6 +20,7 @@ import { defineElements } from "./register";
 import { applyRuleEvent } from "./rule-events";
 import { LaeutwerkRuleEditor } from "./rule-editor";
 import { LaeutwerkSignalEditor } from "./signal-editor";
+import { LaeutwerkTemplatePicker } from "./template-picker";
 import { shared, tokens } from "./styles";
 import type {
   HistoryEntry,
@@ -48,6 +48,8 @@ export class LaeutwerkCard extends LitElement {
   @state() private _actionError?: string;
   /** Rule open in the editor (new rule: without id). */
   @state() private _editing?: Rule;
+  /** Template picker for a new rule is open. */
+  @state() private _picking = false;
   @state() private _now = new Date();
   /** History of the rule shown with view: rule. */
   @state() private _history?: HistoryEntry[];
@@ -236,6 +238,20 @@ export class LaeutwerkCard extends LitElement {
       </ha-card>`;
     }
     if (!this._rules) return html`<ha-card><div class="message">${l.t("loading")}</div></ha-card>`;
+    if (this._picking) {
+      return html`<ha-card>
+        <laeutwerk-template-picker
+          .hass=${this.hass}
+          .localize=${l}
+          @pick=${(e: CustomEvent<{ rule: Rule }>) => {
+            this._picking = false;
+            this._editing = e.detail.rule;
+          }}
+          @imported=${() => (this._picking = false)}
+          @cancel=${() => (this._picking = false)}
+        ></laeutwerk-template-picker>
+      </ha-card>`;
+    }
     if (this._editing) {
       return html`<ha-card>
         <laeutwerk-rule-editor
@@ -289,7 +305,7 @@ export class LaeutwerkCard extends LitElement {
             ? html`<button
                 class="mini"
                 aria-label=${l.t("new_rule")}
-                @click=${() => (this._editing = emptyRule())}
+                @click=${() => (this._picking = true)}
               >
                 <ha-icon icon="mdi:plus"></ha-icon>
               </button>`
@@ -359,7 +375,14 @@ export class LaeutwerkCard extends LitElement {
         ${this._icon(rule)}
         <div class="grow text">
           <div class="name">${reminderTitle(reminder)}</div>
-          <div class="sub">${rule.name} · ${relativeDay(reminder.start, this._now, l, tz)}</div>
+          <div class="sub">
+            ${rule.name} ·
+            ${relativeDay(reminder.start, this._now, l, tz)}${
+              reminder.assignee_name
+                ? html` · ${l.t("responsible", { name: reminder.assignee_name })}`
+                : nothing
+            }
+          </div>
         </div>
       </div>
       <div class="row meta">
@@ -427,11 +450,13 @@ export class LaeutwerkCard extends LitElement {
                   ${
                     errors
                       ? l.t("rule_error")
-                      : rule.enabled
-                        ? rule.status?.next_event
-                          ? `${rule.status.next_event.titles.join(" + ")} · ${relativeDay(rule.status.next_event.start, this._now, l, this._tz)}`
-                          : ""
-                        : l.t("rule_off")
+                      : rule.enabled && rule.status?.active === false
+                        ? l.t("rule_inactive")
+                        : rule.enabled
+                          ? rule.status?.next_event
+                            ? `${rule.status.next_event.titles.join(" + ")} · ${relativeDay(rule.status.next_event.start, this._now, l, this._tz)}`
+                            : ""
+                          : l.t("rule_off")
                   }
                 </span>
               </span>
@@ -706,6 +731,7 @@ void defineElements([
   ["laeutwerk-signal-editor", LaeutwerkSignalEditor],
   ["laeutwerk-field", LaeutwerkField],
   ["laeutwerk-card-editor", LaeutwerkCardEditor],
+  ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
 ]);
 
 declare global {

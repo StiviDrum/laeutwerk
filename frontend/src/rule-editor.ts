@@ -12,6 +12,7 @@ import {
   formatDate,
   relativeDayTime,
   renameColumn,
+  ruleComplete,
   signalSummary,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -23,6 +24,7 @@ import type {
   KeywordRow,
   MatchMode,
   PreviewResult,
+  Rotation,
   Rule,
   Signal,
 } from "./types";
@@ -55,6 +57,8 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _timeAmount = 2;
   @state() private _timeCustom = "";
   @state() private _confirmDelete = false;
+  @state() private _exportYaml?: string;
+  @state() private _notice?: string;
   private _previewTimer?: number;
 
   protected willUpdate(changed: PropertyValues): void {
@@ -125,6 +129,36 @@ export class LaeutwerkRuleEditor extends LitElement {
       this._error = this._l.t("failed", { error: errorText(err) });
     } finally {
       this._saving = false;
+    }
+  }
+
+  private async _saveTemplate(): Promise<void> {
+    if (!this.hass) return;
+    const rule = clone(this._rule);
+    delete rule.id;
+    rule.filter.keywords.rows = rule.filter.keywords.rows.filter((r) => r.match.trim());
+    try {
+      await this.hass.callWS({
+        type: "laeutwerk/templates/save",
+        name: rule.name,
+        rule,
+      });
+      this._notice = this._l.t("template_saved");
+    } catch (err) {
+      this._error = this._l.t("failed", { error: errorText(err) });
+    }
+  }
+
+  private async _export(): Promise<void> {
+    if (!this.hass || !this._rule.id) return;
+    try {
+      const res = await this.hass.callWS<{ yaml: string }>({
+        type: "laeutwerk/rules/export",
+        rule_ids: [this._rule.id],
+      });
+      this._exportYaml = res.yaml;
+    } catch (err) {
+      this._error = this._l.t("failed", { error: errorText(err) });
     }
   }
 
@@ -255,15 +289,36 @@ export class LaeutwerkRuleEditor extends LitElement {
       ></laeutwerk-signal-editor>`;
     }
     const l = this._l;
-    const valid =
-      this._rule.name.trim() && this._rule.sources.length && this._rule.reminders.length;
+    const valid = ruleComplete(this._rule);
     return html`<div class="page">
       <div class="separator">
         ${this._rule.id ? l.t("edit_rule") : l.t("new_rule")}<span class="line"></span>
       </div>
       ${this._stepCalendar()} ${this._stepEvents()} ${this._stepWhen()} ${this._stepSignals()}
-      ${this._stepAck()} ${this._stepDetails()}
+      ${this._stepAck()} ${this._stepDetails()} ${this._stepAdvanced()}
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+      ${
+        this._exportYaml !== undefined
+          ? html`<div class="panel">
+              <div class="step">${l.t("export")}</div>
+              <div class="hint">${l.t("export_hint")}</div>
+              <textarea class="yaml" readonly .value=${this._exportYaml}></textarea>
+            </div>`
+          : nothing
+      }
+      <div class="row extra">
+        <button class="chip" ?disabled=${!valid} @click=${this._saveTemplate}>
+          <ha-icon icon="mdi:content-save-outline"></ha-icon>${l.t("save_as_template")}
+        </button>
+        ${
+          this._rule.id
+            ? html`<button class="chip" @click=${this._export}>
+                <ha-icon icon="mdi:export"></ha-icon>${l.t("export")}
+              </button>`
+            : nothing
+        }
+        <span class="hint grow">${this._notice ?? ""}</span>
+      </div>
       ${
         this._rule.id
           ? html`<button class="pill danger wide" @click=${this._delete}>
@@ -325,14 +380,60 @@ export class LaeutwerkRuleEditor extends LitElement {
         <laeutwerk-field
           .hass=${this.hass}
           .localize=${l}
-          .label=${l.t("calendars")}
-          .selector=${{ entity: { domain: "calendar", multiple: true } }}
+          .label=${l.t("sources")}
+          .selector=${{
+            entity: {
+              domain: ["calendar", "todo", "date", "datetime", "input_datetime", "sensor"],
+              multiple: true,
+            },
+          }}
           .value=${r.sources}
           @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
             const value = e.detail.value;
             this._update({ sources: Array.isArray(value) ? value : value ? [value] : [] }, true);
           }}
         ></laeutwerk-field>
+        <div class="hint">${l.t("sources_hint")}</div>
+        ${this._toggle(l.t("interval"), !!r.interval, (v) =>
+          this._update({ interval: v ? { every: 90 } : null }),
+        )}
+        ${
+          r.interval
+            ? html`<div class="hint">${l.t("interval_hint")}</div>
+                <div class="row">
+                  <label class="field grow"
+                    >${l.t("interval_days")}
+                    <input
+                      type="number"
+                      min="1"
+                      .value=${String(r.interval.every)}
+                      @change=${(e: Event) =>
+                        this._update({
+                          interval: {
+                            ...r.interval!,
+                            every: Number((e.target as HTMLInputElement).value),
+                          },
+                        })}
+                    />
+                  </label>
+                  <label class="field grow"
+                    >${l.t("interval_start")}
+                    <input
+                      type="date"
+                      .value=${r.interval.start ?? ""}
+                      @change=${(e: Event) => {
+                        const start = (e.target as HTMLInputElement).value;
+                        const next: { every: number | string; start?: string } = {
+                          every: r.interval!.every,
+                        };
+                        if (start) next.start = start;
+                        this._update({ interval: next });
+                      }}
+                    />
+                  </label>
+                </div>`
+            : nothing
+        }
       `,
     );
   }
@@ -819,6 +920,196 @@ export class LaeutwerkRuleEditor extends LitElement {
     );
   }
 
+  private _stepAdvanced(): TemplateResult {
+    const l = this._l;
+    const r = this._rule;
+    const assignee = r.assignee;
+    const activation = r.activation;
+    const stages = r.escalation ?? [];
+    const stats = Object.entries(this.rule.status?.assignee_stats ?? {});
+    const setActivation = (changes: Partial<NonNullable<Rule["activation"]>> | null) => {
+      if (changes === null) {
+        this._update({ activation: null }, true);
+        return;
+      }
+      const next = { conditions: [], match: "all" as const, ...activation, ...changes };
+      if (!next.season) delete next.season;
+      this._update({ activation: next }, true);
+    };
+    return this._step(
+      7,
+      "step_advanced",
+      html`
+        <div class="sublabel">${l.t("assignee")}</div>
+        <laeutwerk-field
+          .hass=${this.hass}
+          .localize=${l}
+          .selector=${{ entity: { domain: "person", multiple: true } }}
+          .value=${assignee?.persons ?? []}
+          @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
+            const value = e.detail.value;
+            const persons = Array.isArray(value) ? value : value ? [value] : [];
+            this._update({
+              assignee: persons.length
+                ? { persons, rotation: assignee?.rotation ?? "fixed" }
+                : null,
+            });
+          }}
+        ></laeutwerk-field>
+        ${
+          assignee
+            ? html`<label class="field"
+                  >${l.t("rotation")}
+                  <select
+                    @change=${(e: Event) =>
+                      this._update({
+                        assignee: {
+                          ...assignee,
+                          rotation: (e.target as HTMLSelectElement).value as Rotation,
+                        },
+                      })}
+                  >
+                    ${(["fixed", "weekly", "per_event", "after_last"] as const).map(
+                      (rot) =>
+                        html`<option
+                          value=${rot}
+                          ?selected=${(assignee.rotation ?? "fixed") === rot}
+                        >
+                          ${l.t(`rotation_${rot}` as StringKey)}
+                        </option>`,
+                    )}
+                  </select>
+                </label>
+                <div class="hint">${l.t("assignee_hint")}</div>
+                ${
+                  stats.length
+                    ? html`<div class="wrap">
+                        <span class="hint">${l.t("stats")}:</span>
+                        ${stats.map(([who, n]) => html`<span class="chip">${who} · ${n}×</span>`)}
+                      </div>`
+                    : nothing
+                }`
+            : nothing
+        }
+
+        <div class="row">
+          <div class="sublabel grow">${l.t("activation")}</div>
+          ${
+            activation
+              ? html`<div class="segmented small">
+                  ${(["all", "any"] as const).map(
+                    (m) =>
+                      html`<button
+                        aria-pressed=${(activation.match ?? "all") === m}
+                        @click=${() => setActivation({ match: m })}
+                      >
+                        ${l.t(m === "all" ? "match_all" : "match_any")}
+                      </button>`,
+                  )}
+                </div>`
+              : nothing
+          }
+        </div>
+        <laeutwerk-field
+          .hass=${this.hass}
+          .localize=${l}
+          .selector=${{ condition: {} }}
+          .value=${activation?.conditions ?? []}
+          @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) => {
+            const conditions = e.detail.value ?? [];
+            if (!conditions.length && !activation?.season) setActivation(null);
+            else setActivation({ conditions });
+          }}
+        ></laeutwerk-field>
+        <div class="row">
+          <label class="field grow"
+            >${l.t("season")} – ${l.t("season_from")}
+            <input
+              placeholder="04-01"
+              .value=${activation?.season?.from ?? ""}
+              @change=${(e: Event) => {
+                const from = (e.target as HTMLInputElement).value.trim();
+                const to = activation?.season?.to ?? "";
+                if (!from && !to && !activation?.conditions.length) setActivation(null);
+                else setActivation({ season: from || to ? { from, to } : undefined });
+              }}
+            />
+          </label>
+          <label class="field grow"
+            >${l.t("season_to")}
+            <input
+              placeholder="11-30"
+              .value=${activation?.season?.to ?? ""}
+              @change=${(e: Event) => {
+                const to = (e.target as HTMLInputElement).value.trim();
+                const from = activation?.season?.from ?? "";
+                if (!from && !to && !activation?.conditions.length) setActivation(null);
+                else setActivation({ season: from || to ? { from, to } : undefined });
+              }}
+            />
+          </label>
+        </div>
+
+        <div class="sublabel">${l.t("escalation")}</div>
+        <div class="hint">${l.t("escalation_hint")}</div>
+        ${stages.map(
+          (stage, i) =>
+            html`<div class="row">
+              <span class="chip accent">${l.t("stage_n", { n: i + 1 })}</span>
+              <input
+                class="grow"
+                aria-label=${l.t("stage_after")}
+                placeholder=${l.t("stage_after")}
+                .value=${stage.after}
+                @change=${(e: Event) =>
+                  this._update({
+                    escalation: stages.map((x, j) =>
+                      j === i ? { after: (e.target as HTMLInputElement).value.trim() } : x,
+                    ),
+                  })}
+              />
+              <button
+                class="mini"
+                aria-label=${l.t("remove")}
+                ?disabled=${i !== stages.length - 1}
+                @click=${() =>
+                  this._update({
+                    escalation: stages.slice(0, -1),
+                    signals: r.signals.map((sig) =>
+                      (sig.stage ?? 0) > stages.length - 1
+                        ? { ...sig, stage: stages.length - 1 }
+                        : sig,
+                    ),
+                  })}
+              >
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>`,
+        )}
+        <div class="wrap">
+          <button
+            class="chip dashed"
+            @click=${() =>
+              this._update({ escalation: [...stages, { after: stages.length ? "21:30" : "2h" }] })}
+          >
+            <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_stage")}
+          </button>
+        </div>
+
+        <div class="sublabel">${l.t("on_done")}</div>
+        <div class="hint">${l.t("on_done_hint")}</div>
+        <laeutwerk-field
+          .hass=${this.hass}
+          .localize=${l}
+          .selector=${{ action: {} }}
+          .value=${r.on_done ?? []}
+          @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) =>
+            this._update({ on_done: e.detail.value ?? [] })}
+        ></laeutwerk-field>
+      `,
+    );
+  }
+
   private _toggle(label: string, value: boolean, onChange: (v: boolean) => void): TemplateResult {
     return html`<div class="toggle">
       <span>${label}</span>
@@ -970,6 +1261,18 @@ export class LaeutwerkRuleEditor extends LitElement {
         gap: 10px;
         min-height: 44px;
         font-size: 14px;
+      }
+      .extra {
+        flex-wrap: wrap;
+      }
+      .yaml {
+        min-height: 180px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      .segmented.small button {
+        min-height: 32px;
+        padding: 0 12px;
       }
       .ackblock {
         display: flex;

@@ -210,3 +210,29 @@ describe("rule editing", () => {
     expect(signalSummary(push, en)).toBe("immediately · to steven");
   });
 });
+
+describe("0.6 helpers", () => {
+  it("builds a rule from a template and checks completeness", async () => {
+    const { ruleFromTemplate, ruleComplete } = await import("../src/format");
+    const rule = ruleFromTemplate({
+      rule: { name: "Filter tauschen", interval: { every: 90 }, reminders: [{ at: "18:00" }] },
+    });
+    expect(rule.sources).toEqual([]);
+    expect(rule.filter.keywords.rows).toEqual([]);
+    expect(rule.enabled).toBe(true);
+    expect(ruleComplete(rule)).toBe(true); // interval instead of a source
+    expect(ruleComplete({ ...rule, interval: null })).toBe(false);
+    expect(ruleComplete({ ...rule, interval: null, sources: ["todo.x"] })).toBe(true);
+    expect(ruleComplete({ ...rule, name: " " })).toBe(false);
+  });
+
+  it("offers {zustaendig} with responsible persons and summarises stages", () => {
+    const withAssignee = rule({ assignee: { persons: ["person.steven"] } });
+    expect(availableVariables(withAssignee)).toContain("zustaendig");
+    expect(availableVariables(rule())).not.toContain("zustaendig");
+    const ansage = { ...defaultSignal("announce", rule()), stage: 2 };
+    expect(signalSummary(ansage, de)).toBe("sofort · Stufe 2 · max. 1×");
+    const toAssignee = { ...defaultSignal("notify", rule()), audience: "assignee" as const };
+    expect(signalSummary(toAssignee, de)).toBe("sofort · an Zuständige");
+  });
+});
