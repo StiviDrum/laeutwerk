@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Läutwerk",
+        "description": "Läutwerk einrichten? Regeln legst du danach in der Läutwerk-Karte auf einem Dashboard an."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Läutwerk ist bereits eingerichtet."
+    }
+  }
+}

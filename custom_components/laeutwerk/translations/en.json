@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Läutwerk",
+        "description": "Set up Läutwerk? Rules are created afterwards in the Läutwerk card on a dashboard."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Läutwerk is already set up."
+    }
+  }
+}

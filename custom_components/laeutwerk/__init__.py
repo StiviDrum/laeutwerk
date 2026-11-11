@@ -1,0 +1,64 @@
+"""Läutwerk – reminders from calendar events that stay open until acknowledged."""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from pathlib import Path
+
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
+
+from .const import CARD_FILENAME, CARD_URL_BASE, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+CARD_PATH = Path(__file__).parent / "frontend" / CARD_FILENAME
+
+type LaeutwerkConfigEntry = ConfigEntry[None]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the card once per Home Assistant start."""
+    await _async_register_card(hass)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: LaeutwerkConfigEntry) -> bool:
+    """Set up Läutwerk from a config entry."""
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: LaeutwerkConfigEntry) -> bool:
+    """Unload a config entry."""
+    return True
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve the card JS and add it to the frontend (no manual resource needed)."""
+    card_path = CARD_PATH
+
+    def _bundle_hash() -> str | None:
+        if not card_path.is_file():
+            return None
+        return hashlib.sha256(card_path.read_bytes()).hexdigest()[:12]
+
+    digest = await hass.async_add_executor_job(_bundle_hash)
+    if digest is None:
+        _LOGGER.warning(
+            "Card bundle %s not found – build the frontend (npm run build)", card_path
+        )
+        return
+
+    url = f"{CARD_URL_BASE}/{CARD_FILENAME}"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(url, str(card_path), cache_headers=True)]
+    )
+    # Content hash busts the browser cache after updates and dev rebuilds.
+    add_extra_js_url(hass, f"{url}?v={digest}")

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Start a local Home Assistant with ./config and the integration from this repo.
+# Open http://localhost:8123 afterwards. Stop with Ctrl+C. Run inside WSL2/Linux.
+set -e
+source "$(dirname "$0")/_venv"
+
+python -m pip install -q -r requirements_test.txt
+(cd frontend && npm run build)
+python scripts/seed_dev_config.py
+mkdir -p config/custom_components
+rm -rf config/custom_components/laeutwerk
+# Symlink, so a restart picks up backend changes.
+ln -s ../../custom_components/laeutwerk config/custom_components/laeutwerk
+hass --config "${PWD}/config"

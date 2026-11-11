@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in Läutwerk does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill in the versions and describe the rule
+        (source, keywords, signals) that misbehaves.
+        Deutsch ist auch in Ordnung.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: laeutwerk
+    attributes:
+      label: Läutwerk version
+      description: HACS → Läutwerk, or Settings → Devices & services → Läutwerk
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      description: Settings → About
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: Relevant lines from Settings → System → Logs (filter "laeutwerk").
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For card problems, a screenshot helps a lot (also mention the browser / app).

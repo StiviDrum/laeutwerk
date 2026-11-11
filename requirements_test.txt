@@ -1,0 +1,6 @@
+# Test + dev environment: Home Assistant 2026.11 with its official test
+# package "pytest-homeassistant" (pins the matching homeassistant release).
+pytest-homeassistant==2026.11.1
+home-assistant-frontend==20261028.5
+colorlog
+ruff

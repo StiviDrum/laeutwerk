@@ -1,0 +1,59 @@
+"""The integration serves the card bundle and registers it with the frontend."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+from homeassistant.core import HomeAssistant
+import pytest
+
+from custom_components import laeutwerk
+from custom_components.laeutwerk.const import CARD_URL_BASE, DOMAIN
+
+from .ha_testing import MockConfigEntry
+
+
+@pytest.fixture
+def card_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    bundle = tmp_path / "laeutwerk-card.js"
+    bundle.write_text("console.log('laeutwerk');")
+    monkeypatch.setattr(laeutwerk, "CARD_PATH", bundle)
+    return bundle
+
+
+async def _setup(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_card_registered_and_served(
+    hass: HomeAssistant, hass_client, card_bundle: Path
+) -> None:
+    await _setup(hass)
+    urls = [
+        u for u in hass.data[DATA_EXTRA_MODULE_URL].urls if u.startswith(CARD_URL_BASE)
+    ]
+    assert len(urls) == 1
+    assert urls[0].startswith(f"{CARD_URL_BASE}/laeutwerk-card.js?v=")
+
+    client = await hass_client()
+    resp = await client.get(urls[0])
+    assert resp.status == 200
+    assert "laeutwerk" in await resp.text()
+
+
+async def test_missing_bundle_only_warns(
+    hass: HomeAssistant,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(laeutwerk, "CARD_PATH", tmp_path / "missing.js")
+    await _setup(hass)
+    assert "Card bundle" in caplog.text
+    assert not any(
+        u.startswith(CARD_URL_BASE) for u in hass.data[DATA_EXTRA_MODULE_URL].urls
+    )

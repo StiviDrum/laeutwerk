@@ -1,0 +1,112 @@
+# Local dev instance – test bed for the Läutwerk reference cases (SPEC B8).
+# Helpers only, no real devices. Calendars "Abfallkalender" and "Kult61" are
+# local calendars seeded by scripts/seed_dev_config.py (run by scripts/develop).
+config:
+frontend:
+history:
+logbook:
+system_log:
+calendar:
+tag:
+person:
+zone:
+mobile_app:
+
+homeassistant:
+  name: Läutwerk Dev
+  time_zone: Europe/Berlin
+  country: DE
+  unit_system: metric
+  latitude: 50.11
+  longitude: 8.68
+
+logger:
+  default: info
+  logs:
+    custom_components.laeutwerk: debug
+
+input_boolean:
+  # Stand-ins for presence (who is home)
+  steven_home:
+    name: Steven zu Hause
+    icon: mdi:account
+    initial: true
+  person_2_home:
+    name: Person 2 zu Hause
+    icon: mdi:account-outline
+    initial: true
+  # Stand-in for the front door contact (on = open)
+  haustuer:
+    name: Haustür
+    icon: mdi:door
+  # Backing state of the template light below
+  stehleuchte_state:
+    name: Stehleuchte (Zustand)
+    icon: mdi:floor-lamp
+
+input_number:
+  stehleuchte_brightness:
+    name: Stehleuchte Helligkeit
+    min: 0
+    max: 255
+    step: 1
+    initial: 180
+  stehleuchte_hue:
+    name: Stehleuchte Farbton
+    min: 0
+    max: 360
+    step: 1
+    initial: 30
+  stehleuchte_saturation:
+    name: Stehleuchte Sättigung
+    min: 0
+    max: 100
+    step: 1
+    initial: 40
+
+template:
+  - binary_sensor:
+      - name: Haustuer
+        unique_id: laeutwerk_dev_haustuer
+        device_class: door
+        state: "{{ is_state('input_boolean.haustuer', 'on') }}"
+  - light:
+      # Colour light to watch the light signal blink and restore its state
+      - name: Stehleuchte
+        unique_id: laeutwerk_dev_stehleuchte
+        state: "{{ is_state('input_boolean.stehleuchte_state', 'on') }}"
+        level: "{{ states('input_number.stehleuchte_brightness') | int(0) }}"
+        hs: >-
+          {{ (states('input_number.stehleuchte_hue') | int(0),
+              states('input_number.stehleuchte_saturation') | int(0)) }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.stehleuchte_state
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.stehleuchte_state
+        set_level:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.stehleuchte_brightness
+            data:
+              value: "{{ brightness }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.stehleuchte_state
+        set_hs:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.stehleuchte_hue
+            data:
+              value: "{{ h | int }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.stehleuchte_saturation
+            data:
+              value: "{{ s | int }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.stehleuchte_state
