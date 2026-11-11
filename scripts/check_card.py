@@ -277,7 +277,11 @@ async def main() -> None:
                     "   Object.assign({}, r.signals[0], {when: {opportunity: [{trigger: 'state',"
                     "   entity_id: 'light.stehleuchte', to: 'on'}], manual_only: true},"
                     "   conditions: [{condition: 'state', entity_id: 'input_boolean.steven_home', state: 'on'}]})))};"
-                    " await e.updateComplete; return true })()"
+                    " await e.updateComplete;"
+                    # Sections are collapsible (0.7.5): open the ones with HA editors.
+                    " const se = window.__find(document, 'laeutwerk-signal-editor');"
+                    " se._openSec = new Set(['when', 'only_if', 'what', 'texts']);"
+                    " await se.updateComplete; return true })()"
                 )
                 await asyncio.sleep(5)
                 info = await cdp.js(

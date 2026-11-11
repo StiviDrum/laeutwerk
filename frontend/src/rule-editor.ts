@@ -13,6 +13,7 @@ import {
   relativeDayTime,
   colName,
   colPlural,
+  colorNameToHex,
   signalTitle,
   stageColor,
   columnNames,
@@ -38,6 +39,7 @@ import type {
   KeywordRow,
   MatchMode,
   PreviewResult,
+  PersonInfo,
   Rotation,
   Rule,
   Signal,
@@ -52,6 +54,24 @@ type TimeKind = "days" | "same" | "hours" | "minutes" | "custom";
 function errorText(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) return String(err.message);
   return String(err);
+}
+
+const PALETTE = [
+  "#2f6bff",
+  "#2fbf4a",
+  "#ffc400",
+  "#8a8a94",
+  "#ff6b2f",
+  "#c58cff",
+  "#ff4f8b",
+  "#2fd4d4",
+];
+
+/** Colour offered for a keyword: from an older colour column, else a palette. */
+function suggestColor(row: KeywordRow, index: number, columns: string[]): string {
+  const column = ["farbe", "colour"].find((c) => columns.includes(c));
+  const named = column && row[column] ? colorNameToHex(String(row[column])) : null;
+  return named ?? PALETTE[index % PALETTE.length];
 }
 
 function clone<T>(value: T): T {
@@ -80,6 +100,9 @@ export class LaeutwerkRuleEditor extends LitElement {
   /** Steps that are open; new rules are filled in step by step (guided). */
   @state() private _open = new Set<number>();
   @state() private _guided = false;
+  @state() private _mode: "calendar" | "custom" = "calendar";
+  /** Persons with their phones (to show push targets by person). */
+  @state() private _persons: PersonInfo[] = [];
   @state() private _problems: Problem[] = [];
   @state() private _serverError?: { step?: number; text: string; detail: string };
   @state() private _confirmCancel = false;
@@ -97,6 +120,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       this._rule = copy;
       this._initial = JSON.stringify(copy);
       this._guided = !copy.id;
+      this._mode = copy.interval && !copy.sources.length ? "custom" : "calendar";
       this._open = new Set(copy.id ? [] : [1]);
       this._draft = this._readDraft();
       this._schedulePreview(0);
@@ -105,6 +129,12 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
+    if (!this._persons.length && this.hass) {
+      this.hass
+        .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
+        .then((res) => (this._persons = res.persons))
+        .catch(() => undefined);
+    }
     if (this._knownTags === undefined && this.hass) {
       this.hass
         .callWS<{ id: string; name?: string | null }[]>({ type: "tag/list" })
@@ -168,8 +198,38 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   /** Display name of an entity (friendly name, else the id). */
-  private _names = (entityId: string): string =>
-    (this.hass?.states[entityId]?.attributes.friendly_name as string | undefined) ?? entityId;
+  private _names = (entityId: string): string => {
+    if (entityId.startsWith("notify.")) {
+      const person = this._persons.find((p) => p.notify.includes(entityId));
+      return person ? person.name : entityId.replace(/^notify\./, "");
+    }
+    return (
+      (this.hass?.states[entityId]?.attributes.friendly_name as string | undefined) ?? entityId
+    );
+  };
+
+  /** Source mode: calendar (default) or custom (recurring after done). */
+  private get _custom(): boolean {
+    return this._mode === "custom";
+  }
+
+  private _setCustom(custom: boolean): void {
+    this._mode = custom ? "custom" : "calendar";
+    // Nothing is lost when switching back and forth; saving keeps the mode.
+    if (custom && !this._rule.interval) this._update({ interval: { every: 90 } });
+    else this._update({}, true);
+  }
+
+  /** The rule as it is saved: only the part of the chosen source mode. */
+  private _forSaving(rule: Rule): Rule {
+    if (this._custom)
+      return {
+        ...rule,
+        sources: [],
+        filter: { all_day: false, keywords: { columns: [], rows: [] } },
+      };
+    return { ...rule, interval: null };
+  }
 
   private _toggleStep(num: number): void {
     const open = new Set(this._open);
@@ -209,7 +269,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   private async _loadPreview(): Promise<void> {
-    if (!this.hass || !this._rule?.sources.length) {
+    if (!this.hass || !this._rule?.sources.length || this._custom) {
       this._preview = undefined;
       return;
     }
@@ -256,13 +316,13 @@ export class LaeutwerkRuleEditor extends LitElement {
     this._error = undefined;
     this._serverError = undefined;
     // Check in the card first: clear messages at the step concerned.
-    this._problems = ruleProblems(this._rule, this._l);
+    this._problems = ruleProblems(this._forSaving(this._rule), this._l);
     if (this._problems.length) {
       this._open = new Set([...this._open, ...this._problems.map((p) => p.step)]);
       return;
     }
     this._saving = true;
-    const rule = clone(this._rule);
+    const rule = clone(this._forSaving(this._rule));
     try {
       const saved = rule.id
         ? await this.hass.callWS<Rule>({ type: "laeutwerk/rules/update", rule_id: rule.id, rule })
@@ -347,6 +407,27 @@ export class LaeutwerkRuleEditor extends LitElement {
         if (next.mode === "contains") delete next.mode;
         return next;
       }),
+    );
+  }
+
+  /** An older text column with colour names whose rows have no colour yet. */
+  private _colorColumn(): string | undefined {
+    const names = columnNames(this._rule);
+    const column = ["farbe", "colour"].find((c) => names.includes(c));
+    if (!column) return undefined;
+    const rows = this._rule.filter.keywords.rows;
+    return rows.some((r) => !r.color && r[column] && colorNameToHex(String(r[column])))
+      ? column
+      : undefined;
+  }
+
+  private _takeColumnColors(): void {
+    const column = this._colorColumn();
+    if (!column) return;
+    this._setRows(
+      this._rule.filter.keywords.rows.map((r) =>
+        r.color || !r[column] ? r : { ...r, color: colorNameToHex(String(r[column])) ?? undefined },
+      ),
     );
   }
 
@@ -495,8 +576,8 @@ export class LaeutwerkRuleEditor extends LitElement {
             </div>`
           : nothing
       }
-      ${this._stepCalendar()} ${this._stepEvents()} ${this._stepWhen()} ${this._stepSignals()}
-      ${this._stepAck()} ${this._stepDetails()} ${this._stepAdvanced()}
+      ${this._stepCalendar()} ${this._custom ? nothing : this._stepEvents()} ${this._stepWhen()}
+      ${this._stepSignals()} ${this._stepAck()} ${this._stepDetails()} ${this._stepAdvanced()}
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
       ${
         this._serverError && !this._serverError.step
@@ -574,7 +655,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       (this.hass?.states[id]?.attributes.friendly_name as string | undefined) ?? id;
     return html`<section class="panel ${issues ? "has-error" : ""}" data-step=${num}>
       <button class="step head" aria-expanded=${open} @click=${() => this._toggleStep(num)}>
-        <span class="num">${num}</span>
+        <span class="num">${this._custom && num > 2 ? num - 1 : num}</span>
         <span class="grow text">
           <span>${l.t(title)}</span>
           ${
@@ -628,74 +709,90 @@ export class LaeutwerkRuleEditor extends LitElement {
             @value-changed=${(e: CustomEvent<{ value: string }>) =>
               this._update({ icon: e.detail.value || null })}
           ></laeutwerk-field>
-          <label class="field color"
-            >${l.t("color")}
-            <input
-              type="color"
-              .value=${r.color ?? "#8a8a94"}
-              @change=${(e: Event) => this._update({ color: (e.target as HTMLInputElement).value })}
-            />
-          </label>
+          <laeutwerk-field
+            class="colorfield"
+            .hass=${this.hass}
+            .localize=${l}
+            .label=${l.t("color")}
+            .selector=${{ color_rgb: {} }}
+            .value=${r.color ?? ""}
+            @value-changed=${(e: CustomEvent<{ value: string }>) =>
+              this._update({ color: e.detail.value || null })}
+          ></laeutwerk-field>
         </div>
-        <laeutwerk-field
-          .hass=${this.hass}
-          .localize=${l}
-          .label=${l.t("sources")}
-          .selector=${{
-            entity: {
-              domain: ["calendar", "todo", "date", "datetime", "input_datetime", "sensor"],
-              multiple: true,
-            },
-          }}
-          .value=${r.sources}
-          @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
-            const value = e.detail.value;
-            this._update({ sources: Array.isArray(value) ? value : value ? [value] : [] }, true);
-          }}
-        ></laeutwerk-field>
-        <div class="hint">${l.t("sources_hint")}</div>
-        ${this._toggle(l.t("interval"), !!r.interval, (v) =>
-          this._update({ interval: v ? { every: 90 } : null }),
-        )}
-        ${
-          r.interval
-            ? html`<div class="hint">${l.t("interval_hint")}</div>
-                <div class="row">
-                  <label class="field grow"
-                    >${l.t("interval_days")}
-                    <input
-                      type="number"
-                      min="1"
-                      .value=${String(r.interval.every)}
-                      @change=${(e: Event) =>
-                        this._update({
-                          interval: {
-                            ...r.interval!,
-                            every: Number((e.target as HTMLInputElement).value),
-                          },
-                        })}
-                    />
-                  </label>
-                  <label class="field grow"
-                    >${l.t("interval_start")}
-                    <input
-                      type="date"
-                      .value=${r.interval.start ?? ""}
-                      @change=${(e: Event) => {
-                        const start = (e.target as HTMLInputElement).value;
-                        const next: { every: number | string; start?: string } = {
-                          every: r.interval!.every,
-                        };
-                        if (start) next.start = start;
-                        this._update({ interval: next });
-                      }}
-                    />
-                  </label>
-                </div>`
-            : nothing
-        }
+        <div class="sublabel">${l.t("source_mode")}</div>
+        <div class="segmented">
+          <button aria-pressed=${!this._custom} @click=${() => this._setCustom(false)}>
+            ${l.t("source_calendar")}
+          </button>
+          <button aria-pressed=${this._custom} @click=${() => this._setCustom(true)}>
+            ${l.t("source_custom")}
+          </button>
+        </div>
+        ${this._custom ? this._intervalFields() : this._sourceFields()}
       `,
     );
+  }
+
+  /** Calendar mode: calendars, to-do lists and date entities. */
+  private _sourceFields(): TemplateResult {
+    const l = this._l;
+    const r = this._rule;
+    return html`
+      <laeutwerk-field
+        .hass=${this.hass}
+        .localize=${l}
+        .label=${l.t("sources")}
+        .selector=${{
+          entity: {
+            domain: ["calendar", "todo", "date", "datetime", "input_datetime", "sensor"],
+            multiple: true,
+          },
+        }}
+        .value=${r.sources}
+        @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
+          const value = e.detail.value;
+          this._update({ sources: Array.isArray(value) ? value : value ? [value] : [] }, true);
+        }}
+      ></laeutwerk-field>
+      <div class="hint">${l.t("sources_hint")}</div>
+    `;
+  }
+
+  /** Custom mode: due again n days after it was last done. */
+  private _intervalFields(): TemplateResult {
+    const l = this._l;
+    const interval = this._rule.interval ?? { every: 90 };
+    return html`
+      <div class="hint">${l.t("interval_hint")}</div>
+      <div class="row">
+        <label class="field grow"
+          >${l.t("interval_days")}
+          <input
+            type="number"
+            min="1"
+            .value=${String(interval.every)}
+            @change=${(e: Event) =>
+              this._update({
+                interval: { ...interval, every: Number((e.target as HTMLInputElement).value) },
+              })}
+          />
+        </label>
+        <label class="field grow"
+          >${l.t("interval_start")}
+          <input
+            type="date"
+            .value=${interval.start ?? ""}
+            @change=${(e: Event) => {
+              const start = (e.target as HTMLInputElement).value;
+              const next: { every: number | string; start?: string } = { every: interval.every };
+              if (start) next.start = start;
+              this._update({ interval: next });
+            }}
+          />
+        </label>
+      </div>
+    `;
   }
 
   private _stepEvents(): TemplateResult {
@@ -713,6 +810,11 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="table" role="table">
           <div class="tr head" role="row">
             <div class="th kw" role="columnheader">${l.t("keyword")}</div>
+            ${
+              columns.includes("color")
+                ? nothing
+                : html`<div class="th kcolor" role="columnheader">${l.t("color")}</div>`
+            }
             ${specs.map((spec, i) => {
               const plural = colPlural(spec);
               return html`<div class="th col" role="columnheader">
@@ -769,6 +871,21 @@ export class LaeutwerkRuleEditor extends LitElement {
                     )}
                   </select>
                 </div>
+                ${
+                  columns.includes("color")
+                    ? nothing
+                    : html`<div class="td kcolor" role="cell">
+                        <laeutwerk-field
+                          .hass=${this.hass}
+                          .localize=${l}
+                          .selector=${{ color_rgb: {} }}
+                          .suggest=${suggestColor(row, i, columns)}
+                          .value=${row.color ?? ""}
+                          @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                            this._setRow(i, { color: e.detail.value || undefined })}
+                        ></laeutwerk-field>
+                      </div>`
+                }
                 ${columns.map(
                   (c) =>
                     html`<div class="td col" role="cell">
@@ -805,6 +922,15 @@ export class LaeutwerkRuleEditor extends LitElement {
           <button class="chip dashed" @click=${this._addColumn}>
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_column")}
           </button>
+          ${
+            this._colorColumn()
+              ? html`<button class="chip accent" @click=${this._takeColumnColors}>
+                  <ha-icon icon="mdi:palette-outline"></ha-icon>${l.t("colors_from_column", {
+                    column: this._colorColumn()!,
+                  })}
+                </button>`
+              : nothing
+          }
         </div>
         <div class="hint">
           ${
@@ -1409,44 +1535,46 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="divided">
           ${stages.map(
             (stage, i) =>
-              html`<div class="row stage-row">
-                <label class="stagecolor" title=${l.t("stage_color")}>
-                  <span class="chip" style="--stage: ${stageColor(r, i + 1)}"
+              html`<div class="stage-item">
+                <div class="row stage-row">
+                  <span class="chip stagechip-big" style="--stage: ${stageColor(r, i + 1)}"
                     >${l.t("stage_n", { n: i + 1 })}</span
                   >
-                  <input
-                    type="color"
-                    aria-label=${`${l.t("stage_n", { n: i + 1 })} ${l.t("stage_color")}`}
-                    .value=${stageColor(r, i + 1) ?? "#ffb020"}
-                    @change=${(e: Event) =>
+                  ${this._stageInput(stage.after, (after) =>
+                    this._update({
+                      escalation: stages.map((x, j) => (j === i ? { ...x, after } : x)),
+                    }),
+                  )}
+                  <button
+                    class="mini"
+                    aria-label=${l.t("remove")}
+                    ?disabled=${i !== stages.length - 1}
+                    @click=${() =>
                       this._update({
-                        escalation: stages.map((x, j) =>
-                          j === i ? { ...x, color: (e.target as HTMLInputElement).value } : x,
+                        escalation: stages.slice(0, -1),
+                        signals: r.signals.map((sig) =>
+                          (sig.stage ?? 0) > stages.length - 1
+                            ? { ...sig, stage: stages.length - 1 }
+                            : sig,
                         ),
                       })}
-                  />
-                </label>
-                ${this._stageInput(stage.after, (after) =>
-                  this._update({
-                    escalation: stages.map((x, j) => (j === i ? { ...x, after } : x)),
-                  }),
-                )}
-                <button
-                  class="mini"
-                  aria-label=${l.t("remove")}
-                  ?disabled=${i !== stages.length - 1}
-                  @click=${() =>
+                  >
+                    <ha-icon icon="mdi:close"></ha-icon>
+                  </button>
+                </div>
+                <laeutwerk-field
+                  .hass=${this.hass}
+                  .localize=${l}
+                  .label=${`${l.t("stage_n", { n: i + 1 })} · ${l.t("stage_color")}`}
+                  .selector=${{ color_rgb: {} }}
+                  .value=${stageColor(r, i + 1) ?? ""}
+                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
                     this._update({
-                      escalation: stages.slice(0, -1),
-                      signals: r.signals.map((sig) =>
-                        (sig.stage ?? 0) > stages.length - 1
-                          ? { ...sig, stage: stages.length - 1 }
-                          : sig,
+                      escalation: stages.map((x, j) =>
+                        j === i ? { ...x, color: e.detail.value || undefined } : x,
                       ),
                     })}
-                >
-                  <ha-icon icon="mdi:close"></ha-icon>
-                </button>
+                ></laeutwerk-field>
               </div>`,
           )}
         </div>
@@ -1754,6 +1882,25 @@ export class LaeutwerkRuleEditor extends LitElement {
         font-weight: 600;
         background: color-mix(in srgb, var(--stage) 22%, transparent);
         color: var(--lw-text);
+      }
+      .kcolor {
+        width: 100px;
+        flex-shrink: 0;
+      }
+      .colorfield {
+        width: 120px;
+        flex-shrink: 0;
+      }
+      .stage-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stagechip-big {
+        background: color-mix(in srgb, var(--stage) 30%, transparent);
+        border: 2px solid var(--stage);
+        min-height: 32px;
+        flex-shrink: 0;
       }
       .stagecolor {
         position: relative;

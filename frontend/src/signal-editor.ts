@@ -8,8 +8,10 @@ import { property, state } from "lit/decorators.js";
 import {
   SIGNAL_ICONS,
   availableVariables,
+  colorNameToHex,
   columnNames,
   defaultSignal,
+  mapTargetsToPersons,
   renderTemplate,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -56,7 +58,8 @@ export class LaeutwerkSignalEditor extends LitElement {
   @state() private _focus = "message";
   /** Persons with their phones (laeutwerk/persons), loaded once. */
   @state() private _persons?: PersonInfo[];
-  @state() private _showTargets = false;
+  /** Open sections (collapsible like the steps of the rule editor). */
+  @state() private _openSec = new Set<string>(["what", "texts"]);
 
   public connectedCallback(): void {
     super.connectedCallback();
@@ -71,7 +74,43 @@ export class LaeutwerkSignalEditor extends LitElement {
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("signal") && this.signal) {
       this._sig = JSON.parse(JSON.stringify(this.signal)) as Signal;
+      this._openSec = new Set(["what", "texts"]);
     }
+    if ((changed.has("signal") || changed.has("_persons")) && this._sig && this._persons) {
+      const mapped = mapTargetsToPersons(this._sig, this._persons);
+      if (mapped !== this._sig) this._sig = mapped;
+    }
+  }
+
+  private _toggleSec(key: string): void {
+    const next = new Set(this._openSec);
+    if (!next.delete(key)) next.add(key);
+    this._openSec = next;
+  }
+
+  /** A collapsible section: title, a short summary when closed, the body when open. */
+  private _section(
+    key: string,
+    title: string,
+    summary: string,
+    body: () => TemplateResult,
+    sub = false,
+  ): TemplateResult {
+    const open = this._openSec.has(key);
+    return html`<section class=${sub ? "subsec" : "panel"} data-sec=${key}>
+      <button
+        class="head ${sub ? "small" : "step"}"
+        aria-expanded=${open}
+        @click=${() => this._toggleSec(key)}
+      >
+        <span class="grow text">
+          <span>${title}</span>
+          ${open || !summary ? nothing : html`<span class="summary">${summary}</span>`}
+        </span>
+        <ha-icon .icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+      </button>
+      ${open ? html`<div class="body">${body()}</div>` : nothing}
+    </section>`;
   }
 
   private get _l(): Localizer {
@@ -167,82 +206,135 @@ export class LaeutwerkSignalEditor extends LitElement {
       </div>`;
     }
     const opportunity = s.when !== "now";
+    const conditions = s.conditions?.length ?? 0;
     return html`<div class="page">
       <div class="separator">${l.t("edit_signal")}<span class="line"></span></div>
 
-      <div class="panel">
-        <div class="step">${l.t("sig_type")}</div>
-        <div class="tiles">
-          ${TYPES.map(
-            (type) =>
+      ${this._section("type", l.t("sig_type"), l.t(`type_${s.type}` as StringKey), () => this._typeBody())}
+      ${this._section(
+        "when",
+        l.t("sig_when"),
+        opportunity ? l.t("when_opportunity") : l.t("when_now"),
+        () => this._whenBody(),
+      )}
+      ${this._section(
+        "only_if",
+        l.t("sig_only_if"),
+        conditions ? l.t("sum_conditions", { n: conditions }) : l.t("sum_no_conditions"),
+        () => this._onlyIfBody(),
+      )}
+      ${this._section("what", l.t("sig_what"), this._whatSummary(), () => this._fields())}
+      ${this._section(
+        "limits",
+        l.t("sig_limits"),
+        this._limitsSummary(),
+        () => html`${this._stage()} ${this._limits()}`,
+      )}
+      ${this._footer()}
+    </div>`;
+  }
+
+  private _typeBody(): TemplateResult {
+    const l = this._l;
+    const s = this._sig;
+    return html`<div class="tiles">
+      ${TYPES.map(
+        (type) =>
+          html`<button
+            class="tile"
+            aria-pressed=${type === s.type}
+            @click=${() => this._setType(type)}
+          >
+            <ha-icon .icon=${SIGNAL_ICONS[type]}></ha-icon>
+            <span>${l.t(`type_${type}` as StringKey)}</span>
+          </button>`,
+      )}
+    </div>`;
+  }
+
+  private _whenBody(): TemplateResult {
+    const l = this._l;
+    const opportunity = this._sig.when !== "now";
+    return html`<div class="segmented">
+        <button aria-pressed=${!opportunity} @click=${() => this._set({ when: "now" })}>
+          ${l.t("when_now")}
+        </button>
+        <button
+          aria-pressed=${opportunity}
+          @click=${() =>
+            !opportunity && this._set({ when: { opportunity: [], manual_only: false } })}
+        >
+          ${l.t("when_opportunity")}
+        </button>
+      </div>
+      ${opportunity ? this._opportunity() : nothing}`;
+  }
+
+  private _onlyIfBody(): TemplateResult {
+    const l = this._l;
+    const s = this._sig;
+    return html`<div class="row">
+        <div class="segmented small">
+          ${(["all", "any"] as const).map(
+            (m) =>
               html`<button
-                class="tile"
-                aria-pressed=${type === s.type}
-                @click=${() => this._setType(type)}
+                aria-pressed=${(s.conditions_match ?? "all") === m}
+                @click=${() => this._set({ conditions_match: m })}
               >
-                <ha-icon .icon=${SIGNAL_ICONS[type]}></ha-icon>
-                <span>${l.t(`type_${type}` as StringKey)}</span>
+                ${l.t(m === "all" ? "match_all" : "match_any")}
               </button>`,
           )}
         </div>
       </div>
+      <laeutwerk-field
+        .hass=${this.hass}
+        .localize=${l}
+        .selector=${{ condition: {} }}
+        .value=${s.conditions ?? EMPTY}
+        @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+          const value = list(e.detail.value);
+          this._set({ conditions: value.length ? value : undefined });
+        }}
+      ></laeutwerk-field>`;
+  }
 
-      <div class="panel">
-        <div class="step">${l.t("sig_when")}</div>
-        <div class="segmented">
-          <button aria-pressed=${!opportunity} @click=${() => this._set({ when: "now" })}>
-            ${l.t("when_now")}
-          </button>
-          <button
-            aria-pressed=${opportunity}
-            @click=${() =>
-              !opportunity && this._set({ when: { opportunity: [], manual_only: false } })}
-          >
-            ${l.t("when_opportunity")}
-          </button>
-        </div>
-        ${opportunity ? this._opportunity() : nothing}
-      </div>
+  /** Short summary of "what happens" for the closed section. */
+  private _whatSummary(): string {
+    const s = this._sig;
+    const names = (ids: string[] | undefined) =>
+      (ids ?? [])
+        .map((id) => (this.hass?.states[id]?.attributes.friendly_name as string | undefined) ?? id)
+        .join(", ");
+    if (s.type === "notify")
+      return [this._recipientsSummary(), s.title].filter(Boolean).join(" · ");
+    if (s.type === "light_signal") return names(s.entities);
+    if (s.type === "announce") return names(s.players);
+    const count = list(s.actions).length;
+    return count ? this._l.t("sum_actions", { n: count }) : "";
+  }
 
-      <div class="panel">
-        <div class="row">
-          <div class="step grow">${l.t("sig_only_if")}</div>
-          <div class="segmented small">
-            ${(["all", "any"] as const).map(
-              (m) =>
-                html`<button
-                  aria-pressed=${(s.conditions_match ?? "all") === m}
-                  @click=${() => this._set({ conditions_match: m })}
-                >
-                  ${l.t(m === "all" ? "match_all" : "match_any")}
-                </button>`,
-            )}
-          </div>
-        </div>
-        <laeutwerk-field
-          .hass=${this.hass}
-          .localize=${l}
-          .selector=${{ condition: {} }}
-          .value=${s.conditions ?? EMPTY}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            const value = list(e.detail.value);
-            this._set({ conditions: value.length ? value : undefined });
-          }}
-        ></laeutwerk-field>
-      </div>
+  private _limitsSummary(): string {
+    const l = this._l;
+    const s = this._sig;
+    const bits: string[] = [];
+    if (s.stage) bits.push(l.t("stage_n", { n: s.stage }));
+    if (s.limit?.per_reminder) bits.push(l.t("s_max", { n: s.limit.per_reminder }));
+    if (s.quiet?.length) bits.push(`${l.t("quiet_times")}: ${s.quiet.length}`);
+    return bits.join(" · ");
+  }
 
-      <div class="panel">
-        <div class="step">${l.t("sig_what")}</div>
-        ${this._fields()}
-      </div>
-
-      <div class="panel">
-        <div class="step">${l.t("sig_limits")}</div>
-        ${this._stage()} ${this._limits()}
-      </div>
-
-      ${this._footer()}
-    </div>`;
+  private _recipientsSummary(): string {
+    const l = this._l;
+    const s = this._sig;
+    if (s.audience === "assignee") return l.t("push_to_assignee");
+    const persons = this._persons ?? [];
+    const ids =
+      s.audience === "all" || s.audience === "present"
+        ? persons.map((p) => p.entity_id)
+        : (s.persons ?? []);
+    const named = ids.map((id) => persons.find((p) => p.entity_id === id)?.name ?? id);
+    const text = named.join(", ");
+    return s.audience === "present" || s.only_present ? `${text} (${l.t("only_present")})` : text;
   }
 
   private _opportunity(): TemplateResult {
@@ -289,9 +381,39 @@ export class LaeutwerkSignalEditor extends LitElement {
     const setButtons = (nextAck?: PushButton, nextSnooze?: PushButton) =>
       this._set({ actions: [nextAck, nextSnooze].filter((b): b is PushButton => !!b) });
     return html`
-      ${this._recipients()} ${this._text("title", l.t("push_title"))}
-      ${this._text("message", l.t("push_message"), true)} ${this._variables(false)}
-      <div class="sublabel">${l.t("push_buttons")}</div>
+      ${this._section(
+        "recipients",
+        l.t("sec_recipients"),
+        this._recipientsSummary(),
+        () => this._recipients(),
+        true,
+      )}
+      ${this._section(
+        "texts",
+        l.t("sec_texts"),
+        renderTemplate(s.title, this.sample) || s.title || "",
+        () =>
+          html`${this._text("title", l.t("push_title"))}
+          ${this._text("message", l.t("push_message"), true)} ${this._variables(false)}`,
+        true,
+      )}
+      ${this._section(
+        "buttons",
+        l.t("sec_buttons"),
+        buttons.map((b) => b.label).join(" · "),
+        () => this._buttons(ack, snooze, setButtons),
+        true,
+      )}
+    `;
+  }
+
+  private _buttons(
+    ack: PushButton | undefined,
+    snooze: PushButton | undefined,
+    setButtons: (nextAck?: PushButton, nextSnooze?: PushButton) => void,
+  ): TemplateResult {
+    const l = this._l;
+    return html`
       ${this._toggle(l.t("btn_done"), !!ack, (v) =>
         setButtons(v ? { ack: true, label: l.t("done") } : undefined, snooze),
       )}
@@ -349,9 +471,7 @@ export class LaeutwerkSignalEditor extends LitElement {
           ? { audience: "persons", persons: next, only_present: present || undefined }
           : { audience: undefined, persons: undefined, only_present: undefined },
       );
-    const showTargets = this._showTargets || !!s.targets?.length;
     return html`
-      <div class="sublabel">${l.t("recipients")}</div>
       ${
         this.rule.assignee
           ? this._toggle(l.t("push_to_assignee"), toAssignee, (v) =>
@@ -408,27 +528,22 @@ export class LaeutwerkSignalEditor extends LitElement {
             `
       }
       ${
-        showTargets
-          ? html`<label class="field"
-              >${l.t("targets")}
-              <input
-                .value=${(s.targets ?? []).join(", ")}
-                placeholder="notify.alexa_media_…"
-                @change=${(e: Event) => {
-                  const targets = (e.target as HTMLInputElement).value
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean);
-                  this._set({ targets: targets.length ? targets : undefined });
-                }}
-              />
-              <span class="hint">${l.t("targets_hint")}</span>
-            </label>`
-          : html`<div class="wrap">
-              <button class="chip dashed" @click=${() => (this._showTargets = true)}>
-                <ha-icon icon="mdi:plus"></ha-icon>${l.t("more_targets")}
+        s.targets?.length
+          ? html`<div class="also">
+              <span class="grow">
+                ${l.t("also_to", {
+                  targets: s.targets.map((t) => t.replace(/^notify\./, "")).join(", "),
+                })}
+              </span>
+              <button
+                class="mini"
+                aria-label=${l.t("remove")}
+                @click=${() => this._set({ targets: undefined })}
+              >
+                <ha-icon icon="mdi:close"></ha-icon>
               </button>
             </div>`
+          : nothing
       }
     `;
   }
@@ -437,7 +552,10 @@ export class LaeutwerkSignalEditor extends LitElement {
     const l = this._l;
     const s = this._sig;
     const columns = columnNames(this.rule);
-    const fromColumn = s.color_from !== undefined;
+    const mode = s.color_from !== undefined ? "column" : s.color_from_keyword ? "keyword" : "fixed";
+    const keywordColors = this.rule.filter.keywords.rows
+      .filter((r) => !!r.color)
+      .map((r) => ({ match: String(r.match), color: r.color! }));
     return html`
       <laeutwerk-field
         .hass=${this.hass}
@@ -475,40 +593,68 @@ export class LaeutwerkSignalEditor extends LitElement {
       </div>
       <div class="sublabel">${l.t("light_color")}</div>
       <div class="segmented">
-        <button aria-pressed=${!fromColumn} @click=${() => this._set({ color_from: undefined })}>
-          ${l.t("color_fixed")}
+        <button
+          aria-pressed=${mode === "keyword"}
+          @click=${() => this._set({ color_from_keyword: true, color_from: undefined })}
+        >
+          ${l.t("color_keyword")}
         </button>
         <button
-          aria-pressed=${fromColumn}
-          ?disabled=${!columns.length}
-          @click=${() => this._set({ color_from: columns[0], color: undefined })}
+          aria-pressed=${mode === "fixed"}
+          @click=${() => this._set({ color_from_keyword: undefined, color_from: undefined })}
         >
-          ${l.t("color_from")}
+          ${l.t("color_fixed_pick")}
         </button>
+        ${
+          mode === "column"
+            ? html`<button aria-pressed="true">${l.t("color_column_old")}</button>`
+            : nothing
+        }
       </div>
       ${
-        fromColumn
+        mode === "column"
           ? html`<select
-                .value=${s.color_from ?? ""}
-                @change=${(e: Event) => this._set({ color_from: (e.target as HTMLSelectElement).value })}
-              >
-                ${columns.map((c) => html`<option value=${c} ?selected=${c === s.color_from}>{${c}}</option>`)}
-              </select>
-              ${
-                this.swatches.length
-                  ? html`<div class="wrap swatches">
-                      ${this.swatches.map(
-                        (c) =>
-                          html`<span class="swatch" style="background:${c}" title=${c}></span>`,
-                      )}
-                    </div>`
-                  : nothing
-              }`
-          : html`<input
-              .value=${s.color ?? ""}
-              placeholder=${l.t("color_placeholder")}
-              @input=${(e: Event) => this._set({ color: (e.target as HTMLInputElement).value })}
-            />`
+              .value=${s.color_from ?? ""}
+              @change=${(e: Event) => this._set({ color_from: (e.target as HTMLSelectElement).value })}
+            >
+              ${columns.map((c) => html`<option value=${c} ?selected=${c === s.color_from}>{${c}}</option>`)}
+            </select>`
+          : nothing
+      }
+      ${
+        mode === "fixed"
+          ? html`<laeutwerk-field
+              .hass=${this.hass}
+              .localize=${l}
+              .label=${l.t("color_fixed_pick")}
+              .selector=${{ color_rgb: {} }}
+              .suggest=${keywordColors[0]?.color ?? ""}
+              .value=${s.color ? (colorNameToHex(s.color) ?? s.color) : ""}
+              @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                this._set({ color: e.detail.value || undefined })}
+            ></laeutwerk-field>`
+          : nothing
+      }
+      ${
+        keywordColors.length
+          ? html`<div class="sublabel">${l.t("keyword_colors")}</div>
+              <div class="wrap swatches">
+                ${keywordColors.map(
+                  ({ match, color }) =>
+                    html`<button
+                      class="swatch"
+                      style="background:${color}"
+                      title=${match}
+                      aria-label=${`${match} ${color}`}
+                      aria-pressed=${mode === "fixed" && s.color?.toLowerCase() === color.toLowerCase()}
+                      @click=${() =>
+                        this._set({ color, color_from_keyword: undefined, color_from: undefined })}
+                    ></button>`,
+                )}
+              </div>`
+          : mode === "keyword"
+            ? html`<div class="hint">${l.t("no_keyword_colors")}</div>`
+            : nothing
       }
       <label class="field"
         >${l.t("brightness")}
@@ -768,10 +914,69 @@ export class LaeutwerkSignalEditor extends LitElement {
         gap: 8px;
       }
       .swatch {
-        width: 22px;
-        height: 22px;
-        border-radius: 11px;
+        width: 32px;
+        height: 32px;
+        border-radius: 16px;
+        padding: 0;
         box-shadow: 0 0 0 1px var(--lw-border);
+      }
+      .swatch[aria-pressed="true"] {
+        box-shadow:
+          0 0 0 2px var(--lw-bg),
+          0 0 0 4px var(--lw-accent);
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 44px;
+        text-align: left;
+        padding: 0;
+      }
+      .head.small {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--lw-text-2);
+      }
+      .head .text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .summary {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--lw-text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .subsec {
+        border-top: 1px solid var(--lw-border);
+        padding-top: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .subsec .body {
+        padding-bottom: 8px;
+      }
+      .also {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 4px 8px 12px;
+        border-radius: 12px;
+        background: var(--lw-surface-2);
+        font-size: 13px;
+        overflow-wrap: anywhere;
       }
       .persons {
         display: flex;

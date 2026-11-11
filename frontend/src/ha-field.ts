@@ -51,6 +51,8 @@ export class LaeutwerkField extends LitElement {
   @property({ attribute: false }) public selector: Record<string, unknown> = {};
   @property({ attribute: false }) public value: unknown;
   @property() public label = "";
+  /** Colour fields: colour offered by "choose a colour" (#rrggbb). */
+  @property({ attribute: false }) public suggest = "";
   @state() private _native?: boolean;
   @state() private _text = "";
   @state() private _error?: string;
@@ -79,6 +81,64 @@ export class LaeutwerkField extends LitElement {
   private _emit(value: unknown): void {
     // The parent stores the value and passes it back (one-way data flow).
     this.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
+  }
+
+  /**
+   * Colour: the value is "#rrggbb" for Läutwerk, HA's colour selector works
+   * with [r, g, b]; without HA's elements a plain colour input.
+   */
+  private _renderColor() {
+    const hex = typeof this.value === "string" && this.value ? this.value : "";
+    if (!hex) {
+      // An empty picker would show black: offer "choose a colour" instead.
+      const label = this.label || this.localize.t("pick_color");
+      return html`<button
+        class="chip dashed pick"
+        aria-label=${label}
+        title=${label}
+        @click=${() => this._emit(this.suggest || "#8a8a94")}
+      >
+        <ha-icon icon="mdi:palette-outline"></ha-icon
+        >${this.label ? html`<span>${this.label}</span>` : nothing}
+      </button>`;
+    }
+    return html`<div class="colorrow">
+      ${this._colorPicker(hex)}
+      <button
+        class="mini"
+        aria-label=${this.localize.t("no_color")}
+        title=${this.localize.t("no_color")}
+        @click=${() => this._emit("")}
+      >
+        <ha-icon icon="mdi:close"></ha-icon>
+      </button>
+    </div>`;
+  }
+
+  private _colorPicker(hex: string) {
+    if (this._native && this.hass) {
+      return html`<ha-selector
+        .hass=${this.hass}
+        .selector=${this.selector}
+        .value=${hexToRgb(hex)}
+        .label=${this.label}
+        .required=${false}
+        @value-changed=${(ev: CustomEvent<{ value: number[] | undefined }>) => {
+          ev.stopPropagation();
+          const rgb = ev.detail.value;
+          this._emit(Array.isArray(rgb) && rgb.length === 3 ? rgbToHex(rgb) : "");
+        }}
+      ></ha-selector>`;
+    }
+    return html`<label class="field">
+      <span>${this.label}</span>
+      <input
+        type="color"
+        class="color"
+        .value=${hex}
+        @change=${(ev: Event) => this._emit((ev.target as HTMLInputElement).value)}
+      />
+    </label>`;
   }
 
   private _onSelector(ev: CustomEvent<{ value: unknown }>): void {
@@ -113,6 +173,7 @@ export class LaeutwerkField extends LitElement {
 
   protected render() {
     if (this._native === undefined) return html`<div class="hint">…</div>`;
+    if (this._kind === "color_rgb") return this._renderColor();
     if (this._native && this.hass) {
       return html`<ha-selector
         .hass=${this.hass}
@@ -158,9 +219,40 @@ export class LaeutwerkField extends LitElement {
         font-family: ui-monospace, monospace;
         font-size: 12px;
       }
+      .colorrow {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .colorrow > :first-child {
+        flex: 1;
+        min-width: 0;
+      }
+      .pick {
+        min-height: 40px;
+      }
+      input.color {
+        width: 64px;
+        padding: 4px;
+      }
       .err {
         color: var(--lw-danger);
       }
     `,
   ];
+}
+
+export function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export function rgbToHex(rgb: number[]): string {
+  return `#${rgb
+    .map((v) =>
+      Math.max(0, Math.min(255, Math.round(v)))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 }

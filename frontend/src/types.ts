@@ -8,6 +8,8 @@ export type HaConfig = Record<string, unknown>;
 export interface KeywordRow {
   match: string;
   mode?: MatchMode;
+  /** Own colour of the keyword (#rrggbb). */
+  color?: string;
   [column: string]: string | undefined;
 }
 
@@ -49,6 +51,8 @@ export interface Signal {
   pattern?: { effect?: "blink" | "pulse"; count?: number; interval?: number };
   color?: string;
   color_from?: string;
+  /** Blink in the colours of the matching keywords. */
+  color_from_keyword?: boolean;
   brightness?: number;
   restore?: boolean;
   // announce
