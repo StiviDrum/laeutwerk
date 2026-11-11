@@ -21,6 +21,8 @@ ignore = [
 "scripts/**" = ["T20", "D"]
 # Dev tool with long inline JavaScript; starts Chromium as a subprocess.
 "scripts/check_card.py" = ["T20", "D", "E501", "ASYNC220"]
+# Long German / English service descriptions.
+"scripts/build_translations.py" = ["E501"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true

@@ -24,6 +24,8 @@ class StoredData(TypedDict):
     reminders: dict[str, list[dict[str, Any]]]
     # per rule id: finished reminders, newest first (added in 1.2)
     history: dict[str, list[dict[str, Any]]]
+    # rule templates saved by the user (added in 1.3)
+    templates: list[dict[str, Any]]
 
 
 class _VersionedStore(Store[StoredData]):
@@ -38,6 +40,7 @@ class _VersionedStore(Store[StoredData]):
         """Migrate older storage versions.
 
         1.1 -> 1.2: history per rule (starts empty).
+        1.2 -> 1.3: user templates (start empty).
         """
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
@@ -46,6 +49,7 @@ class _VersionedStore(Store[StoredData]):
             "rules": list(old_data.get("rules", [])),
             "reminders": dict(old_data.get("reminders", {})),
             "history": dict(old_data.get("history", {})),
+            "templates": list(old_data.get("templates", [])),
         }
 
 
@@ -62,10 +66,11 @@ class LaeutwerkStore:
         """Load stored data (empty layout when nothing is stored)."""
         data = await self._store.async_load()
         if not data:
-            return {"rules": [], "reminders": {}, "history": {}}
+            return {"rules": [], "reminders": {}, "history": {}, "templates": []}
         data.setdefault("rules", [])
         data.setdefault("reminders", {})
         data.setdefault("history", {})
+        data.setdefault("templates", [])
         return data
 
     def async_schedule_save(self, data_func: Callable[[], StoredData]) -> None:

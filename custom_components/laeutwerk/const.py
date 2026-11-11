@@ -9,7 +9,7 @@ NAME: Final = "Läutwerk"
 
 STORAGE_KEY: Final = "laeutwerk"
 STORAGE_VERSION: Final = 1
-STORAGE_MINOR_VERSION: Final = 2
+STORAGE_MINOR_VERSION: Final = 3
 
 # Finished reminders kept per rule (history in the card and diagnostics).
 HISTORY_MAX: Final = 50

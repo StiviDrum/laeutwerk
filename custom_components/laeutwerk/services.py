@@ -39,6 +39,8 @@ SERVICE_CREATE_RULE = "create_rule"
 SERVICE_UPDATE_RULE = "update_rule"
 SERVICE_DELETE_RULE = "delete_rule"
 SERVICE_DUPLICATE_RULE = "duplicate_rule"
+SERVICE_EXPORT_RULES = "export_rules"
+SERVICE_IMPORT_RULES = "import_rules"
 SERVICE_ENABLE = "enable"
 SERVICE_DISABLE = "disable"
 
@@ -218,6 +220,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(str(err)) from err
         return {"rule": rule.id} if call.return_response else None
 
+    async def export_rules(call: ServiceCall) -> ServiceResponse:
+        manager = get_manager(hass)
+        return {"yaml": manager.export_rules(_rule_ids(hass, call))}
+
+    async def import_rules(call: ServiceCall) -> ServiceResponse:
+        await _require_admin(hass, call)
+        try:
+            rules = await get_manager(hass).async_import_rules(call.data["yaml"])
+        except (vol.Invalid, ValueError, HomeAssistantError) as err:
+            raise ServiceValidationError(str(err)) from err
+        return {"rules": [rule.id for rule in rules]} if call.return_response else None
+
     async def enable(call: ServiceCall) -> None:
         manager = get_manager(hass)
         for rule_id in _rule_ids(hass, call):
@@ -292,6 +306,20 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _RULE_SCHEMA.extend(
             {vol.Optional("name"): cv.string, vol.Optional("new_rule"): cv.slug}
         ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    register(
+        DOMAIN,
+        SERVICE_EXPORT_RULES,
+        export_rules,
+        _RULES_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    register(
+        DOMAIN,
+        SERVICE_IMPORT_RULES,
+        import_rules,
+        vol.Schema({vol.Required("yaml"): cv.string}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     register(DOMAIN, SERVICE_ENABLE, enable, _RULES_SCHEMA)

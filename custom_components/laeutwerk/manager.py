@@ -38,6 +38,13 @@ from .schema import (
 )
 from .signals import async_clear_notifications, async_send_signal
 from .store import LaeutwerkStore, StoredData
+from .templates import (
+    RUNTIME_KEYS,
+    builtin_templates,
+    export_yaml,
+    parse_rules_yaml,
+    template_from_rule,
+)
 from .triggers import own_context
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +84,7 @@ class LaeutwerkManager:
         self.runners: dict[str, RuleRunner] = {}
         self.reminders: dict[str, dict[str, Reminder]] = {}
         self.history: dict[str, list[dict[str, Any]]] = {}
+        self.templates: list[dict[str, Any]] = []
         self._invalid: list[dict[str, Any]] = []  # kept so nothing is lost
         self._listeners: list[RuleListener] = []
         self._started = False
@@ -89,6 +97,7 @@ class LaeutwerkManager:
         """Load rules; runners start once Home Assistant has started."""
         data = await self.store.async_load()
         self.history = data["history"]
+        self.templates = data["templates"]
         for raw in data["rules"]:
             try:
                 rule = Rule.from_dict(validate_rule(raw))
@@ -158,6 +167,7 @@ class LaeutwerkManager:
         return {
             "rules": [rule.to_dict() for rule in self.rules.values()] + self._invalid,
             "history": self.history,
+            "templates": self.templates,
             "reminders": {
                 rule_id: [reminder.to_dict() for reminder in reminders.values()]
                 for rule_id, reminders in self.reminders.items()
@@ -309,6 +319,70 @@ class LaeutwerkManager:
             await self._async_start_runner(rule)
         self._notify(EVENT_UPDATED, rule_id)
         return rule
+
+    async def async_import_rules(self, text: str) -> list[Rule]:
+        """Create rules from YAML; ids that exist already get a new one."""
+        items = parse_rules_yaml(text)
+        prepared = []
+        for item in items:
+            data = {k: v for k, v in item.items() if k not in RUNTIME_KEYS}
+            if data.get("id") in self.rules:
+                data["id"] = None
+            prepared.append(data)
+        # Validate everything first: an import adds all rules or none.
+        taken = set(self.rules)
+        for data in prepared:
+            check = dict(data)
+            check["id"] = check.get("id") or make_rule_id(
+                str(check.get("name", "")), taken
+            )
+            taken.add(check["id"])
+            await async_validate_rule(self.hass, check)
+        return [await self.async_create_rule(data) for data in prepared]
+
+    def export_rules(self, rule_ids: list[str]) -> str:
+        """YAML of some rules."""
+        return export_yaml([self.get_rule(rule_id).to_dict() for rule_id in rule_ids])
+
+    def list_templates(self) -> list[dict[str, Any]]:
+        """Built-in templates (server language) and the user's own."""
+        builtin = [
+            {**t, "builtin": True} for t in builtin_templates(self.hass.config.language)
+        ]
+        return builtin + [{**t, "builtin": False} for t in self.templates]
+
+    def save_template(
+        self, name: str, rule: dict[str, Any], description: str = ""
+    ) -> dict[str, Any]:
+        """Save a rule configuration as the user's own template."""
+        data = {**template_from_rule(rule), "name": rule.get("name") or name}
+        data.setdefault("reminders", [{"at": "09:00"}])
+        data["sources"] = data.get("sources") or []
+        # Must be a valid rule apart from the personal parts.
+        validate_rule(
+            {**data, "id": "template", "sources": ["calendar.template"]}
+            if not data.get("interval")
+            else {**data, "id": "template"}
+        )
+        data.pop("sources", None)
+        existing = {t["id"] for t in self.templates}
+        template_id = make_rule_id(f"user {name}", existing)
+        template = {
+            "id": template_id,
+            "name": name,
+            "description": description,
+            "rule": data,
+        }
+        self.templates.append(template)
+        self.async_schedule_save()
+        return template
+
+    def delete_template(self, template_id: str) -> None:
+        """Delete one of the user's templates."""
+        if not any(t["id"] == template_id for t in self.templates):
+            raise HomeAssistantError(f"Unknown template '{template_id}'")
+        self.templates = [t for t in self.templates if t["id"] != template_id]
+        self.async_schedule_save()
 
     async def async_set_enabled(self, rule_id: str, enabled: bool) -> None:
         """Switch a rule on or off (off forgets its open reminders)."""

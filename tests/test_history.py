@@ -89,7 +89,7 @@ async def test_history_websocket(
 async def test_storage_migration_from_1_1(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
 ) -> None:
-    """0.1–0.4 stored version 1.1 without history."""
+    """0.1–0.4 stored version 1.1 without history and templates."""
     freezer.move_to(at(MON, 9))
     FakeCalendars(hass, WASTE)
     hass_storage["laeutwerk"] = {
@@ -107,8 +107,9 @@ async def test_storage_migration_from_1_1(
     assert manager.history == {}
     assert await hass.config_entries.async_unload(entry.entry_id)
     stored = hass_storage["laeutwerk"]
-    assert stored["minor_version"] == 2
+    assert stored["minor_version"] == 3
     assert stored["data"]["history"] == {}
+    assert stored["data"]["templates"] == []
 
 
 async def test_diagnostics(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:

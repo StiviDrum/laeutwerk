@@ -29,6 +29,8 @@
     "update_rule": { "service": "mdi:pencil" },
     "delete_rule": { "service": "mdi:delete" },
     "duplicate_rule": { "service": "mdi:content-copy" },
+    "export_rules": { "service": "mdi:export" },
+    "import_rules": { "service": "mdi:import" },
     "enable": { "service": "mdi:toggle-switch" },
     "disable": { "service": "mdi:toggle-switch-off-outline" }
   }

@@ -112,6 +112,23 @@ duplicate_rule:
       selector:
         text:
 
+export_rules:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+          multiple: true
+
+import_rules:
+  fields:
+    yaml:
+      required: true
+      selector:
+        text:
+          multiline: true
+
 enable:
   fields:
     rule:

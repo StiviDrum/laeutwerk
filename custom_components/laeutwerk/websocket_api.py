@@ -308,6 +308,106 @@ async def ws_history(
     connection.send_result(msg["id"], {"history": entries})
 
 
+@websocket_api.websocket_command({vol.Required("type"): "laeutwerk/templates/list"})
+@websocket_api.async_response
+@_with_manager
+async def ws_templates_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Built-in and own templates."""
+    connection.send_result(msg["id"], {"templates": manager.list_templates()})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/templates/save",
+        vol.Required("name"): cv.string,
+        vol.Optional("description", default=""): cv.string,
+        vol.Exclusive("rule_id", "rule"): cv.string,
+        vol.Exclusive("rule", "rule"): dict,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_templates_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Save a rule (saved or unsaved) as own template (admin)."""
+    if "rule_id" in msg:
+        rule = manager.get_rule(msg["rule_id"]).to_dict()
+    elif "rule" in msg:
+        rule = msg["rule"]
+    else:
+        raise vol.Invalid("rule_id or rule is required")
+    template = manager.save_template(msg["name"], rule, msg["description"])
+    connection.send_result(msg["id"], template)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/templates/delete",
+        vol.Required("template_id"): cv.string,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_templates_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Delete an own template (admin)."""
+    manager.delete_template(msg["template_id"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/rules/export",
+        vol.Optional("rule_ids"): [cv.string],
+    }
+)
+@websocket_api.async_response
+@_with_manager
+async def ws_export(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """YAML of some or all rules."""
+    rule_ids = msg.get("rule_ids") or list(manager.rules)
+    connection.send_result(msg["id"], {"yaml": manager.export_rules(rule_ids)})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "laeutwerk/rules/import", vol.Required("yaml"): cv.string}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_import(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Create rules from YAML (admin)."""
+    rules = await manager.async_import_rules(msg["yaml"])
+    connection.send_result(
+        msg["id"], {"rules": [rule_payload(manager, rule) for rule in rules]}
+    )
+
+
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
@@ -321,5 +421,10 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_subscribe,
         ws_preview,
         ws_history,
+        ws_templates_list,
+        ws_templates_save,
+        ws_templates_delete,
+        ws_export,
+        ws_import,
     ):
         websocket_api.async_register_command(hass, command)
