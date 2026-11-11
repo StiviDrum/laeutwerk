@@ -960,6 +960,33 @@ class RuleRunner:
         )
 
     def next_occurrence(self, now: datetime | None = None) -> Occurrence | None:
-        """Next matching event (bundle) that is not over yet."""
+        """Next matching event (bundle) that still needs something to be done.
+
+        Skipped: events that are over, whose reminder is done or missed, or
+        whose expiry has passed. To-dos and intervals stay due until they are
+        acknowledged (they are carried to today while overdue), so for them
+        only "done" counts.
+        """
         now = now or dt_util.utcnow()
-        return next((o for o in self.upcoming if o.end > now), None)
+        for occurrence in self.upcoming:
+            if occurrence.end <= now:
+                continue
+            reminder = self.reminders.get(occurrence.id)
+            if self._stays_due(occurrence):
+                if reminder is not None and reminder.state == STATE_DONE:
+                    continue
+                return occurrence
+            if reminder is not None and reminder.state in (STATE_DONE, STATE_MISSED):
+                continue
+            if self.expire_at(occurrence) <= now:
+                continue
+            return occurrence
+        return None
+
+    @staticmethod
+    def _stays_due(occurrence: Occurrence) -> bool:
+        """Whether an occurrence comes from to-dos / an interval only."""
+        return all(
+            event.calendar.split(".", 1)[0] in (TODO_DOMAIN, INTERVAL_SOURCE)
+            for event in occurrence.events
+        )

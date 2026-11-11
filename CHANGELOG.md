@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- "Next event" (sensor `…_naechster_termin`, attribute `next_event`,
+  `get_rules`, card) no longer shows an event whose reminder has expired, is
+  done or missed – e.g. today's all-day collection after `event_day 12:00`.
+  Overdue to-dos and intervals stay the next event until acknowledged.
+
 ## [0.6.1] - 2026-11-11
 
 ### Fixed

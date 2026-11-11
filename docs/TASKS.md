@@ -121,7 +121,10 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - `laeutwerk/persons` lists persons with their companion-app notify actions; signal option `only_present` for `audience: persons`. Notify actions only as optional extra field.
 - [x] Release v0.6.1
 
-## 1.0 – Veröffentlichung
+## 0.6.2 – Praxistest v0.6.1 (11.11.2026, Testregel auf `calendar.rodgau_abfallkalender`)
+- [x] „Nächster Termin“ zeigte einen schon verfallenen Termin
+  - `RuleRunner.next_occurrence()` now skips occurrences whose reminder is done or missed, or whose expiry has passed. Occurrences made only of to-dos / intervals stay "next" until acknowledged (missed does not count for them: the item is still open and carried to today). Affects `next_event` of the state sensor, `_naechster_termin`, `get_rules` / websocket status and the card's rule list.
+
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)
 - [ ] HACS-Standardliste (vorher Steven fragen)
