@@ -67,6 +67,19 @@ def full_rule() -> dict:
         acknowledge=[
             {"type": "trigger", "trigger": {"trigger": "state", "entity_id": DOOR}}
         ],
+        activation={
+            "conditions": [
+                {
+                    "condition": "state",
+                    "entity_id": "input_boolean.abwesend",
+                    "state": "off",
+                }
+            ]
+        },
+        on_done=[
+            {"action": "counter.increment", "target": {"entity_id": "counter.tonnen"}}
+        ],
+        assignee={"persons": ["person.steven"]},
     )
 
 
@@ -80,6 +93,9 @@ def test_rule_refs() -> None:
         "tts.piper",
         "scene.abend",
         DOOR,
+        "input_boolean.abwesend",
+        "counter.tonnen",
+        "person.steven",
     }
     assert rule_action_refs(rule) == {PHONE}
 
