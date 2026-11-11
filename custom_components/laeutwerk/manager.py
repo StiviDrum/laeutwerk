@@ -26,7 +26,7 @@ from .const import (
     SIGNAL_RULE_STATUS,
 )
 from .engine import RuleRunner
-from .matching import Occurrence, sample_occurrence
+from .matching import Occurrence, hit_colors, sample_occurrence
 from .model import STATE_INACTIVE, Reminder, Rule, Signal
 from .schema import (
     async_validate_rule,
@@ -395,6 +395,8 @@ class LaeutwerkManager:
         runner = self.runners.get(rule_id)
         payload = reminder.to_dict()
         payload["titles"] = [event.summary for event in reminder.events]
+        if rule := self.rules.get(rule_id):
+            payload["colors"] = hit_colors(rule, reminder.events)
         if runner is not None:
             next_time = runner.next_reminder_time(reminder)
             payload["variables"] = runner.variables(reminder)
@@ -440,5 +442,7 @@ def occurrence_payload(
         "end": occurrence.end.isoformat(),
         "titles": [event.summary for event in occurrence.events],
         "days_until": (occurrence.day - today).days,
+        "colors": hit_colors(runner.rule, occurrence.events),
+        "all_day": all(event.all_day for event in occurrence.events),
         "variables": runner.variables(occurrence),
     }

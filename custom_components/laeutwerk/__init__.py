@@ -17,6 +17,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import CARD_FILENAME, CARD_URL_BASE, DOMAIN
 from .manager import LaeutwerkManager
 from .services import async_setup_services
+from .websocket_api import async_register_websocket
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,8 +36,9 @@ type LaeutwerkConfigEntry = ConfigEntry[LaeutwerkManager]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register card and services once per Home Assistant start."""
+    """Register card, services and websocket API once per Home Assistant start."""
     async_setup_services(hass)
+    async_register_websocket(hass)
     await _async_register_card(hass)
     return True
 

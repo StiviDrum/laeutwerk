@@ -11,6 +11,7 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
+from .colors import color_hex
 from .model import (
     MATCH_REGEX,
     MATCH_STARTSWITH,
@@ -248,6 +249,25 @@ def hits_of(rule: Rule, events: Iterable[CalendarEvent]) -> list[KeywordRow]:
             if not any(row is known for known in hits):
                 hits.append(row)
     return hits
+
+
+COLOR_COLUMNS = ("farbe", "color", "colour")
+
+
+def hit_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
+    """Colours (#rrggbb) of the matching rows, for the dots in the card.
+
+    Taken from the column a light signal uses (``color_from``), else from a
+    column named farbe / color.
+    """
+    column = next(
+        (s.config["color_from"] for s in rule.signals if s.config.get("color_from")),
+        None,
+    ) or next((c for c in COLOR_COLUMNS if c in rule.filter.columns), None)
+    if column is None:
+        return []
+    colors = [color_hex(row.values.get(column)) for row in hits_of(rule, events)]
+    return [color for color in colors if color]
 
 
 def is_plural(rule: Rule, events: Iterable[CalendarEvent]) -> bool:

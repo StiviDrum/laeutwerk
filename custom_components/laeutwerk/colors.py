@@ -34,7 +34,26 @@ _HEX = re.compile(r"^#?([0-9a-f]{6})$")
 _RGB = re.compile(r"^(\d{1,3})\s*[,; ]\s*(\d{1,3})\s*[,; ]\s*(\d{1,3})$")
 
 
-def parse_color(value: str | None) -> tuple[int, int, int] | None:
+# For drawing (colour dots in the card) grey stays grey.
+_DRAWN = {
+    "grau": "grey",
+    "schwarz": "black",
+    "grey": "grey",
+    "gray": "grey",
+    "black": "black",
+    "braun": "brown",
+}
+
+
+def color_hex(value: str | None) -> str | None:
+    """Return #rrggbb for drawing a colour text, None if not understood."""
+    rgb = parse_color(value, for_light=False)
+    return "#{:02x}{:02x}{:02x}".format(*rgb) if rgb else None
+
+
+def parse_color(
+    value: str | None, *, for_light: bool = True
+) -> tuple[int, int, int] | None:
     """Return r, g, b for a colour text, None if it is not understood."""
     text = (value or "").strip().lower()
     if not text:
@@ -45,7 +64,10 @@ def parse_color(value: str | None) -> tuple[int, int, int] | None:
     if match := _RGB.match(text):
         red, green, blue = (int(part) for part in match.groups())
         return (red, green, blue) if max(red, green, blue) <= 255 else None
-    name = _GERMAN.get(text, text).replace(" ", "")
+    name = _GERMAN.get(text, text)
+    if not for_light:
+        name = _DRAWN.get(text, name)
+    name = name.replace(" ", "")
     try:
         rgb = color_util.color_name_to_rgb(name)
     except ValueError:
