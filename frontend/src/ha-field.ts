@@ -77,7 +77,7 @@ export class LaeutwerkField extends LitElement {
   }
 
   private _emit(value: unknown): void {
-    this.value = value;
+    // The parent stores the value and passes it back (one-way data flow).
     this.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
   }
 

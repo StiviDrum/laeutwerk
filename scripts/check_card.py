@@ -285,6 +285,28 @@ async def main() -> None:
                 )
                 print("signal editor fields:", info)
                 await cdp.shot("signal")
+                # Regression (0.6.1): edits must survive Home Assistant state
+                # changes (the card re-renders the editor on every hass update).
+                await cdp.js(
+                    "(() => { const se = window.__find(document, 'laeutwerk-signal-editor');"
+                    " const ta = se.shadowRoot.querySelector('textarea');"
+                    " ta.value = 'EDIT SURVIVES'; ta.dispatchEvent(new Event('input')); return true })()"
+                )
+                for value in range(3):
+                    async with session.post(
+                        f"{HA}/api/states/sensor.laeutwerk_check",
+                        json={"state": str(value)},
+                        headers={"Authorization": f"Bearer {tok['access_token']}"},
+                    ):
+                        pass
+                    await asyncio.sleep(1)
+                kept = await cdp.js(
+                    "(() => { const se = window.__find(document, 'laeutwerk-signal-editor');"
+                    " return se._sig.message })()"
+                )
+                print("edit kept after state changes:", kept == "EDIT SURVIVES")
+                if kept != "EDIT SURVIVES":
+                    raise SystemExit("edits were reset by state changes")
                 # Template picker (new rule) and the "advanced" step.
                 templates = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"

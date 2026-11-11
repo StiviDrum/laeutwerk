@@ -3,7 +3,7 @@
  * HA's trigger editor), only if (all / any + HA's condition editor), the
  * fields of the type, limits, test and "as YAML".
  */
-import { LitElement, css, html, nothing, type TemplateResult } from "lit";
+import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { SIGNAL_ICONS, availableVariables, defaultSignal, renderTemplate } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -11,6 +11,8 @@ import { shared, tokens } from "./styles";
 import type { HaConfig, HomeAssistant, PushButton, QuietTime, Rule, Signal } from "./types";
 
 const TYPES: Signal["type"][] = ["notify", "light_signal", "announce", "action"];
+/** Shared empty list: a new [] on every render would look like a new value. */
+const EMPTY: never[] = [];
 
 function list(value: unknown): HaConfig[] {
   if (Array.isArray(value)) return value as HaConfig[];
@@ -21,7 +23,13 @@ export class LaeutwerkSignalEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public rule!: Rule;
+  /**
+   * Signal to edit. Never written by this element: Lit re-sets object
+   * properties on every parent render, so edits live in the copy `_sig`
+   * (changing this property would reset the editor on each HA update).
+   */
   @property({ attribute: false }) public signal!: Signal;
+  @state() private _sig!: Signal;
   /** Variables of the next real event (preview of the texts). */
   @property({ attribute: false }) public sample: Record<string, string> = {};
   /** Saved rule id: testing needs a saved rule. */
@@ -31,38 +39,44 @@ export class LaeutwerkSignalEditor extends LitElement {
   @state() private _testState?: string;
   @state() private _focus = "message";
 
+  protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("signal") && this.signal) {
+      this._sig = JSON.parse(JSON.stringify(this.signal)) as Signal;
+    }
+  }
+
   private get _l(): Localizer {
     return this.localize;
   }
 
   private _set(changes: Partial<Signal>): void {
-    const next = { ...this.signal, ...changes } as Signal & Record<string, unknown>;
+    const next = { ...this._sig, ...changes } as Signal & Record<string, unknown>;
     for (const [key, value] of Object.entries(changes)) {
       if (value === undefined || value === "") delete next[key];
     }
-    this.signal = next;
+    this._sig = next;
   }
 
   private _emit(name: "apply" | "cancel" | "delete"): void {
-    this.dispatchEvent(new CustomEvent(name, { detail: { signal: this.signal } }));
+    this.dispatchEvent(new CustomEvent(name, { detail: { signal: this._sig } }));
   }
 
   private _setType(type: Signal["type"]): void {
-    if (type === this.signal.type) return;
+    if (type === this._sig.type) return;
     const fresh = defaultSignal(type, this.rule);
-    this.signal = {
+    this._sig = {
       ...fresh,
-      id: this.signal.id,
-      when: this.signal.when,
-      conditions: this.signal.conditions,
-      conditions_match: this.signal.conditions_match,
-      quiet: this.signal.quiet,
+      id: this._sig.id,
+      when: this._sig.when,
+      conditions: this._sig.conditions,
+      conditions_match: this._sig.conditions_match,
+      quiet: this._sig.quiet,
     };
   }
 
   private _insertVariable(name: string): void {
     const key = this._focus as keyof Signal;
-    const current = String(this.signal[key] ?? "");
+    const current = String(this._sig[key] ?? "");
     this._set({ [key]: `${current}${current && !current.endsWith(" ") ? " " : ""}{${name}}` });
   }
 
@@ -70,7 +84,7 @@ export class LaeutwerkSignalEditor extends LitElement {
     if (!this.hass || !this.ruleId) return;
     this._testState = "…";
     try {
-      const config = { ...this.signal };
+      const config = { ...this._sig };
       delete config.id;
       await this.hass.callService("laeutwerk", "test_signal", { rule: this.ruleId, config });
       this._testState = this._l.t("test_sent");
@@ -95,7 +109,7 @@ export class LaeutwerkSignalEditor extends LitElement {
   private _onYaml(ev: CustomEvent<{ value: unknown }>): void {
     const value = ev.detail.value;
     if (value && typeof value === "object" && !Array.isArray(value) && "type" in value) {
-      this.signal = value as Signal;
+      this._sig = value as Signal;
       this._yamlError = undefined;
     } else {
       this._yamlError = "type";
@@ -106,7 +120,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   protected render() {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     if (this._yaml) {
       return html`<div class="page">
         <div class="separator">${l.t("edit_signal")}<span class="line"></span></div>
@@ -178,7 +192,7 @@ export class LaeutwerkSignalEditor extends LitElement {
           .hass=${this.hass}
           .localize=${l}
           .selector=${{ condition: {} }}
-          .value=${s.conditions ?? []}
+          .value=${s.conditions ?? EMPTY}
           @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
             const value = list(e.detail.value);
             this._set({ conditions: value.length ? value : undefined });
@@ -202,7 +216,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _opportunity(): TemplateResult {
     const l = this._l;
-    const when = this.signal.when as { opportunity: HaConfig | HaConfig[]; manual_only?: boolean };
+    const when = this._sig.when as { opportunity: HaConfig | HaConfig[]; manual_only?: boolean };
     return html`
       <div class="hint">${l.t("when_opportunity_hint")}</div>
       <laeutwerk-field
@@ -220,7 +234,7 @@ export class LaeutwerkSignalEditor extends LitElement {
   }
 
   private _fields(): TemplateResult {
-    const s = this.signal;
+    const s = this._sig;
     if (s.type === "notify") return this._notifyFields();
     if (s.type === "light_signal") return this._lightFields();
     if (s.type === "announce") return this._announceFields();
@@ -237,7 +251,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _notifyFields(): TemplateResult {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     const buttons = (s.actions ?? []) as PushButton[];
     const ack = buttons.find((b) => b.ack);
     const snooze = buttons.find((b) => b.snooze !== undefined);
@@ -270,7 +284,7 @@ export class LaeutwerkSignalEditor extends LitElement {
               .localize=${l}
               .label=${l.t("persons")}
               .selector=${{ entity: { domain: "person", multiple: true } }}
-              .value=${s.persons ?? []}
+              .value=${s.persons ?? EMPTY}
               @value-changed=${(e: CustomEvent<{ value: string[] }>) =>
                 this._set({ persons: e.detail.value })}
             ></laeutwerk-field>`
@@ -336,7 +350,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _lightFields(): TemplateResult {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     const columns = this.rule.filter.keywords.columns;
     const fromColumn = s.color_from !== undefined;
     return html`
@@ -345,7 +359,7 @@ export class LaeutwerkSignalEditor extends LitElement {
         .localize=${l}
         .label=${l.t("lights")}
         .selector=${{ entity: { domain: "light", multiple: true } }}
-        .value=${s.entities ?? []}
+        .value=${s.entities ?? EMPTY}
         @value-changed=${(e: CustomEvent<{ value: string[] }>) => this._set({ entities: e.detail.value })}
       ></laeutwerk-field>
       <div class="row">
@@ -417,14 +431,14 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _announceFields(): TemplateResult {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     return html`
       <laeutwerk-field
         .hass=${this.hass}
         .localize=${l}
         .label=${l.t("players")}
         .selector=${{ entity: { domain: "media_player", multiple: true } }}
-        .value=${s.players ?? []}
+        .value=${s.players ?? EMPTY}
         @value-changed=${(e: CustomEvent<{ value: string[] }>) => this._set({ players: e.detail.value })}
       ></laeutwerk-field>
       <div class="row">
@@ -463,7 +477,7 @@ export class LaeutwerkSignalEditor extends LitElement {
     multiline = false,
   ): TemplateResult {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     const pluralKey = `${key}_plural` as "title_plural" | "message_plural" | "text_plural";
     const input = (k: typeof key | typeof pluralKey) => {
       const value = String(s[k] ?? "");
@@ -492,7 +506,7 @@ export class LaeutwerkSignalEditor extends LitElement {
   }
 
   private _variables(opportunityOnly: boolean): TemplateResult {
-    const names = availableVariables(this.rule, this.signal.when !== "now" || opportunityOnly);
+    const names = availableVariables(this.rule, this._sig.when !== "now" || opportunityOnly);
     return html`<div class="wrap vars" aria-label=${this._l.t("variables")}>
       ${names.map(
         (name) =>
@@ -515,7 +529,7 @@ export class LaeutwerkSignalEditor extends LitElement {
       >
         ${Array.from({ length: stages + 1 }, (_, n) => n).map(
           (n) =>
-            html`<option value=${n} ?selected=${(this.signal.stage ?? 0) === n}>
+            html`<option value=${n} ?selected=${(this._sig.stage ?? 0) === n}>
               ${n ? `${l.t("stage_n", { n })} · ${this.rule.escalation![n - 1].after}` : l.t("stage_0")}
             </option>`,
         )}
@@ -525,7 +539,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _limits(): TemplateResult {
     const l = this._l;
-    const s = this.signal;
+    const s = this._sig;
     const limit = s.limit ?? {};
     const setLimit = (key: "per_reminder" | "min_interval", raw: string) => {
       const next = { ...limit, [key]: raw === "" ? undefined : Number(raw) };

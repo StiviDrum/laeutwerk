@@ -29,6 +29,9 @@ import type {
   Signal,
 } from "./types";
 
+/** Shared empty list: a new [] on every render would look like a new value. */
+const EMPTY: never[] = [];
+
 type TimeKind = "days" | "same" | "hours" | "minutes" | "custom";
 
 function errorText(err: unknown): string {
@@ -959,7 +962,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           .hass=${this.hass}
           .localize=${l}
           .selector=${{ entity: { domain: "person", multiple: true } }}
-          .value=${assignee?.persons ?? []}
+          .value=${assignee?.persons ?? EMPTY}
           @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
             const value = e.detail.value;
             const persons = Array.isArray(value) ? value : value ? [value] : [];
@@ -1028,7 +1031,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           .hass=${this.hass}
           .localize=${l}
           .selector=${{ condition: {} }}
-          .value=${activation?.conditions ?? []}
+          .value=${activation?.conditions ?? EMPTY}
           @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) => {
             const conditions = e.detail.value ?? [];
             if (!conditions.length && !activation?.season) setActivation(null);
@@ -1116,7 +1119,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           .hass=${this.hass}
           .localize=${l}
           .selector=${{ action: {} }}
-          .value=${r.on_done ?? []}
+          .value=${r.on_done ?? EMPTY}
           @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) =>
             this._update({ on_done: e.detail.value ?? [] })}
         ></laeutwerk-field>
