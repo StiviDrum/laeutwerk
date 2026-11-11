@@ -95,13 +95,27 @@ export class LaeutwerkRuleEditor extends LitElement {
       return;
     }
     const rule = clone(this._rule);
-    rule.filter.keywords.rows = rule.filter.keywords.rows.filter((r) => r.match.trim());
-    // Columns may still be half-typed: the preview needs no variables of signals.
-    rule.signals = [];
+    // Only what decides the matches: other steps may be half filled in and
+    // must not turn the preview into an error.
+    const season = rule.activation?.season;
+    const preview: Record<string, unknown> = {
+      sources: rule.sources,
+      filter: {
+        all_day: rule.filter.all_day,
+        keywords: {
+          columns: rule.filter.keywords.columns,
+          rows: rule.filter.keywords.rows.filter((r) => r.match.trim()),
+        },
+      },
+      bundle: rule.bundle,
+      reminders: rule.reminders.length ? rule.reminders : [{ at: "09:00" }],
+      expire: rule.expire,
+    };
+    if (season?.from && season?.to) preview.activation = { season };
     try {
       this._preview = await this.hass.callWS<PreviewResult>({
         type: "laeutwerk/preview",
-        rule: { ...rule, reminders: rule.reminders.length ? rule.reminders : [{ at: "09:00" }] },
+        rule: preview,
         limit: 5,
       });
       this._previewError = undefined;

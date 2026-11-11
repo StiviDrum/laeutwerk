@@ -43,8 +43,9 @@ LIBS = os.environ.get("LAEUTWERK_CHROME_LIBS", "")
 
 async def tokens(session: aiohttp.ClientSession) -> dict:
     async with session.get(f"{HA}/api/onboarding") as resp:
-        steps = await resp.json()
-    user_done = next(s["done"] for s in steps if s["step"] == "user")
+        # After onboarding Home Assistant removes this endpoint (404).
+        steps = await resp.json() if resp.status == 200 else []
+    user_done = next((s["done"] for s in steps if s["step"] == "user"), True)
     if not user_done:
         async with session.post(
             f"{HA}/api/onboarding/users",
@@ -284,6 +285,29 @@ async def main() -> None:
                 )
                 print("signal editor fields:", info)
                 await cdp.shot("signal")
+                # Template picker (new rule) and the "advanced" step.
+                templates = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " c._editing = undefined; c._picking = true; await c.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 1500));"
+                    " const p = c.shadowRoot.querySelector('laeutwerk-template-picker');"
+                    " return [...p.shadowRoot.querySelectorAll('.tpl .name')].map(n => n.textContent) })()"
+                )
+                print("templates:", templates)
+                await cdp.shot("templates")
+                advanced = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " c._picking = false; c._editing = Object.assign({}, c._rules[0], {"
+                    "  escalation: [{after: '2h'}], assignee: {persons: [], rotation: 'fixed'}});"
+                    " await c.updateComplete; await new Promise(r => setTimeout(r, 2500));"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const sec = e.shadowRoot.querySelectorAll('section')[6];"
+                    " sec.scrollIntoView();"
+                    " return [...sec.querySelectorAll('laeutwerk-field')].map(f =>"
+                    "  f.shadowRoot.querySelector('ha-selector') ? 'ha-selector' : 'fallback') })()"
+                )
+                print("advanced step fields:", advanced)
+                await cdp.shot("advanced")
         finally:
             proc.terminate()
 
