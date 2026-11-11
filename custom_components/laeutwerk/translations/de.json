@@ -208,5 +208,11 @@
     "signal_failed": {
       "message": "Das Signal konnte nicht gesendet werden – Details stehen im Protokoll."
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "Läutwerk-Regel „{rule}“ verweist auf Fehlendes",
+      "description": "Die Regel „{rule}“ verwendet Entitäten oder Aktionen, die es (nicht mehr) gibt: {entities}.\n\nFehlende Kalender werden nicht gelesen, Signale an fehlende Lampen, Lautsprecher oder Handys nicht gesendet. Stelle sie wieder her oder bearbeite die Regel in der Läutwerk-Karte. Diese Meldung verschwindet, sobald alles wieder vorhanden ist."
+    }
   }
 }

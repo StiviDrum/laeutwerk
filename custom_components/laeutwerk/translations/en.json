@@ -208,5 +208,11 @@
     "signal_failed": {
       "message": "The signal could not be sent – see the log for details."
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "Läutwerk rule \"{rule}\" refers to missing entities",
+      "description": "The rule \"{rule}\" uses entities or actions that do not exist (any more): {entities}.\n\nCalendars that are missing are not read, signals to missing lights, speakers or phones are not sent. Restore them or edit the rule in the Läutwerk card. This message disappears as soon as everything is available again."
+    }
   }
 }
