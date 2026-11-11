@@ -411,7 +411,7 @@ async def test_missing_calendar_is_reported(
     await manager.async_create_rule(muell_rule(sources=["calendar.gibt_es_nicht"]))
     await hass.async_block_till_done()
     assert manager.status("muell")["errors"] == {
-        "calendar.gibt_es_nicht": "calendar not found"
+        "calendar.gibt_es_nicht": "entity not found"
     }
 
 

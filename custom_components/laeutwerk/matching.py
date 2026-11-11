@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from .colors import color_hex
 from .model import (
+    INTERVAL_SOURCE,
     MATCH_REGEX,
     MATCH_STARTSWITH,
     CalendarEvent,
@@ -166,7 +167,12 @@ def build_occurrences(rule: Rule, events: Iterable[CalendarEvent]) -> list[Occur
     groups: dict[str, list[CalendarEvent]] = {}
     seen: set[str] = set()
     for event in sorted(events, key=lambda e: (e.start, e.calendar, e.summary)):
-        if event.key in seen or match_event(rule.filter, event) is None:
+        if event.key in seen:
+            continue
+        if (
+            event.calendar != INTERVAL_SOURCE
+            and match_event(rule.filter, event) is None
+        ):
             continue
         seen.add(event.key)
         key = f"{rule.id}__{event.day:%Y%m%d}"
@@ -286,6 +292,7 @@ def build_variables(
     tz: tzinfo,
     language: str | None,
     calendar_names: Mapping[str, str] | None = None,
+    assignee: str | None = None,
 ) -> dict[str, str]:
     """Variables of a reminder (SPEC B4)."""
     events = list(events)
@@ -303,6 +310,8 @@ def build_variables(
         "datum": format_date(first.day, language),
         "uhrzeit": "" if first.all_day else f"{first.start.astimezone(tz):%H:%M}",
     }
+    if assignee is not None:
+        variables["zustaendig"] = assignee
     hits = hits_of(rule, events)
     for column in rule.filter.columns:
         values = [row.values.get(column, "") for row in hits]

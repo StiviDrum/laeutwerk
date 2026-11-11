@@ -56,8 +56,8 @@ def test_defaults_and_signal_ids() -> None:
     ("changes", "message"),
     [
         ({"name": "  "}, "must not be empty"),
-        ({"sources": []}, "length"),
-        ({"sources": ["light.lampe"]}, "not a calendar entity"),
+        ({"sources": []}, "at least one source or an 'interval'"),
+        ({"sources": ["light.lampe"]}, "cannot be a source"),
         ({"sources": ["calendar.a", "calendar.a"]}, "unique|duplicate"),
         ({"reminders": []}, "length"),
         ({"reminders": [{"at": "morgen früh"}]}, "invalid time"),
@@ -177,5 +177,7 @@ def test_reminder_round_trip() -> None:
         "snoozed_until": None,
         "repeats": 2,
         "last_reminded": "2026-11-16T18:00:00+00:00",
+        "stage": 1,
+        "assignee": "person.steven",
     }
     assert Reminder.from_dict(data).to_dict() == data

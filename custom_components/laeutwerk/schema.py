@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import re
 from typing import Any
 
@@ -21,6 +22,7 @@ from .model import (
     ACK_NOTIFY_ACTION,
     ACK_TAG,
     ACK_TRIGGER,
+    AUDIENCE_ASSIGNEE,
     AUDIENCE_PERSONS,
     AUDIENCES,
     DEFAULT_EXPIRE,
@@ -35,6 +37,8 @@ from .model import (
     QUIET_MODES,
     QUIET_SKIP,
     REPEAT_NONE,
+    ROTATION_FIXED,
+    ROTATIONS,
     SIGNAL_ACTION,
     SIGNAL_ANNOUNCE,
     SIGNAL_LIGHT,
@@ -42,6 +46,7 @@ from .model import (
     SIGNAL_TYPES,
     WHEN_NOW,
 )
+from .sources import SOURCE_DOMAINS
 from .timespec import KIND_EVENT_END, KIND_EVENT_START, parse_timespec
 from .triggers import as_trigger_list, async_validate_triggers
 
@@ -83,11 +88,57 @@ def _expire_time(value: Any) -> str:
     return text
 
 
-def _calendar_entity(value: Any) -> str:
+def _source_entity(value: Any) -> str:
     entity_id = cv.entity_id(value)
-    if not entity_id.startswith("calendar."):
-        raise vol.Invalid(f"'{entity_id}' is not a calendar entity")
+    if entity_id.split(".", 1)[0] not in SOURCE_DOMAINS:
+        raise vol.Invalid(
+            f"'{entity_id}' cannot be a source (allowed: "
+            f"{', '.join(d + '.*' for d in SOURCE_DOMAINS)})"
+        )
     return entity_id
+
+
+def duration_days(value: Any) -> int:
+    """Parse a number of days: 90, '90d', '12w'."""
+    if isinstance(value, bool):
+        raise vol.Invalid("invalid number of days")
+    if isinstance(value, int):
+        days = value
+    else:
+        match = re.fullmatch(r"(\d{1,4})\s*([dw]?)", _text(value).lower())
+        if not match:
+            raise vol.Invalid(f"invalid interval '{value}' (e.g. 90, '90d', '12w')")
+        days = int(match[1]) * (7 if match[2] == "w" else 1)
+    if days < 1:
+        raise vol.Invalid("an interval must be at least one day")
+    return days
+
+
+def _month_day(value: Any) -> str:
+    text = _non_empty(value)
+    match = re.fullmatch(r"(\d{1,2})-(\d{1,2})", text)
+    if not match:
+        raise vol.Invalid(f"'{value}' is not a month-day (MM-DD, e.g. '04-01')")
+    month, day = int(match[1]), int(match[2])
+    try:
+        date(2024, month, day)  # leap year: 02-29 is allowed
+    except ValueError as err:
+        raise vol.Invalid(f"'{value}' is not a valid day of the year") from err
+    return f"{month:02d}-{day:02d}"
+
+
+def _escalation_after(value: Any) -> str:
+    text = _non_empty(value).lower()
+    if re.fullmatch(r"\d{1,2}:\d{2}", text):
+        return _clock(text)
+    try:
+        duration_minutes(text.lstrip("+"))
+    except vol.Invalid as err:
+        raise vol.Invalid(
+            f"invalid escalation time '{value}' (after a duration such as '2h', "
+            "'30m' or at a time of day such as '21:30')"
+        ) from err
+    return text.lstrip("+")
 
 
 def _notify_target(value: Any) -> str:
@@ -205,6 +256,14 @@ def _conditions(value: Any) -> list[dict[str, Any]]:
     return conditions
 
 
+def _conditions_or_empty(value: Any) -> list[dict[str, Any]]:
+    return _conditions(value) if value else []
+
+
+def _actions_or_empty(value: Any) -> list[dict[str, Any]]:
+    return _actions(value) if value else []
+
+
 def _actions(value: Any) -> list[dict[str, Any]]:
     """Check a Home Assistant action sequence but keep it as given."""
     actions = cv.ensure_list(value)
@@ -251,6 +310,8 @@ _SIGNAL_BASE = {
     vol.Optional("conditions_match", default=MATCH_ALL): vol.In([MATCH_ALL, MATCH_ANY]),
     vol.Optional("limit"): _LIMIT_SCHEMA,
     vol.Optional("quiet"): [_QUIET_SCHEMA],
+    # Escalation stage from which the signal is active (0 = from the start).
+    vol.Optional("stage"): vol.All(vol.Coerce(int), vol.Range(min=0, max=10)),
 }
 
 _SIGNAL_SCHEMAS = {
@@ -398,6 +459,33 @@ _REPEAT_SCHEMA = vol.Any(
     msg="'repeat' must be 'none' or an object with 'every' (and 'max')",
 )
 
+_INTERVAL_SCHEMA = vol.Schema(
+    {
+        vol.Required("every"): duration_days,
+        # First due day while it was never done (default: the day it is saved).
+        vol.Optional("start"): vol.All(cv.date, lambda day: day.isoformat()),
+    }
+)
+
+_ACTIVATION_SCHEMA = vol.Schema(
+    {
+        vol.Optional("conditions", default=list): _conditions_or_empty,
+        vol.Optional("match", default=MATCH_ALL): vol.In([MATCH_ALL, MATCH_ANY]),
+        vol.Optional("season"): vol.Schema(
+            {vol.Required("from"): _month_day, vol.Required("to"): _month_day}
+        ),
+    }
+)
+
+_ASSIGNEE_SCHEMA = vol.Schema(
+    {
+        vol.Required("persons"): vol.All(
+            cv.ensure_list, [_domain_entity("person")], vol.Length(min=1), vol.Unique()
+        ),
+        vol.Optional("rotation", default=ROTATION_FIXED): vol.In(ROTATIONS),
+    }
+)
+
 RULE_SCHEMA = vol.Schema(
     {
         vol.Required("id"): cv.slug,
@@ -405,8 +493,8 @@ RULE_SCHEMA = vol.Schema(
         vol.Optional("icon", default=None): vol.Any(None, cv.icon),
         vol.Optional("color", default=None): vol.Any(None, _text),
         vol.Optional("enabled", default=True): cv.boolean,
-        vol.Required("sources"): vol.All(
-            cv.ensure_list, [_calendar_entity], vol.Length(min=1), vol.Unique()
+        vol.Optional("sources", default=list): vol.All(
+            cv.ensure_list, [_source_entity], vol.Unique()
         ),
         vol.Optional("filter", default=dict): _FILTER_SCHEMA,
         vol.Required("reminders"): vol.All(
@@ -420,6 +508,13 @@ RULE_SCHEMA = vol.Schema(
         vol.Optional("repeat", default=REPEAT_NONE): _REPEAT_SCHEMA,
         vol.Optional("bundle", default=True): cv.boolean,
         vol.Optional("expire", default=DEFAULT_EXPIRE): _expire_time,
+        vol.Optional("interval", default=None): vol.Any(None, _INTERVAL_SCHEMA),
+        vol.Optional("activation", default=None): vol.Any(None, _ACTIVATION_SCHEMA),
+        vol.Optional("on_done", default=list): _actions_or_empty,
+        vol.Optional("assignee", default=None): vol.Any(None, _ASSIGNEE_SCHEMA),
+        vol.Optional("escalation", default=list): [
+            vol.Schema({vol.Required("after"): _escalation_after})
+        ],
     }
 )
 
@@ -434,6 +529,20 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
             raise vol.Invalid(
                 f"signal '{signal['id']}': color_from '{column}' is not a column "
                 "of the keyword table"
+            )
+    if not rule["sources"] and not rule["interval"]:
+        raise vol.Invalid("a rule needs at least one source or an 'interval'")
+    stages = len(rule["escalation"])
+    for signal in rule["signals"]:
+        if signal.get("stage", 0) > stages:
+            raise vol.Invalid(
+                f"signal '{signal['id']}': stage {signal['stage']} does not exist "
+                f"(the rule has {stages} escalation stage(s))"
+            )
+        if signal.get("audience") == AUDIENCE_ASSIGNEE and not rule["assignee"]:
+            raise vol.Invalid(
+                f"signal '{signal['id']}': audience 'assignee' needs 'assignee' "
+                "(responsible persons) in the rule"
             )
     ats = [item["at"] for item in rule["reminders"]]
     if len(set(ats)) != len(ats):
@@ -465,6 +574,20 @@ async def async_validate_rule(
                 )
         except (vol.Invalid, HomeAssistantError) as err:
             raise vol.Invalid(f"signal '{signal['id']}': {err}") from err
+    try:
+        if rule["activation"] and rule["activation"]["conditions"]:
+            await condition_helper.async_validate_conditions_config(
+                hass, cv.CONDITIONS_SCHEMA(rule["activation"]["conditions"])
+            )
+    except (vol.Invalid, HomeAssistantError) as err:
+        raise vol.Invalid(f"activation: {err}") from err
+    try:
+        if rule["on_done"]:
+            await script_helper.async_validate_actions_config(
+                hass, cv.SCRIPT_SCHEMA(rule["on_done"])
+            )
+    except (vol.Invalid, HomeAssistantError) as err:
+        raise vol.Invalid(f"on_done: {err}") from err
     for index, ack in enumerate(rule["acknowledge"], start=1):
         if ack["type"] != ACK_TRIGGER:
             continue

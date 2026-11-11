@@ -203,6 +203,7 @@ class LaeutwerkManager:
             on_finished=lambda reminder, rule_id=rule.id: self._add_history(
                 rule_id, reminder
             ),
+            history=lambda rule_id=rule.id: self.history.get(rule_id, []),
         )
         self.runners[rule.id] = runner
         await runner.async_start()
@@ -229,6 +230,7 @@ class LaeutwerkManager:
                 "acknowledged_by": reminder.acknowledged_by,
                 "acknowledged_via": reminder.acknowledged_via,
                 "signals_sent": sum(reminder.signals_sent.values()),
+                "assignee": reminder.assignee,
             },
         )
         self.history[rule_id] = entries[:HISTORY_MAX]
@@ -273,6 +275,7 @@ class LaeutwerkManager:
         elif data["id"] in self.rules:
             raise vol.Invalid(f"a rule with id '{data['id']}' already exists")
         rule = Rule.from_dict(await async_validate_rule(self.hass, data))
+        _default_interval_start(rule)
         self.rules[rule.id] = rule
         self.reminders[rule.id] = {}
         self.async_schedule_save()
@@ -298,6 +301,7 @@ class LaeutwerkManager:
         rule = Rule.from_dict(
             await async_validate_rule(self.hass, {**data, "id": rule_id})
         )
+        _default_interval_start(rule, self.rules[rule_id])
         await self._async_stop_runner(rule_id, drop_open=not rule.enabled)
         self.rules[rule_id] = rule
         self.async_schedule_save()
@@ -457,13 +461,24 @@ class LaeutwerkManager:
             payload["variables"] = runner.variables(reminder)
             payload["expires_at"] = runner.expire_at(reminder).isoformat()
             payload["next_reminder_at"] = next_time.isoformat() if next_time else None
+            payload["assignee_name"] = runner.assignee_name(reminder.assignee)
         return payload
+
+    def assignee_stats(self, rule_id: str) -> dict[str, int]:
+        """How often each person acknowledged a reminder of the rule (history)."""
+        stats: dict[str, int] = {}
+        for entry in self.history.get(rule_id, []):
+            if entry.get("state") == "done" and (who := entry.get("acknowledged_by")):
+                stats[who] = stats.get(who, 0) + 1
+        return stats
 
     def status(self, rule_id: str) -> dict[str, Any]:
         """Runtime status of a rule (services, websocket, diagnostics)."""
         runner = self.runners.get(rule_id)
         if runner is None:
             return {
+                "active": False,
+                "assignee_stats": self.assignee_stats(rule_id),
                 "state": STATE_INACTIVE,
                 "current": None,
                 "reminders": [],
@@ -472,6 +487,8 @@ class LaeutwerkManager:
             }
         current = runner.current()
         return {
+            "active": runner.active,
+            "assignee_stats": self.assignee_stats(rule_id),
             "state": runner.state,
             "current": current.id if current else None,
             "reminders": [
@@ -500,4 +517,15 @@ def occurrence_payload(
         "colors": hit_colors(runner.rule, occurrence.events),
         "all_day": all(event.all_day for event in occurrence.events),
         "variables": runner.variables(occurrence),
+    }
+
+
+def _default_interval_start(rule: Rule, old: Rule | None = None) -> None:
+    """Without a start an interval rule is first due on the day it is saved."""
+    if not rule.interval or rule.interval.get("start"):
+        return
+    previous = (old.interval or {}).get("start") if old else None
+    rule.interval = {
+        **rule.interval,
+        "start": previous or dt_util.now().date().isoformat(),
     }

@@ -35,6 +35,7 @@ from .durations import duration_minutes
 from .matching import render
 from .model import (
     AUDIENCE_ALL,
+    AUDIENCE_ASSIGNEE,
     AUDIENCE_PERSONS,
     AUDIENCE_PRESENT,
     EFFECT_PULSE,
@@ -71,6 +72,8 @@ class SignalRun:
     variables: Mapping[str, str]
     plural: bool
     context: Context
+    # Responsible person (entity id) for audience "assignee".
+    assignee: str | None = None
 
     def text(self, key: str) -> str:
         """Render a text field, using its plural variant if it applies."""
@@ -197,7 +200,9 @@ def person_notify_targets(hass: HomeAssistant, person: State) -> list[str]:
     return targets
 
 
-def notify_targets(hass: HomeAssistant, signal: Signal) -> list[str]:
+def notify_targets(
+    hass: HomeAssistant, signal: Signal, assignee: str | None = None
+) -> list[str]:
     """Resolve the audience and explicit targets of a push signal."""
     config = signal.config
     targets: list[str] = list(config.get("targets", []))
@@ -209,6 +214,8 @@ def notify_targets(hass: HomeAssistant, signal: Signal) -> list[str]:
             for state in hass.states.async_all("person")
             if audience == AUDIENCE_ALL or state.state == "home"
         ]
+    elif audience == AUDIENCE_ASSIGNEE:
+        persons = [state] if assignee and (state := hass.states.get(assignee)) else []
     elif audience == AUDIENCE_PERSONS:
         persons = [
             state
@@ -248,7 +255,7 @@ def notify_payload(run: SignalRun) -> dict[str, Any]:
 async def _async_notify(run: SignalRun) -> bool:
     payload = notify_payload(run)
     sent = False
-    for target in notify_targets(run.hass, run.signal):
+    for target in notify_targets(run.hass, run.signal, run.assignee):
         domain, _, service = target.partition(".")
         sent = (
             await _async_call(run.hass, domain, service, payload, run.context) or sent
@@ -267,7 +274,7 @@ async def async_clear_notifications(
     for signal in signals:
         if signal.type != SIGNAL_NOTIFY or not reminder.signals_sent.get(signal.id):
             continue
-        for target in notify_targets(hass, signal):
+        for target in notify_targets(hass, signal, reminder.assignee):
             if target.startswith(MOBILE_APP_PREFIX):
                 domain, _, service = target.partition(".")
                 await _async_call(hass, domain, service, payload, context)

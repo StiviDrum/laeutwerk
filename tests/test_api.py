@@ -204,7 +204,7 @@ async def test_preview_saved_and_unsaved(
 
     broken = await client.ok("preview", rule={"sources": ["calendar.nope"]})
     assert broken["events"] == []
-    assert broken["errors"] == {"calendar.nope": "calendar not found"}
+    assert broken["errors"] == {"calendar.nope": "entity not found"}
 
     error = await client.error("preview", rule={"sources": []})
     assert error["code"] == "invalid_format"

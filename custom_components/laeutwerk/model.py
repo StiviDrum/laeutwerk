@@ -22,7 +22,17 @@ SIGNAL_TYPES = (SIGNAL_NOTIFY, SIGNAL_LIGHT, SIGNAL_ANNOUNCE, SIGNAL_ACTION)
 AUDIENCE_ALL = "all"
 AUDIENCE_PRESENT = "present"
 AUDIENCE_PERSONS = "persons"
-AUDIENCES = (AUDIENCE_ALL, AUDIENCE_PRESENT, AUDIENCE_PERSONS)
+AUDIENCE_ASSIGNEE = "assignee"
+AUDIENCES = (AUDIENCE_ALL, AUDIENCE_PRESENT, AUDIENCE_PERSONS, AUDIENCE_ASSIGNEE)
+
+ROTATION_FIXED = "fixed"
+ROTATION_WEEKLY = "weekly"
+ROTATION_PER_EVENT = "per_event"
+ROTATION_AFTER_LAST = "after_last"
+ROTATIONS = (ROTATION_FIXED, ROTATION_WEEKLY, ROTATION_PER_EVENT, ROTATION_AFTER_LAST)
+
+# Pseudo source of "interval since done" rules (no calendar).
+INTERVAL_SOURCE = "interval"
 
 EFFECT_BLINK = "blink"
 EFFECT_PULSE = "pulse"
@@ -129,6 +139,11 @@ class Signal:
         return self.when.get("opportunity") if isinstance(self.when, dict) else None
 
     @property
+    def stage(self) -> int:
+        """Escalation stage from which the signal is active."""
+        return int(self.config.get("stage", 0))
+
+    @property
     def manual_only(self) -> bool:
         """Only real operation counts as opportunity (no automations)."""
         return isinstance(self.when, dict) and bool(self.when.get("manual_only"))
@@ -177,6 +192,16 @@ class Rule:
     repeat: Any = REPEAT_NONE
     bundle: bool = True
     expire: str = DEFAULT_EXPIRE
+    # 0.6: {every (days), start (date)} – due again n days after done.
+    interval: dict[str, Any] | None = None
+    # 0.6: {conditions, match, season: {from, to}} – rule only active then.
+    activation: dict[str, Any] | None = None
+    # 0.6: Home Assistant actions run when a reminder is acknowledged.
+    on_done: list[dict[str, Any]] = field(default_factory=list)
+    # 0.6: {persons, rotation} – who is responsible ({zustaendig}).
+    assignee: dict[str, Any] | None = None
+    # 0.6: escalation stages [{after}] – signals with "stage: n" start then.
+    escalation: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def repeat_every(self) -> int | None:
@@ -208,6 +233,11 @@ class Rule:
             repeat=data.get("repeat", REPEAT_NONE),
             bundle=bool(data.get("bundle", True)),
             expire=data.get("expire", DEFAULT_EXPIRE),
+            interval=data.get("interval"),
+            activation=data.get("activation"),
+            on_done=list(data.get("on_done") or []),
+            assignee=data.get("assignee"),
+            escalation=list(data.get("escalation") or []),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -227,6 +257,11 @@ class Rule:
             "repeat": self.repeat,
             "bundle": self.bundle,
             "expire": self.expire,
+            "interval": self.interval,
+            "activation": self.activation,
+            "on_done": list(self.on_done),
+            "assignee": self.assignee,
+            "escalation": list(self.escalation),
         }
 
 
@@ -303,6 +338,10 @@ class Reminder:
     # Repetitions while reminding: how many and when last reminded.
     repeats: int = 0
     last_reminded: datetime | None = None
+    # Escalation stage reached (0 = the reminder itself).
+    stage: int = 0
+    # Responsible person (entity id), fixed when the reminder is created.
+    assignee: str | None = None
 
     @property
     def is_open(self) -> bool:
@@ -336,6 +375,8 @@ class Reminder:
             snoozed_until=_parse_opt(data.get("snoozed_until")),
             repeats=int(data.get("repeats", 0)),
             last_reminded=_parse_opt(data.get("last_reminded")),
+            stage=int(data.get("stage", 0)),
+            assignee=data.get("assignee"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -363,6 +404,8 @@ class Reminder:
             "snoozed_until": _format_opt(self.snoozed_until),
             "repeats": self.repeats,
             "last_reminded": _format_opt(self.last_reminded),
+            "stage": self.stage,
+            "assignee": self.assignee,
         }
 
 
