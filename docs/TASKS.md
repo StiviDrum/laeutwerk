@@ -213,6 +213,21 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.7.4
   - Checked in the real frontend (steps 4, 5, 7 with staged signals).
 
+## 0.7.5 – Quelle „Benutzerdefiniert“, Farbwähler, Stichwort-Farben, einklappbarer Signal-Editor (11.11.2026)
+- [x] Notify-Aktionen aus der Push-Einstellung entfernt
+  - Push-Empfänger nur noch per Personen-Häkchen. `mapTargetsToPersons()` ordnet alte `targets` beim Öffnen der Person mit diesem Handy zu (nicht bei „nur Anwesende“, da eine Notify-Aktion unabhängig von Anwesenheit ging); übrige bleiben als „Zusätzlich an … ✕“ sichtbar. Backend unverändert (`targets` bleibt gültig).
+- [x] HA-eigene Farbwähler
+  - `laeutwerk-field` mit `color_rgb` (ha-selector, hex ↔ rgb; Fallback `<input type=color>`). Leeres Feld zeigt „Farbe wählen“ statt Schwarz, ✕ entfernt die Farbe; `suggest` schlägt eine Farbe vor.
+- [x] Schritt 1: Quelle „Kalender | Benutzerdefiniert“
+  - Benutzerdefiniert = Intervall ab Erledigung. Schritt 2 entfällt dann, Nummern rücken nach; beim Speichern wird nur der Teil des gewählten Modus übernommen (`_forSaving`).
+- [x] Farbe je Stichwort, in Signalen wählbar
+  - Backend: `KeywordRow.color`, `color_from_keyword` am Licht-Signal, mehrere Treffer blinken abwechselnd (`light_colors` liefert eine Liste). Karte: Farbspalte in der Stichwort-Tabelle, „Farben aus Spalte übernehmen“ für eine alte `farbe`-Spalte, Licht: „Farbe des Stichworts | Feste Farbe“ mit antippbaren Stichwort-Farben.
+- [x] Push zeigt Personennamen statt Notify-Namen
+- [x] Signal-Editor einklappbar
+  - Art / Wann / Nur wenn / Was passiert / Grenzen mit Zusammenfassung; Push zusätzlich Empfänger / Texte / Knöpfe mit Trennlinien.
+- [x] Release v0.7.5
+  - Im echten Frontend geprüft (Schritt 1 + 2 mit Farbwählern, Push- und Licht-Signal); `check_card.py` öffnet die Bereiche jetzt selbst.
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

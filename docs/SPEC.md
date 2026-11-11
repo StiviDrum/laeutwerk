@@ -81,7 +81,7 @@ Ein Signal ist ein Baustein aus fünf Teilen. Push, Licht und Ansage sind nur vo
 
 | Teil | Möglichkeiten |
 |---|---|
-| Art | Push (Mobile App `notify`, mit Aktionsknöpfen), Licht (Muster blinken/pulsieren, Anzahl, Farbe fest oder aus Spalte), Ansage (`tts.speak` mit `announce: true`, Lautsprecher, Lautstärke, Stimme/Engine), Eigene Aktion (HA-Aktions-Editor, Skript, Szene …) |
+| Art | Push (Mobile App `notify`, mit Aktionsknöpfen), Licht (Muster blinken/pulsieren, Anzahl, Farbe fest oder aus den Stichwort-Farben – seit 0.7.5 hat jede Zeile der Stichwort-Tabelle eine eigene Farbe; ältere Regeln: aus Spalte), Ansage (`tts.speak` mit `announce: true`, Lautsprecher, Lautstärke, Stimme/Engine), Eigene Aktion (HA-Aktions-Editor, Skript, Szene …) |
 | Wann | **sofort** zum Erinnerungszeitpunkt oder **bei Gelegenheit**: jeder HA-Trigger (Zustand, Zone, Bewegung, NFC-Tag, Ereignis), aktiv nur zwischen Erinnerungszeitpunkt und Quittierung/Verfall |
 | Nur wenn | Bedingungen mit alle/eine (wie Zeitwerk) |
 | Was passiert | Felder je Art, überall Variablen; jederzeit als YAML bearbeitbar |

@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-11-11
+
+### Added
+- Every keyword can have its own colour (`color` in the keyword row, colour
+  picker in step 2). Light signals can blink in the colours of the matched
+  keywords (`color_from_keyword`, alternating when several match).
+- Step 1 offers the source *Calendar* or *Custom* (recurring after it was
+  last done, the interval).
+- "Take colours from column" turns an older colour-name column into keyword
+  colours.
+
+### Changed
+- Colours are picked with Home Assistant's colour picker; an empty colour
+  shows "Choose a colour" instead of black and can be removed again.
+- The signal editor is split into collapsible sections with a summary; push
+  signals into recipients, texts and buttons.
+- Push recipients are only chosen by ticking persons. Older notify actions of
+  a person's phone are shown as that person; others stay listed and can be
+  removed. Push signals are labelled with person names.
+
 ## [0.7.4] - 2026-11-11
 
 ### Added

@@ -114,7 +114,7 @@ signals:
     audience: persons            # all | present | persons | assignee
     persons: [person.steven, person.anna]   # their phones (companion app)
     only_present: true           # only those of them who are at home
-    targets: [notify.alexa_media_kueche]    # optional: further notify actions
+    targets: [notify.alexa_media_kueche]    # older setting: further notify actions
     title: "{wann}: {tonnen}"
     message: "Bitte heute Abend rausstellen."
     actions:
@@ -123,7 +123,8 @@ signals:
     type: light_signal
     entity: light.stehleuchte
     pattern: {effect: blink, count: 3}    # blink | pulse, interval in seconds
-    color_from: farbe            # colour from a keyword column, or color: "#ff8800"
+    color_from_keyword: true     # blink in the colours of the matched keywords
+    color: "#ff8800"             # else / otherwise a fixed colour
     restore: true                # previous state (on/off, brightness, colour) afterwards
     quiet:
       - {from: "00:00", to: "10:00", mode: skip}
@@ -177,7 +178,11 @@ knows it. The triggers are only listened to while a reminder is open.
   their phones (companion app; persons without one are flagged). Optionally
   only to those who are at home, or to the responsible person. Notify actions
   are only needed for other devices.
-- **Light:** German and English colour names, `#rrggbb` or `r,g,b`. Lamps
+- **Light:** every keyword can have its own colour (`color: "#2f6bff"` in
+  its row, colour picker in step 2); with `color_from_keyword` the lamp
+  blinks in the colours of the matched keywords (alternating when several
+  match), else in the fixed colour. Colours are `#rrggbb`, `r,g,b` or German
+  and English colour names (older `color_from: <column>` still works). Lamps
   without colour just blink. A lamp that was off is switched off again.
 - **Announcement:** played with `announce: true`, so players that support it
   lower running music and continue afterwards. `volume` is the announcement
@@ -222,6 +227,7 @@ reminds again when the time is over, unless it expires first.
 sources: [calendar.abfallkalender, todo.aufgaben, input_datetime.tuev]
 
 # Due again n days after it was last acknowledged (no calendar needed).
+# In the card: step 1 → Source → Custom ("recurring after it was last done").
 # Overdue reminders (also overdue to-dos) remind daily until done.
 interval: {every: 90}            # or "12w"; optional start: 2026-12-01
 
@@ -329,7 +335,12 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Signal editor:** type, *immediately / on opportunity* with Home
   Assistant's trigger editor, *only if* with the condition editor, the fields
   of the type with variable chips and a text preview, limits and quiet times,
-  *Test* and *Edit as YAML*.
+  *Test* and *Edit as YAML*. Every part is collapsible with a short summary;
+  a push is split into recipients (tick persons), texts and buttons.
+- **Colours** are picked with Home Assistant's colour picker (rule, keywords,
+  escalation stages, light signal); the keyword colours can be tapped as the
+  fixed colour of a light signal. An older text column `farbe` can be turned
+  into keyword colours with one tap.
 
 The card bundle is 39 KB gzipped (measured with `gzip -9` on 0.7.0).
 
@@ -438,6 +449,17 @@ Feste und variable Tags lassen sich mischen.
   **NFC-Tags** aus den in Home Assistant angelernten Tags ausgewählt, und
   Signale lassen sich schon vor dem Speichern **testen**.
 - **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
+- **Quelle** in Schritt 1: *Kalender* oder *Benutzerdefiniert* – wiederkehrend
+  nach dem letzten Erledigen (z. B. Filter alle 90 Tage), ohne Kalender.
+- **Farben** wählst du mit dem Farbwähler von Home Assistant – für die Regel,
+  jedes **Stichwort** (Schritt 2) und jede Eskalationsstufe. Ein Licht-Signal
+  blinkt in der **Farbe des Stichworts** (bei mehreren abwechselnd) oder in
+  einer festen Farbe; die Stichwort-Farben lassen sich dort antippen. Eine
+  alte Spalte `farbe` wird per Knopf in Stichwort-Farben übernommen.
+- Der **Signal-Editor** ist in einklappbare Bereiche mit Zusammenfassung
+  gegliedert; Push in Empfänger (Personen anhaken), Texte und Knöpfe.
+  Notify-Aktionen gibst du nicht mehr an – alte werden der Person mit dem
+  Handy zugeordnet.
 
 ## Installation (HACS, benutzerdefiniertes Repository)
 
