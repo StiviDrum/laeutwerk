@@ -361,6 +361,8 @@ class Reminder:
     finished_at: datetime | None = None  # acknowledged or missed
     acknowledged_by: str | None = None
     acknowledged_via: str | None = None
+    # Person entity of whoever acknowledged (None: a user without person).
+    acknowledged_person: str | None = None
     signals_sent: dict[str, int] = field(default_factory=dict)
     # Last time each signal was sent (minimum interval).
     signal_last: dict[str, datetime] = field(default_factory=dict)
@@ -397,6 +399,7 @@ class Reminder:
             finished_at=_parse_opt(data.get("finished_at")),
             acknowledged_by=data.get("acknowledged_by"),
             acknowledged_via=data.get("acknowledged_via"),
+            acknowledged_person=data.get("acknowledged_person"),
             signals_sent=dict(data.get("signals_sent", {})),
             signal_last={
                 key: _parse_dt(value)
@@ -427,6 +430,7 @@ class Reminder:
             "finished_at": _format_opt(self.finished_at),
             "acknowledged_by": self.acknowledged_by,
             "acknowledged_via": self.acknowledged_via,
+            "acknowledged_person": self.acknowledged_person,
             "signals_sent": dict(self.signals_sent),
             "signal_last": {
                 key: value.isoformat() for key, value in self.signal_last.items()

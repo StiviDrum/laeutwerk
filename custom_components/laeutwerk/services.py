@@ -28,7 +28,7 @@ from homeassistant.helpers import config_validation as cv
 from .compat import vol
 from .const import ACK_VIA_SERVICE, DOMAIN
 from .durations import duration_minutes
-from .manager import LaeutwerkManager, RuleNotFoundError, person_name
+from .manager import LaeutwerkManager, RuleNotFoundError, async_who, named_person
 
 SERVICE_ACKNOWLEDGE = "acknowledge"
 SERVICE_SNOOZE = "snooze"
@@ -111,11 +111,16 @@ def async_setup_services(hass: HomeAssistant) -> None:
         rule_id: str | None = call.data.get(ATTR_RULE)
         if rule_id is not None:
             _check_rule(manager, rule_id)
+        if given := call.data.get("person"):
+            by, person = named_person(hass, given)
+        else:
+            by, person = await async_who(hass, call.context)
         done = await manager.async_acknowledge(
             rule_id,
             reminder_id=call.data.get("reminder_id"),
-            by=call.data.get("person") or person_name(hass, call.context.user_id),
+            by=by,
             via=ACK_VIA_SERVICE,
+            person=person,
         )
         if not call.return_response:
             return None

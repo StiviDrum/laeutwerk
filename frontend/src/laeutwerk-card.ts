@@ -208,7 +208,7 @@ export class LaeutwerkCard extends LitElement {
     return this._call(reminder.id, "acknowledge", {
       rule: reminder.rule_id,
       reminder_id: reminder.id,
-      ...(this.hass?.user?.name ? { person: this.hass.user.name } : {}),
+      // Who it was is resolved by Läutwerk from the user (person, else name).
     });
   }
 

@@ -129,6 +129,10 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Decision for `plural: false` with bundles: the variable holds the **unique values joined with "und"** (one value if all are equal). Reason: no information is lost ("die und den" shows the mix), and with one value per bundle it reads exactly as before. With plural on, `{column}` stays the first value (unchanged).
   - Clash check only for active plurals (incl. own plural names); column names are still checked against reserved names.
   - Card: toggle under each column name in the keyword table (shows `{tonnen}` or "keine Mehrzahl"); variable chips and new signal texts only use plurals that exist. Renaming keeps the setting.
+- [x] `acknowledged_by` leer, wenn der HA-Benutzer keiner Person zugeordnet ist
+  - `manager.async_who(hass, context)`: person linked to the user → (name, person entity); else the user's display name (no person); nobody for system users, contexts with a parent (automations / scripts) and calls without user. Used by the button, the acknowledge action and push buttons. Tag and trigger keep `person_ref` (person of the trigger / user).
+  - New reminder / history field `acknowledged_person` (person entity). The rotation "after the one who did it last" uses only that and skips entries with a user name only; history from before 0.6.2 (no field) is matched by name as before. An explicit `person` in `laeutwerk.acknowledge` may be a person name or entity id.
+  - The card no longer sends the user name as `person` (that bypassed the person link).
 
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

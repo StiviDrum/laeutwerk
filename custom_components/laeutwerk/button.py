@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import LaeutwerkConfigEntry
 from .const import ACK_VIA_BUTTON
 from .entity import LaeutwerkEntity, async_setup_rule_entities
-from .manager import LaeutwerkManager, person_name
+from .manager import LaeutwerkManager, async_who
 
 PARALLEL_UPDATES = 0
 
@@ -41,8 +41,7 @@ class DoneButton(LaeutwerkEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Acknowledge."""
+        by, person = await async_who(self.hass, self._context)
         await self._manager.async_acknowledge(
-            self._rule_id,
-            by=person_name(self.hass, self._context.user_id if self._context else None),
-            via=ACK_VIA_BUTTON,
+            self._rule_id, by=by, via=ACK_VIA_BUTTON, person=person
         )

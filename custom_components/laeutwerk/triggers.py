@@ -70,25 +70,36 @@ def trigger_state(variables: dict[str, Any]) -> State | None:
     return state if isinstance(state, State) else None
 
 
-def person_of(
+def person_ref(
     hass: HomeAssistant, variables: dict[str, Any], context: Context | None
-) -> str:
-    """Who caused a trigger: the person that changed, else the acting user."""
+) -> tuple[str, str | None]:
+    """Who caused a trigger: (name, person entity id), "" if unknown.
+
+    The person that changed, the person of a device tracker, else the person
+    of the acting user.
+    """
     state = trigger_state(variables)
     if state is not None and state.domain == "person":
-        return state.name
+        return state.name, state.entity_id
     if state is not None and state.domain == "device_tracker":
         for person in hass.states.async_all("person"):
             if state.entity_id in person.attributes.get("device_trackers", []):
-                return person.name
+                return person.name, person.entity_id
     user_id = context.user_id if context else None
     if user_id is None and state is not None:
         user_id = state.context.user_id
     if user_id:
         for person in hass.states.async_all("person"):
             if person.attributes.get("user_id") == user_id:
-                return person.name
-    return ""
+                return person.name, person.entity_id
+    return "", None
+
+
+def person_of(
+    hass: HomeAssistant, variables: dict[str, Any], context: Context | None
+) -> str:
+    """Name of whoever caused a trigger ("" if unknown)."""
+    return person_ref(hass, variables, context)[0]
 
 
 class TriggerListener:

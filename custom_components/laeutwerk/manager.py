@@ -8,7 +8,14 @@ from datetime import datetime, timedelta
 import logging
 from typing import Any
 
-from homeassistant.core import CALLBACK_TYPE, Context, Event, HomeAssistant, callback
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    Context,
+    Event,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -62,14 +69,40 @@ class RuleNotFoundError(HomeAssistantError):
     """Raised for an unknown rule id."""
 
 
-def person_name(hass: HomeAssistant, user_id: str | None) -> str | None:
-    """Name of the person that belongs to a Home Assistant user."""
-    if user_id is None:
-        return None
+def _person_of_user(hass: HomeAssistant, user_id: str) -> State | None:
     for state in hass.states.async_all("person"):
         if state.attributes.get("user_id") == user_id:
-            return state.name
+            return state
     return None
+
+
+async def async_who(
+    hass: HomeAssistant, context: Context | None
+) -> tuple[str | None, str | None]:
+    """Who acted: (name, person entity id).
+
+    The person linked to the user, else the user's display name (no person).
+    Nobody for system users, automations / scripts (context with a parent)
+    and calls without a user.
+    """
+    if context is None or context.parent_id is not None or context.user_id is None:
+        return None, None
+    if (person := _person_of_user(hass, context.user_id)) is not None:
+        return person.name, person.entity_id
+    user = await hass.auth.async_get_user(context.user_id)
+    if user is None or user.system_generated or not user.name:
+        return None, None
+    return user.name, None
+
+
+def named_person(hass: HomeAssistant, value: str) -> tuple[str, str | None]:
+    """Resolve an explicitly given name (service field): person entity or name."""
+    if (state := hass.states.get(value)) is not None and state.domain == "person":
+        return state.name, state.entity_id
+    for person in hass.states.async_all("person"):
+        if person.name == value:
+            return person.name, person.entity_id
+    return value, None
 
 
 class LaeutwerkManager:
@@ -239,6 +272,7 @@ class LaeutwerkManager:
                 ),
                 "acknowledged_by": reminder.acknowledged_by,
                 "acknowledged_via": reminder.acknowledged_via,
+                "acknowledged_person": reminder.acknowledged_person,
                 "signals_sent": sum(reminder.signals_sent.values()),
                 "assignee": reminder.assignee,
             },
@@ -423,6 +457,7 @@ class LaeutwerkManager:
         reminder_id: str | None = None,
         by: str | None = None,
         via: str | None = None,
+        person: str | None = None,
     ) -> list[Reminder]:
         """Acknowledge the reminders of one rule or all reminding ones."""
         if rule_id is not None:
@@ -431,14 +466,14 @@ class LaeutwerkManager:
             if runner is None:
                 return []
             return await runner.async_acknowledge(
-                reminder_id=reminder_id, by=by, via=via
+                reminder_id=reminder_id, by=by, via=via, person=person
             )
         done: list[Reminder] = []
         for runner in list(self.runners.values()):
             if reminder_id is not None and reminder_id not in runner.reminders:
                 continue
             done += await runner.async_acknowledge(
-                reminder_id=reminder_id, by=by, via=via, early=False
+                reminder_id=reminder_id, by=by, via=via, person=person, early=False
             )
         return done
 
@@ -515,10 +550,12 @@ class LaeutwerkManager:
             return
         if not action.startswith(ACTION_ACK_PREFIX):
             return
+        by, person = await async_who(self.hass, event.context)
         await self.async_acknowledge(
             reminder_id=action.removeprefix(ACTION_ACK_PREFIX),
-            by=person_name(self.hass, event.context.user_id),
+            by=by,
             via=ACK_VIA_NOTIFICATION,
+            person=person,
         )
 
     # ---------------------------------------------------------------- status

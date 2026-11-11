@@ -82,6 +82,7 @@ from .triggers import (
     is_own_context,
     own_context,
     person_of,
+    person_ref,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -259,10 +260,12 @@ class RuleRunner:
                     context: Context | None = None,
                     early: bool = early,
                 ) -> None:
+                    name, person = person_ref(self.hass, variables, context)
                     await self.async_acknowledge(
-                        by=person_of(self.hass, variables, context) or None,
+                        by=name or None,
                         via=ACK_VIA_TRIGGER,
                         early=early,
+                        person=person,
                     )
 
                 self._ack_triggers.append(
@@ -280,9 +283,9 @@ class RuleRunner:
 
             async def tag_scanned(event: Event[Any]) -> None:
                 if event.data.get("tag_id") in tags:
+                    name, person = person_ref(self.hass, {}, event.context)
                     await self.async_acknowledge(
-                        by=person_of(self.hass, {}, event.context) or None,
-                        via=ACK_VIA_TAG,
+                        by=name or None, via=ACK_VIA_TAG, person=person
                     )
 
             self._unsub_tags = self.hass.bus.async_listen(
@@ -454,24 +457,35 @@ class RuleRunner:
             )
             return persons[(len(self._history()) + earlier) % len(persons)]
         if rotation == ROTATION_AFTER_LAST:
-            names = {
-                entity_id: (
-                    state.name if (state := self.hass.states.get(entity_id)) else ""
-                )
-                for entity_id in persons
-            }
-            last = next(
-                (
-                    e.get("acknowledged_by")
-                    for e in self._history()
-                    if e.get("state") == STATE_DONE and e.get("acknowledged_by")
-                ),
-                None,
-            )
-            for index, entity_id in enumerate(persons):
-                if last and names[entity_id] == last:
-                    return persons[(index + 1) % len(persons)]
+            last = self._last_person(persons)
+            if last is not None:
+                return persons[(persons.index(last) + 1) % len(persons)]
         return persons[0]
+
+    def _last_person(self, persons: list[str]) -> str | None:
+        """Responsible person who acknowledged most recently.
+
+        Only acknowledgements by a person count: entries with just a user
+        name (user without person) or by someone outside the rotation are
+        skipped. Entries from before 0.6.2 have no person entity and are
+        matched by name.
+        """
+        names = {
+            (
+                state.name if (state := self.hass.states.get(entity_id)) else ""
+            ): entity_id
+            for entity_id in persons
+        }
+        for entry in self._history():
+            if entry.get("state") != STATE_DONE:
+                continue
+            if "acknowledged_person" in entry:
+                person = entry["acknowledged_person"]
+            else:
+                person = names.get(entry.get("acknowledged_by") or "")
+            if person in persons:
+                return person
+        return None
 
     def assignee_name(self, entity_id: str | None) -> str | None:
         """Display name of a responsible person."""
@@ -825,8 +839,13 @@ class RuleRunner:
         by: str | None = None,
         via: str | None = None,
         early: bool = True,
+        person: str | None = None,
     ) -> list[Reminder]:
-        """Mark reminders as done; returns the acknowledged ones."""
+        """Mark reminders as done; returns the acknowledged ones.
+
+        ``by`` is the display name, ``person`` the person entity (None for a
+        user without person or an unknown actor).
+        """
         async with self._lock:
             now = dt_util.utcnow()
             if reminder_id is not None:
@@ -848,6 +867,7 @@ class RuleRunner:
                 reminder.deferred.clear()
                 reminder.acknowledged_by = by
                 reminder.acknowledged_via = via
+                reminder.acknowledged_person = person
                 self._fire(
                     EVENT_ACKNOWLEDGED,
                     reminder,

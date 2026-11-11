@@ -18,6 +18,11 @@ All notable changes to this project are documented here. The format follows
   `get_rules`, card) no longer shows an event whose reminder has expired, is
   done or missed – e.g. today's all-day collection after `event_day 12:00`.
   Overdue to-dos and intervals stay the next event until acknowledged.
+- "Acknowledged by" stayed empty when the Home Assistant user has no person:
+  it now falls back to the user's display name (system users, automations
+  and scripts stay empty). The person entity is stored as
+  `acknowledged_person`; the rotation "after the one who did it last" only
+  counts acknowledgements by a person.
 
 ## [0.6.1] - 2026-11-11
 

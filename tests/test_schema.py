@@ -171,6 +171,7 @@ def test_reminder_round_trip() -> None:
         "finished_at": "2026-11-16T19:41:00+00:00",
         "acknowledged_by": "Steven",
         "acknowledged_via": "button",
+        "acknowledged_person": "person.steven",
         "signals_sent": {"push": 1},
         "signal_last": {"push": "2026-11-16T16:00:00+00:00"},
         "deferred": {"ansage": "2026-11-17T07:00:00+00:00"},
