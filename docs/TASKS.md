@@ -33,9 +33,9 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - 0.1: `targets` = list of `notify.xxx` actions (audience comes with 0.2). Push carries `tag` + action `LAEUTWERK_ACK__<reminder id>`; on done/missed the notification is cleared on `notify.mobile_app_*` targets.
 - [x] Entitäten, Dienste (inkl. `get_rules`), Ereignisse
   - Services: acknowledge, trigger, get_rules, create_rule, update_rule, delete_rule, duplicate_rule, enable, disable. `snooze` (0.3) and `test_signal` (0.2) follow. WebSocket API follows with the card (0.4).
-- [ ] Tests inkl. Sommer-/Winterzeit; Release v0.1.0
-  - Tests are written and green (88). Still open: check in the dev instance (`scripts/develop`, real local calendars), README section, CHANGELOG, version bump, tag `v0.1.0`.
-  - CI: the HACS job fails until the GitHub repo has a description and topics (repo settings, Steven).
+- [x] Tests inkl. Sommer-/Winterzeit; Release v0.1.0
+  - Checked in the dev instance with the real local calendars: reference rules seeded into `.storage/laeutwerk`, "Gelb" (tomorrow) was reminded once via `notify.persistent_notification`, the other events are planned, all ten entities exist, no errors in the log.
+  - CI: the HACS job fails while the GitHub repo has no description (topics are set) – repo settings, Steven.
 
 ## 0.2 – Signale
 - [ ] Licht-Signal (Muster, Farbe aus Spalte, Zustand wiederherstellen), Ansage (TTS announce, Lautstärke, Einzahl/Mehrzahl-Text), eigene Aktion

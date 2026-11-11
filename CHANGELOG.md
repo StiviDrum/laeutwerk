@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-11
+
 ### Added
-- Project scaffold: integration skeleton (config flow, card registration),
-  card placeholder, tooling, CI and release workflow.
+- Rules: calendar sources, keyword table with free columns (contains / starts
+  with / regex), all-day filter, several reminder times relative to the event,
+  bundling of events of the same day, expiry.
+- Reminder lifecycle planned → reminded → done / missed, restart safe; every
+  reminder time is sent exactly once.
+- Text variables incl. automatic plural (`{tonne}` / `{tonnen}`) and
+  singular / plural texts.
+- Push signal (notify actions) with an acknowledge button; the notification is
+  cleared when the reminder is done or missed.
+- Entities per rule (state, open, next event, done button, switch), actions
+  (`acknowledge`, `trigger`, `get_rules`, `create_rule`, `update_rule`,
+  `delete_rule`, `duplicate_rule`, `enable`, `disable`) and bus events.
