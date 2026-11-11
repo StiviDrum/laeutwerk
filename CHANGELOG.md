@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-11
+
+### Added
+- Undo after *Done* in the card; action `laeutwerk.reopen`.
+- *Later* with choices (1 hour, 3 hours, tomorrow morning); `laeutwerk.snooze`
+  accepts `until` (time of day).
+- Details of a reminder when tapped (reminded, next time, expiry, signals
+  sent, held back, responsible person, stage, tags).
+- Keyword suggestions from the event titles of the calendar (`laeutwerk/preview`
+  with `titles`).
+- NFC tags can be picked from the tags Home Assistant knows.
+- Signals can be tested before the rule is saved (`laeutwerk/test_signal`).
+- Rules can be sorted (`laeutwerk/rules/reorder`) and searched.
+- Feedback messages (saved, done, later) and busy states.
+
+### Changed
+- Rule editor: steps are collapsed with a summary; new rules are filled in
+  step by step. Problems are checked before saving and shown at their step in
+  plain words (server messages translated, original under "Details").
+- Unsaved changes need a confirmation and are kept as a draft in the browser.
+- Friendlier inputs for season (day and month) and escalation stages (after
+  minutes / hours or at a time of day); colour swatches for light signals.
+
 ## [0.6.3] - 2026-11-11
 
 ### Added

@@ -136,6 +136,44 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.6.2
   - Checked in the real frontend (plural toggle in the column header, edit regression check still green).
 
+## 0.6.3 – NFC-Tag aus einer Variable (Praxistest, Regel `claude_muell`)
+- [x] `acknowledge: [{type: tag, tag_id: "{nfc}"}]`
+  - Still one `tag_scanned` listener per rule. Fixed tags behave as before (acknowledge what is due). Tag ids with `{…}` are resolved **per event** of a reminder (so a bundle accepts the tag of each hit) without the automatic capital letter (`render(..., capitalize=False)`), and only reminders that are reminding / snoozed or planned within the early window (24 h) are candidates; a tag that fits none acknowledges nothing (debug log).
+  - Validation: variables in `tag_id` must be keyword columns (or their active plurals) or event variables. Tags are no entities, so no repair issue.
+  - Resolved tags in the status (`reminders[].tags`) and in `laeutwerk/preview` (`events[].tags`); the card shows variable chips at the tag field and the resolved tag of the next match. The editor preview only sends tag acks whose variables exist.
+- [x] Release v0.6.3
+
+## 0.7 – Usability (Stevens Auswahl, 11.11.2026: alle Vorschläge, NFC als Auswahl)
+- [x] 1 Editor-Schritte einklappbar mit Zusammenfassung; neue Regeln Schritt für Schritt
+  - `stepSummary()` per step; existing rules open collapsed, new rules open step 1 and offer „Weiter“ (opens the next, scrolls to it). Bodies are only rendered when open.
+- [x] 2 Verständliche Fehlermeldungen (deutsch) am betroffenen Schritt, Prüfung vor dem Speichern
+  - `ruleProblems()` checks in the card (name, source/interval, empty keyword, columns, time, push recipients/message, lamp, speaker+text, empty tag, season, stage); steps get a badge and open. Server errors: `errorStep()` (path / message → step) and `translateError()` (common messages → plain German), original in „Details“.
+- [x] 3 „Rückgängig“ nach Erledigt
+  - Service `laeutwerk.reopen` (any user, like acknowledge): done → reminded (or planned if it had not reminded yet) while not expired; history entry removed; no signals again, `on_done` actions are not undone; interval rules refresh. Card: toast „Erledigt: … · Rückgängig“ for 8 s.
+- [x] 4 Ungespeicherte Änderungen: Rückfrage beim Verwerfen, Entwurf im Browser
+  - „Abbrechen“ asks „Änderungen verwerfen?“ when dirty. Draft in `localStorage` (`laeutwerk-draft-<id|new>`, debounced, try/catch – per browser only), offered with „Wiederherstellen / Verwerfen“; removed on save or discard.
+- [x] 5 NFC-Tag aus den in HA angelernten Tags auswählen
+  - HA websocket `tag/list` (id, name): chips under the tag field and a `<datalist>` for the tag field and keyword columns named like nfc/tag.
+- [x] 6 Stichwörter aus den Termintiteln des Kalenders vorschlagen
+  - `laeutwerk/preview` with `titles: true`: distinct titles of the next 60 days with count and whether the keyword table matches; the card offers the unmatched ones (+ „Alle übernehmen“).
+- [x] 7 Signal testen ohne vorher zu speichern
+  - Websocket `laeutwerk/test_signal` (admin) with the editor's rule (saved or not) and the signal; uses the next match or a sample event.
+- [x] 8 „Später“ mit Auswahl (1 h, 3 h, morgen früh)
+  - `laeutwerk.snooze` accepts `until` (time of day, next occurrence; „morgen früh“ = 07:00).
+- [x] 9 Details einer Erinnerung beim Antippen
+  - From the reminder payload (reminded, next time, snoozed, expiry, assignee, stage, signals sent with last time, deferred, tags).
+- [x] 10 Freundlichere Eingaben (Saison, Eskalation, Farbmuster)
+  - Season: day + month selects. Escalation: „nach“ (number + min/h) or „um“ (time). Light with colour from column: swatches of the next matches.
+- [x] 11 Rückmeldungen (Gespeichert, Gesendet) und Lade-Zustände
+  - Toasts in the card (saved, done with undo, later); „…“ on busy buttons.
+- [x] 12 Regeln sortieren und durchsuchen
+  - Websocket `laeutwerk/rules/reorder` (admin), subscribe sends `reordered`; card „Sortieren“ mode with ↑/↓. Search field from 6 rules on.
+- [x] Release v0.7.0
+  - Checked in the real frontend (`scripts/check_card.py` + manual run): details, later choices, undo, collapsed editor, suggestions, problem at step 1. The check script opens the collapsed steps and waits for the fields to load.
+  - Bundle: 39 KB gzip (was 31).
+  - Lesson: doc edits by script must assert that the anchor exists – inserting before „## 1.0“ silently did nothing after the heading had been replaced in 0.6.2 (fixed here).
+
+## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)
 - [ ] HACS-Standardliste (vorher Steven fragen)
