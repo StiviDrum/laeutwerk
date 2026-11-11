@@ -92,7 +92,7 @@ export class LaeutwerkSignalEditor extends LitElement {
 
   private _setType(type: Signal["type"]): void {
     if (type === this._sig.type) return;
-    const fresh = defaultSignal(type, this.rule);
+    const fresh = defaultSignal(type, this.rule, this._l.t("done"));
     this._sig = {
       ...fresh,
       id: this._sig.id,
@@ -293,10 +293,7 @@ export class LaeutwerkSignalEditor extends LitElement {
       ${this._text("message", l.t("push_message"), true)} ${this._variables(false)}
       <div class="sublabel">${l.t("push_buttons")}</div>
       ${this._toggle(l.t("btn_done"), !!ack, (v) =>
-        setButtons(
-          v ? { ack: true, label: this.rule.ack_label || l.t("done") } : undefined,
-          snooze,
-        ),
+        setButtons(v ? { ack: true, label: l.t("done") } : undefined, snooze),
       )}
       ${
         ack

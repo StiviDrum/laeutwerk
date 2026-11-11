@@ -293,7 +293,7 @@ export const SIGNAL_ICONS: Record<string, string> = {
 };
 
 /** A new signal with sensible defaults for its type. */
-export function defaultSignal(type: Signal["type"], rule: Rule): Signal {
+export function defaultSignal(type: Signal["type"], rule: Rule, done = "OK"): Signal {
   const first = rule.filter.keywords.columns[0];
   const what = first ? `{${colPlural(first) ?? colName(first)}}` : "{titel}";
   const base = { type, enabled: true, when: "now" as const };
@@ -303,7 +303,7 @@ export function defaultSignal(type: Signal["type"], rule: Rule): Signal {
       audience: "present",
       title: `{wann}: ${what}`,
       message: rule.name,
-      actions: [{ ack: true, label: rule.ack_label || "OK" }],
+      actions: [{ ack: true, label: done }],
     };
   }
   if (type === "light_signal") {
@@ -570,4 +570,44 @@ export function translateError(message: string, l: Localizer): string {
   ];
   const hit = known.find(([pattern]) => pattern.test(message));
   return hit ? l.t(hit[1]) : message;
+}
+
+// --- 0.7.1: next task (compact card) and the done label ---------------------
+
+/** Label of "done" for a rule: its push button text, else "Erledigt". */
+export function doneLabel(rule: Rule, l: Localizer): string {
+  for (const signal of rule.signals) {
+    if (signal.type !== "notify") continue;
+    const button = (signal.actions ?? []).find((a) => (a as { ack?: boolean }).ack) as
+      { label?: string } | undefined;
+    if (button?.label) return button.label;
+  }
+  return rule.ack_label || l.t("done");
+}
+
+export interface Task {
+  rule: Rule;
+  reminder: Reminder;
+  /** Reminding now (else planned). */
+  open: boolean;
+}
+
+/**
+ * All tasks of some rules: reminding ones first (the one that expires first
+ * on top), then planned ones by their next reminder time.
+ */
+export function tasks(rules: Rule[], only?: string[]): Task[] {
+  const list: Task[] = [];
+  for (const rule of rules) {
+    if (only?.length && !only.includes(rule.id ?? "")) continue;
+    for (const reminder of rule.status?.reminders ?? []) {
+      if (reminder.state === "reminded") list.push({ rule, reminder, open: true });
+      else if (reminder.state === "planned") list.push({ rule, reminder, open: false });
+    }
+  }
+  const key = (t: Task) =>
+    t.open
+      ? (t.reminder.expires_at ?? t.reminder.start)
+      : (t.reminder.snoozed_until ?? t.reminder.next_reminder_at ?? t.reminder.start);
+  return list.sort((a, b) => Number(b.open) - Number(a.open) || key(a).localeCompare(key(b)));
 }

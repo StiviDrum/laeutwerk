@@ -173,6 +173,20 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Bundle: 39 KB gzip (was 31).
   - Lesson: doc edits by script must assert that the anchor exists – inserting before „## 1.0“ silently did nothing after the heading had been replaced in 0.6.2 (fixed here).
 
+## 0.7.1 – Kompakte Karte und Erledigt-Knopf (Stevens Entscheidung, 11.11.2026)
+- [x] Kompakte Karte: immer die nächste Aufgabe in einer Zeile mit Symbol
+  - `tasks()`: reminding ones first (soonest `expires_at`), then planned by next reminder time; badge = number of open ones; „Keine anstehenden Aufgaben“ only if there is none. Planned tasks show just their title (it already says when).
+- [x] Antippen: Fenster mit Nachfrage „Als erledigt markieren?“, „Später“, weitere Aufgaben, „+ Neue Regel“ (Admins: Vorlagen-Auswahl und Editor im Fenster)
+  - `laeutwerk-task-dialog` is appended to `<body>` (fixed overlay, bottom sheet on phones), so the one-row grid cell does not clip it; the card forwards `hass` and the rules to it on every update. No undo toast in the compact card (the question is the safeguard).
+- [x] Geplante Aufgaben jederzeit vorab erledigen (mit Nachfrage)
+  - Acknowledge by `reminder_id` already accepts any open (also planned) reminder without the 24 h window – now covered by a test; without an id the window still applies (tags, button entity).
+- [x] Großer Erledigt-Knopf in der Karte nur als Haken
+  - Label (aria/title) = text of the push signal's done button, else `ack_label` of older rules, else „Erledigt“ (`doneLabel()`).
+- [x] Feld „Text des Erledigt-Knopfs“ aus Schritt 5 entfernt
+  - `ack_label` stays readable in stored rules / YAML; new push signals get „Erledigt“ as button text.
+- [x] Release v0.7.1
+  - Checked in the real frontend (compact line, dialog, confirm → done, next task follows).
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

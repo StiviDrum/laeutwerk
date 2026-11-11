@@ -254,3 +254,23 @@ async def test_reorder(hass: HomeAssistant, hass_ws_client) -> None:
         {"id": 3, "type": "laeutwerk/rules/reorder", "rule_ids": ["nope"]}
     )
     assert (await ws.receive_json())["error"]["code"] == "not_found"
+
+
+async def test_planned_reminder_can_be_done_ahead_by_id(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The compact card asks first, then acknowledges by id – also days ahead."""
+    freezer.move_to(at(MON, 9))
+    calendars = FakeCalendars(hass, WASTE)
+    calendars.add_all_day(WASTE, "Papier", date(2026, 11, 24))  # a week ahead
+    _, manager = await setup_integration(hass)
+    await manager.async_create_rule(muell_rule())
+    await hass.async_block_till_done()
+    # Without an id the 24 h window applies …
+    assert await call(hass, "acknowledge", rule="muell") == {"acknowledged": []}
+    # … with the id it is done right away.
+    result = await call(
+        hass, "acknowledge", rule="muell", reminder_id="muell__20261124"
+    )
+    assert result == {"acknowledged": ["muell__20261124"]}
+    assert manager.reminders["muell"]["muell__20261124"].state == "done"

@@ -1085,7 +1085,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             (type) =>
               html`<button
                 class="chip dashed"
-                @click=${() => this._openSignal(signals.length, defaultSignal(type, this._rule))}
+                @click=${() => this._openSignal(signals.length, defaultSignal(type, this._rule, l.t("done")))}
               >
                 <ha-icon .icon=${SIGNAL_ICONS[type]}></ha-icon>${l.t(`type_${type}` as StringKey)}
               </button>`,
@@ -1213,15 +1213,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_trigger")}
           </button>
         </div>
-        <label class="field"
-          >${l.t("ack_label")}
-          <input
-            .value=${this._rule.ack_label ?? ""}
-            placeholder=${l.t("ack_label_placeholder")}
-            @input=${(e: Event) =>
-              this._update({ ack_label: (e.target as HTMLInputElement).value || null })}
-          />
-        </label>
+
         <div class="hint">${l.t("ack_always")}</div>
       `,
     );

@@ -290,7 +290,7 @@ rule: muell           # with view: rule
 rules: [muell, kult61]   # optional filter for the overview
 show_upcoming: true
 show_done: true
-compact: false        # one line for the top of a dashboard
+compact: false        # one line: the next task; tap to confirm done, snooze or add a rule
 ```
 
 - **Today & upcoming:** open reminders with *Later* (3 h) and the done button
@@ -299,6 +299,11 @@ compact: false        # one line for the top of a dashboard
 - **Rule editor** (administrators, *+* or tap a rule): calendar, keyword table
   with free columns (scrolls sideways), live preview of the next matches,
   reminder times, repeat, signals, ways to acknowledge, bundling and expiry.
+- **Compact** (`compact: true`): always the next task in one line (open ones
+  first, the one that expires first on top, then planned ones) with the rule's
+  icon and the number of open tasks. Tapping opens a dialog: confirm *done*
+  (also ahead of time for planned tasks), *Later*, pick another task, or
+  create a new rule (administrators).
 - **Everyday use:** *Later* offers 1 hour, 3 hours or tomorrow morning;
   after *Done* a short message offers **Undo** (also `laeutwerk.reopen`).
   Tap a reminder for its details: when it reminded, what was sent, what comes
@@ -397,6 +402,12 @@ Feste und variable Tags lassen sich mischen.
 
 ## Bedienung (seit 0.7)
 
+- **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
+  Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
+  Nachfrage als erledigt markieren (geplante auch schon vorab), „Später“,
+  eine andere Aufgabe wählen oder eine neue Regel anlegen (Admins).
+- Der Erledigt-Knopf in der Karte ist nur noch ein ✓; die Beschriftung kommt
+  aus dem Erledigt-Knopf des Push-Signals.
 - **Später** bietet 1 Stunde, 3 Stunden oder „Morgen früh“ (07:00); nach
   **Erledigt** erscheint kurz **Rückgängig** (auch als Aktion `laeutwerk.reopen`).
 - Eine Erinnerung **antippen** zeigt Details: wann erinnert, was gesendet

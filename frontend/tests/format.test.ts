@@ -187,9 +187,9 @@ describe("rule editing", () => {
   });
 
   it("creates signals with useful defaults", () => {
-    const push = defaultSignal("notify", rule({ ack_label: "Steht draußen" }));
+    const push = defaultSignal("notify", rule(), "Erledigt");
     expect(push.title).toBe("{wann}: {tonnen}");
-    expect(push.actions).toEqual([{ ack: true, label: "Steht draußen" }]);
+    expect(push.actions).toEqual([{ ack: true, label: "Erledigt" }]);
     expect(push.audience).toBe("present");
     expect(defaultSignal("light_signal", rule()).color_from).toBe("farbe");
     expect(defaultSignal("announce", emptyRule()).text).toBe("{wann}: {titel}");
@@ -376,5 +376,67 @@ describe("0.7 editor helpers", () => {
       "Eine Liste braucht mindestens einen Eintrag.",
     );
     expect(translateError("totally new", de)).toBe("totally new");
+  });
+});
+
+describe("compact card: next task and done label", () => {
+  it("puts reminding tasks first (soonest expiry), then planned ones", async () => {
+    const { tasks } = await import("../src/format");
+    const r1 = rule({
+      id: "muell",
+      status: {
+        state: "reminded",
+        current: null,
+        errors: {},
+        next_event: null,
+        reminders: [
+          reminder({ id: "a", state: "planned", next_reminder_at: "2026-11-20T16:00:00Z" }),
+          reminder({ id: "b", state: "reminded", expires_at: "2026-11-17T11:00:00Z" }),
+          reminder({ id: "c", state: "done" }),
+        ],
+      },
+    });
+    const r2 = rule({
+      id: "kult",
+      status: {
+        state: "reminded",
+        current: null,
+        errors: {},
+        next_event: null,
+        reminders: [
+          reminder({
+            id: "d",
+            rule_id: "kult",
+            state: "reminded",
+            expires_at: "2026-11-16T22:00:00Z",
+          }),
+          reminder({
+            id: "e",
+            rule_id: "kult",
+            state: "planned",
+            next_reminder_at: "2026-11-18T19:00:00Z",
+          }),
+        ],
+      },
+    });
+    expect(tasks([r1, r2]).map((t) => [t.reminder.id, t.open])).toEqual([
+      ["d", true],
+      ["b", true],
+      ["e", false],
+      ["a", false],
+    ]);
+    expect(tasks([r1, r2], ["muell"]).map((t) => t.reminder.id)).toEqual(["b", "a"]);
+    expect(tasks([])).toEqual([]);
+  });
+
+  it("labels done with the push button text, else the old field, else Erledigt", async () => {
+    const { doneLabel } = await import("../src/format");
+    const push = {
+      ...defaultSignal("notify", rule()),
+      actions: [{ ack: true, label: "Steht draußen" }],
+    };
+    expect(doneLabel(rule({ signals: [push] }), de)).toBe("Steht draußen");
+    expect(doneLabel(rule({ ack_label: "Gratuliert" }), de)).toBe("Gratuliert");
+    expect(doneLabel(rule(), de)).toBe("Erledigt");
   });
 });

@@ -6,12 +6,14 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { property, state } from "lit/decorators.js";
 import {
   buildOverview,
+  doneLabel,
   finishedLine,
   formatDate,
   openStatus,
   relativeDay,
   relativeDayTime,
   reminderTitle,
+  tasks,
 } from "./format";
 import { LaeutwerkCardEditor } from "./card-editor";
 import { LaeutwerkField } from "./ha-field";
@@ -20,6 +22,7 @@ import { defineElements } from "./register";
 import { applyRuleEvent } from "./rule-events";
 import { LaeutwerkRuleEditor } from "./rule-editor";
 import { LaeutwerkSignalEditor } from "./signal-editor";
+import { LaeutwerkTaskDialog } from "./task-dialog";
 import { LaeutwerkTemplatePicker } from "./template-picker";
 import { shared, tokens } from "./styles";
 import type {
@@ -54,6 +57,7 @@ export class LaeutwerkCard extends LitElement {
   @state() private _sorting = false;
   @state() private _search = "";
   private _toastTimer?: number;
+  private _dialog?: LaeutwerkTaskDialog;
   /** Rule open in the editor (new rule: without id). */
   @state() private _editing?: Rule;
   /** Template picker for a new rule is open. */
@@ -104,6 +108,8 @@ export class LaeutwerkCard extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._dialog?.remove();
+    this._dialog = undefined;
     this._unsubscribe();
     window.clearTimeout(this._clock);
     this._clock = undefined;
@@ -111,6 +117,10 @@ export class LaeutwerkCard extends LitElement {
 
   /** Only re-render for relevant changes (DESIGN C3): rules come via websocket. */
   protected shouldUpdate(changed: PropertyValues): boolean {
+    if (this._dialog) {
+      this._dialog.hass = this.hass;
+      this._dialog.rules = this._rules ?? [];
+    }
     if (changed.size !== 1 || !changed.has("hass")) return true;
     const old = changed.get("hass") as HomeAssistant | undefined;
     if (!old || !this.hass) return true;
@@ -547,14 +557,12 @@ export class LaeutwerkCard extends LitElement {
               </button>
               <button
                 class="pill primary"
+                aria-label=${doneLabel(rule, l)}
+                title=${doneLabel(rule, l)}
                 ?disabled=${!!this._busy}
                 @click=${() => this._done(reminder)}
               >
-                ${
-                  this._busy === reminder.id
-                    ? "…"
-                    : html`<ha-icon icon="mdi:check"></ha-icon>${rule.ack_label || l.t("done")}`
-                }
+                ${this._busy === reminder.id ? "…" : html`<ha-icon icon="mdi:check"></ha-icon>`}
               </button>
             </div>`
       }
@@ -728,50 +736,61 @@ export class LaeutwerkCard extends LitElement {
       }`;
   }
 
+  /** Compact: the next task in one line; tapping opens the task dialog. */
   private _renderCompact(): TemplateResult {
     const l = this._l;
-    const overview = buildOverview(this._rulesFiltered(), this._now, this._tz);
-    const first = overview.open[0];
-    if (!first) {
-      const next = overview.upcoming[0];
-      return html`<ha-card class="compact">
-        <div class="row">
-          <span class="icon small"><ha-icon icon="mdi:check-circle-outline"></ha-icon></span>
-          <div class="grow text">
-            <div class="name">${l.t("all_done")}</div>
-            ${
-              next
-                ? html`<div class="sub">
-                    ${next.reminder.titles.join(" + ")} ·
-                    ${relativeDay(next.reminder.start, this._now, l, this._tz)}
-                  </div>`
-                : nothing
-            }
-          </div>
-        </div>
-      </ha-card>`;
-    }
-    const more = overview.open.length - 1;
-    return html`<ha-card class="compact">
-      <div class="row">
-        <span class="badge-wrap">
-          ${this._icon(first.rule, true)}
-          <span class="badge">${overview.open.length}</span>
+    const all = tasks(this._rules ?? [], this._config?.rules);
+    const task = all[0];
+    const openCount = all.filter((t) => t.open).length;
+    const clickable = !!task || this._isAdmin;
+    let line: TemplateResult;
+    if (!task) {
+      line = html`<span class="icon small"><ha-icon icon="mdi:calendar-check"></ha-icon></span>
+        <span class="grow oneline dim">${l.t("no_tasks")}</span>`;
+    } else {
+      // Planned tasks already say when in their title ("Am Freitag: …").
+      const when = task.open ? openStatus(task.reminder, this._now, l, this._tz) : "";
+      line = html`<span class="badge-wrap">
+          ${this._icon(task.rule, true)}
+          ${openCount ? html`<span class="badge">${openCount}</span>` : nothing}
         </span>
-        <div class="grow text">
-          <div class="name">${reminderTitle(first.reminder)}</div>
-          ${more > 0 ? html`<div class="sub">${l.t("more_open", { n: more })}</div>` : nothing}
-        </div>
-        <button
-          class="pill primary small"
-          ?disabled=${!!this._busy}
-          aria-label=${first.rule.ack_label || l.t("done")}
-          @click=${() => this._done(first.reminder)}
-        >
-          <ha-icon icon="mdi:check"></ha-icon>${l.t("done")}
-        </button>
+        <span class="grow oneline ${task.open ? "" : "dim"}">
+          <span class="name">${reminderTitle(task.reminder)}</span>
+          ${when ? html`<span class="when"> · ${when}</span>` : nothing}
+        </span>`;
+    }
+    return html`<ha-card
+      class="compact ${task?.open ? "due" : ""}"
+      role=${clickable ? "button" : nothing}
+      tabindex=${clickable ? "0" : nothing}
+      aria-label=${task ? reminderTitle(task.reminder) : l.t("no_tasks")}
+      @click=${() => clickable && this._openDialog()}
+      @keydown=${(e: KeyboardEvent) => {
+        if (clickable && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          this._openDialog();
+        }
+      }}
+    >
+      <div class="row">
+        ${line}
+        ${clickable ? html`<ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>` : nothing}
       </div>
     </ha-card>`;
+  }
+
+  /** The task dialog lives at <body> level (not clipped by the grid cell). */
+  private _openDialog(): void {
+    if (this._dialog) return;
+    const dialog = document.createElement("laeutwerk-task-dialog") as LaeutwerkTaskDialog;
+    dialog.hass = this.hass;
+    dialog.localize = this._l;
+    dialog.rules = this._rules ?? [];
+    dialog.only = this._config?.rules ?? [];
+    dialog.toggleAttribute("dark", !!this.hass?.themes?.darkMode);
+    dialog.addEventListener("closed", () => (this._dialog = undefined));
+    document.body.appendChild(dialog);
+    this._dialog = dialog;
   }
 
   static styles = [
@@ -978,6 +997,40 @@ export class LaeutwerkCard extends LitElement {
       .separator .chip {
         min-height: 32px;
       }
+      ha-card.compact {
+        cursor: pointer;
+        min-height: 56px;
+      }
+      ha-card.compact.due {
+        border: 1px solid color-mix(in srgb, var(--lw-accent) 55%, transparent);
+      }
+      ha-card.compact:focus-visible {
+        outline: 2px solid var(--lw-accent);
+        outline-offset: 2px;
+      }
+      .oneline {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 15px;
+      }
+      .oneline .name {
+        font-weight: 600;
+      }
+      .oneline .when {
+        color: var(--lw-text-2);
+        font-size: 13px;
+      }
+      .oneline.dim .name {
+        font-weight: 500;
+        color: var(--lw-text-2);
+      }
+      .chev {
+        color: var(--lw-text-2);
+      }
+      .actions .pill.primary ha-icon {
+        --mdc-icon-size: 24px;
+      }
       .pill.small {
         min-height: 44px;
         padding: 0 14px;
@@ -995,6 +1048,7 @@ void defineElements([
   ["laeutwerk-field", LaeutwerkField],
   ["laeutwerk-card-editor", LaeutwerkCardEditor],
   ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
+  ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
 ]);
 
 declare global {

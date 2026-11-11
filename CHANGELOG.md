@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-11
+
+### Changed
+- Compact card: always the next task in one line (open ones first, the one
+  that expires first on top, then planned ones) with the rule's icon and the
+  number of open tasks – no more "all done" line. Tapping opens a dialog to
+  confirm *done* (also ahead of time for planned tasks), snooze, pick another
+  task or create a new rule.
+- The done button of open reminders in the card is a check mark only; its
+  label comes from the push signal's done button.
+- The rule editor no longer has the "text of the done button" field
+  (`ack_label` in existing rules is still read).
+
 ## [0.7.0] - 2026-11-11
 
 ### Added
