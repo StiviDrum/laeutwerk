@@ -124,6 +124,11 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 ## 0.6.2 – Praxistest v0.6.1 (11.11.2026, Testregel auf `calendar.rodgau_abfallkalender`)
 - [x] „Nächster Termin“ zeigte einen schon verfallenen Termin
   - `RuleRunner.next_occurrence()` now skips occurrences whose reminder is done or missed, or whose expiry has passed. Occurrences made only of to-dos / intervals stay "next" until acknowledged (missed does not count for them: the item is still open and carried to today). Affects `next_event` of the state sensor, `_naechster_termin`, `get_rules` / websocket status and the card's rule list.
+- [x] Automatische Mehrzahl für jede Spalte, auch wo sie unsinnig ist
+  - Implemented as proposed: a column is a name (plural "<name>n", as before) or `{name, plural: false | "<own name>"}`. Both forms are read, so no storage migration; validation stores the short form while the plural is the default (`model.column_spec`), so existing rules, exports and templates are unchanged.
+  - Decision for `plural: false` with bundles: the variable holds the **unique values joined with "und"** (one value if all are equal). Reason: no information is lost ("die und den" shows the mix), and with one value per bundle it reads exactly as before. With plural on, `{column}` stays the first value (unchanged).
+  - Clash check only for active plurals (incl. own plural names); column names are still checked against reserved names.
+  - Card: toggle under each column name in the keyword table (shows `{tonnen}` or "keine Mehrzahl"); variable chips and new signal texts only use plurals that exist. Renaming keeps the setting.
 
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

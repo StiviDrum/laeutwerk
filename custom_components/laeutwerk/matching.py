@@ -315,8 +315,13 @@ def build_variables(
     hits = hits_of(rule, events)
     for column in rule.filter.columns:
         values = [row.values.get(column, "") for row in hits]
-        variables[column] = values[0] if values else ""
-        variables[f"{column}n"] = join_words(values, language)
+        plural = rule.filter.plural(column)
+        if plural is None:
+            # No plural variable: the unique values of a bundle, joined.
+            variables[column] = join_words(values, language)
+        else:
+            variables[column] = values[0] if values else ""
+            variables[plural] = join_words(values, language)
     return variables
 
 

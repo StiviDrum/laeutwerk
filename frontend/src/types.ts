@@ -134,7 +134,7 @@ export interface Rule {
   color: string | null;
   enabled: boolean;
   sources: string[];
-  filter: { all_day: boolean; keywords: { columns: string[]; rows: KeywordRow[] } };
+  filter: { all_day: boolean; keywords: { columns: ColumnSpec[]; rows: KeywordRow[] } };
   reminders: { at: string }[];
   signals: Signal[];
   acknowledge: Acknowledge[];
@@ -153,6 +153,12 @@ export interface Rule {
   escalation?: { after: string }[];
   status?: RuleStatus;
 }
+
+/**
+ * Keyword column: its name (plural variable "<name>n"), or an object with
+ * `plural: false` (no plural variable) or an own plural name.
+ */
+export type ColumnSpec = string | { name: string; plural?: boolean | string };
 
 export interface PersonInfo {
   entity_id: string;

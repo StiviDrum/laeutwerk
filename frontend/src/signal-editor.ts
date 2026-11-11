@@ -5,7 +5,13 @@
  */
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { SIGNAL_ICONS, availableVariables, defaultSignal, renderTemplate } from "./format";
+import {
+  SIGNAL_ICONS,
+  availableVariables,
+  columnNames,
+  defaultSignal,
+  renderTemplate,
+} from "./format";
 import type { Localizer, StringKey } from "./localize";
 import { shared, tokens } from "./styles";
 import type {
@@ -429,7 +435,7 @@ export class LaeutwerkSignalEditor extends LitElement {
   private _lightFields(): TemplateResult {
     const l = this._l;
     const s = this._sig;
-    const columns = this.rule.filter.keywords.columns;
+    const columns = columnNames(this.rule);
     const fromColumn = s.color_from !== undefined;
     return html`
       <laeutwerk-field

@@ -91,6 +91,12 @@ data:
   `{datum}`, `{uhrzeit}`, plus one per column and its plural with an appended
   `n`: `{tonnen}` = "Papiertonne und Biotonne". `title_plural` /
   `message_plural` are used when several keywords matched.
+- **Plural per column:** where a plural makes no sense (e.g. `artikel`),
+  switch it off in the column header of the card or write the column as
+  `{name: artikel, plural: false}`. Then there is no `{artikeln}`, and with
+  several matches `{artikel}` contains the different values joined with
+  "und" ("die", or "die und den"). An own plural name:
+  `{name: tonne, plural: tonnen_liste}`. Plain names keep the default plural.
 - **Acknowledge:** the button in the push notification, the entity
   `button.laeutwerk_<rule>_erledigt`, the action `laeutwerk.acknowledge`, an
   NFC tag or any trigger (see below).
@@ -351,6 +357,17 @@ bleibt, bis sie quittiert wird oder verfällt.
 
 Läutwerk holt keine Termine selbst – Waste Collection Schedule,
 Google-Kalender, CalDAV oder der lokale HA-Kalender bleiben die Quellen.
+
+## Variablen und Mehrzahl
+
+Jede Spalte der Stichwort-Tabelle wird eine Textvariable, z. B. `{tonne}`.
+Bei mehreren Treffern entsteht automatisch die Mehrzahl mit angehängtem `n`:
+`{tonnen}` = „Papiertonne und Biotonne“. Wo das keinen Sinn ergibt (z. B. bei
+`artikel`), schaltest du die Mehrzahl im Spaltenkopf der Karte aus oder
+schreibst die Spalte als `{name: artikel, plural: false}`. Dann gibt es kein
+`{artikeln}`, und `{artikel}` enthält bei mehreren Treffern die verschiedenen
+Werte, mit „und“ verbunden („die“ bzw. „die und den“). Ein eigener Name für
+die Mehrzahl: `{name: tonne, plural: tonnen_liste}`.
 
 ## Installation (HACS, benutzerdefiniertes Repository)
 

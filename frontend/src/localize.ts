@@ -233,6 +233,10 @@ const en = {
   on_done_hint: "e.g. add to a shopping list or count. Variables: person, via, titel …",
   audience_assignee: "responsible person",
   rule_inactive: "inactive",
+  plural_toggle: "Plural variable on / off",
+  plural_off: "no plural",
+  plural_hint_off:
+    'Each column becomes a variable; with several matches it contains their different values, joined with "and".',
   recipients: "Recipients",
   push_to_assignee: "To the responsible person",
   only_present: "Only who is at home right now",
@@ -492,6 +496,10 @@ const de: Strings = {
   on_done_hint: "z. B. auf die Einkaufsliste setzen oder zählen. Variablen: person, via, titel …",
   audience_assignee: "Zuständige",
   rule_inactive: "inaktiv",
+  plural_toggle: "Mehrzahl-Variable an / aus",
+  plural_off: "keine Mehrzahl",
+  plural_hint_off:
+    "Jede Spalte wird eine Variable; bei mehreren Treffern enthält sie die verschiedenen Werte, mit „und“ verbunden.",
   recipients: "Empfänger",
   push_to_assignee: "An die zuständige Person",
   only_present: "Nur wer gerade zu Hause ist",

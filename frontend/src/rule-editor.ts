@@ -11,8 +11,11 @@ import {
   describeTimespec,
   formatDate,
   relativeDayTime,
+  colName,
+  colPlural,
   renameColumn,
   ruleComplete,
+  setColumnPlural,
   signalSummary,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -213,8 +216,9 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   private _addColumn(): void {
     const { columns, rows } = this._rule.filter.keywords;
+    const names = columns.map(colName);
     let name = "spalte";
-    for (let n = 2; columns.includes(name); n++) name = `spalte${n}`;
+    for (let n = 2; names.includes(name); n++) name = `spalte${n}`;
     const keywords = {
       columns: [...columns, name],
       rows: rows.map((r) => ({ ...r, [name]: "" })),
@@ -224,7 +228,7 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   private _removeColumn(index: number): void {
     const { columns, rows } = this._rule.filter.keywords;
-    const name = columns[index];
+    const name = colName(columns[index]);
     const keywords = {
       columns: columns.filter((_, i) => i !== index),
       rows: rows.map((r) => {
@@ -457,8 +461,9 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   private _stepEvents(): TemplateResult {
     const l = this._l;
-    const { columns, rows } = this._rule.filter.keywords;
-    const example = columns[0] ?? "tonne";
+    const { columns: specs, rows } = this._rule.filter.keywords;
+    const columns = specs.map(colName);
+    const withPlural = specs.find((c) => colPlural(c));
     return this._step(
       2,
       "step_events",
@@ -469,12 +474,13 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="table" role="table">
           <div class="tr head" role="row">
             <div class="th kw" role="columnheader">${l.t("keyword")}</div>
-            ${columns.map(
-              (c, i) =>
-                html`<div class="th col" role="columnheader">
+            ${specs.map((spec, i) => {
+              const plural = colPlural(spec);
+              return html`<div class="th col" role="columnheader">
+                <div class="colhead">
                   <input
                     class="colname"
-                    .value=${c}
+                    .value=${colName(spec)}
                     aria-label=${l.t("add_column")}
                     @change=${(e: Event) =>
                       this._update(
@@ -489,8 +495,18 @@ export class LaeutwerkRuleEditor extends LitElement {
                   >
                     <ha-icon icon="mdi:close"></ha-icon>
                   </button>
-                </div>`,
-            )}
+                </div>
+                <button
+                  class="plural"
+                  role="switch"
+                  aria-checked=${!!plural}
+                  title=${l.t("plural_toggle")}
+                  @click=${() => this._update(setColumnPlural(this._rule, i, !plural))}
+                >
+                  ${plural ? `{${plural}}` : l.t("plural_off")}
+                </button>
+              </div>`;
+            })}
             <div class="th end"></div>
           </div>
           ${rows.map(
@@ -552,9 +568,14 @@ export class LaeutwerkRuleEditor extends LitElement {
         </div>
         <div class="hint">
           ${
-            rows.length
-              ? l.t("plural_hint", { example: `{${example}}`, plural: `{${example}n}` })
-              : l.t("no_keywords")
+            !rows.length
+              ? l.t("no_keywords")
+              : withPlural
+                ? l.t("plural_hint", {
+                    example: `{${colName(withPlural)}}`,
+                    plural: `{${colPlural(withPlural)}}`,
+                  })
+                : l.t("plural_hint_off")
           }
         </div>
         ${this._previewList()}
@@ -1201,6 +1222,39 @@ export class LaeutwerkRuleEditor extends LitElement {
         display: flex;
         align-items: center;
         gap: 2px;
+      }
+      .th.col {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+      }
+      .colhead {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .plural {
+        position: relative;
+        min-height: 28px;
+        border-radius: 14px;
+        border: 1px dashed var(--lw-border);
+        font-size: 11px;
+        font-weight: 500;
+        font-family: ui-monospace, monospace;
+        color: var(--lw-text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .plural::before {
+        content: "";
+        position: absolute;
+        inset: -8px -2px;
+      }
+      .plural[aria-checked="true"] {
+        border-style: solid;
+        background: color-mix(in srgb, var(--lw-accent) 14%, transparent);
+        color: var(--lw-text);
       }
       .end {
         width: 36px;

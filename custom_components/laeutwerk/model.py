@@ -94,22 +94,53 @@ class KeywordRow:
         return {**data, **self.values}
 
 
+def column_name(spec: Any) -> str:
+    """Name of a keyword column (short form: the name, long form: a mapping)."""
+    return str(spec["name"] if isinstance(spec, dict) else spec)
+
+
+def column_plural(spec: Any) -> str | None:
+    """Plural variable of a column: "<name>n" by default, None if switched off."""
+    name = column_name(spec)
+    plural = spec.get("plural", True) if isinstance(spec, dict) else True
+    if plural is False:
+        return None
+    if plural is True or not plural:
+        return f"{name}n"
+    return str(plural)
+
+
+def column_spec(name: str, plural: str | None) -> Any:
+    """Short form (the name) while the plural is the default, else a mapping."""
+    if plural == f"{name}n":
+        return name
+    return {"name": name, "plural": plural if plural is not None else False}
+
+
 @dataclass(slots=True)
 class Filter:
     """Which events of the sources belong to a rule."""
 
     all_day: bool = False
-    columns: list[str] = field(default_factory=list)
+    columns: list[str] = field(default_factory=list)  # names
     rows: list[KeywordRow] = field(default_factory=list)
+    # Plural variable per column name (None: no plural variable).
+    plurals: dict[str, str | None] = field(default_factory=dict)
+
+    def plural(self, column: str) -> str | None:
+        """Plural variable of a column (default "<name>n")."""
+        return self.plurals.get(column, f"{column}n")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Filter:
         """Create from the stored form."""
         keywords = data.get("keywords") or {}
+        specs = list(keywords.get("columns", []))
         return cls(
             all_day=bool(data.get("all_day", False)),
-            columns=list(keywords.get("columns", [])),
+            columns=[column_name(spec) for spec in specs],
             rows=[KeywordRow.from_dict(row) for row in keywords.get("rows", [])],
+            plurals={column_name(spec): column_plural(spec) for spec in specs},
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -117,7 +148,9 @@ class Filter:
         return {
             "all_day": self.all_day,
             "keywords": {
-                "columns": list(self.columns),
+                "columns": [
+                    column_spec(name, self.plural(name)) for name in self.columns
+                ],
                 "rows": [row.to_dict() for row in self.rows],
             },
         }

@@ -45,6 +45,9 @@ from .model import (
     SIGNAL_NOTIFY,
     SIGNAL_TYPES,
     WHEN_NOW,
+    column_name,
+    column_plural,
+    column_spec,
 )
 from .sources import SOURCE_DOMAINS
 from .timespec import KIND_EVENT_END, KIND_EVENT_START, parse_timespec
@@ -159,26 +162,49 @@ def _column(value: Any) -> str:
     return name
 
 
+_COLUMN_OBJECT = vol.Schema(
+    {
+        vol.Required("name"): _column,
+        # true: "<name>n" (default), false: no plural variable, or its name.
+        vol.Optional("plural", default=True): vol.Any(bool, _column),
+    }
+)
+
+
+def _COLUMN_SPEC(value: Any) -> Any:
+    """Validate a column: its name, or an object with name and plural."""
+    if isinstance(value, dict):
+        return _COLUMN_OBJECT(value)
+    return _column(value)
+
+
 def _keywords(value: Any) -> dict[str, Any]:
     """Validate the keyword table: columns and flat rows."""
     data = vol.Schema(
         {
-            vol.Optional("columns", default=list): [_column],
+            vol.Optional("columns", default=list): [_COLUMN_SPEC],
             vol.Optional("rows", default=list): [dict],
         }
     )(value or {})
-    columns: list[str] = data["columns"]
+    columns: list[str] = [column_name(spec) for spec in data["columns"]]
+    plurals = {column_name(spec): column_plural(spec) for spec in data["columns"]}
     if len(set(columns)) != len(columns):
         raise vol.Invalid("column names must be unique")
-    taken = set(EVENT_VARIABLES) | set(_ROW_KEYS) | set(columns)
     for column in columns:
         if column in EVENT_VARIABLES or column in _ROW_KEYS:
             raise vol.Invalid(f"column name '{column}' is reserved")
-        if f"{column}n" in taken:
+    # Plural variables only exist (and can only clash) where they are switched on.
+    taken = set(EVENT_VARIABLES) | set(_ROW_KEYS) | set(columns)
+    for column in columns:
+        plural = plurals[column]
+        if plural is None:
+            continue
+        if plural in taken:
             raise vol.Invalid(
-                f"column '{column}': its plural variable '{column}n' clashes "
-                "with another variable"
+                f"column '{column}': its plural variable '{plural}' clashes "
+                "with another variable (switch the plural off or rename it)"
             )
+        taken.add(plural)
     rows = []
     for index, raw in enumerate(data["rows"], start=1):
         row = {str(key).lower(): val for key, val in raw.items()}
@@ -208,7 +234,10 @@ def _keywords(value: Any) -> dict[str, Any]:
         for column in columns:
             clean[column] = _text(row.get(column, "") or "")
         rows.append(clean)
-    return {"columns": columns, "rows": rows}
+    return {
+        "columns": [column_spec(name, plurals[name]) for name in columns],
+        "rows": rows,
+    }
 
 
 _FILTER_SCHEMA = vol.Schema(
@@ -524,7 +553,7 @@ RULE_SCHEMA = vol.Schema(
 def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
     """Validate a rule; raises ``vol.Invalid`` with a readable message."""
     rule: dict[str, Any] = RULE_SCHEMA(data)
-    columns = rule["filter"]["keywords"]["columns"]
+    columns = [column_name(spec) for spec in rule["filter"]["keywords"]["columns"]]
     for signal in rule["signals"]:
         column = signal.get("color_from")
         if column and column not in columns:

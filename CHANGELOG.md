@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Plural per keyword column can be switched off (`{name: artikel, plural:
+  false}`, toggle in the column header of the card) or given an own name
+  (`{name: tonne, plural: tonnen_liste}`). Without plural, a bundle's
+  variable holds the different values joined with "und". Plain column names
+  work as before.
+
 ### Fixed
 - "Next event" (sensor `…_naechster_termin`, attribute `next_event`,
   `get_rules`, card) no longer shows an event whose reminder has expired, is

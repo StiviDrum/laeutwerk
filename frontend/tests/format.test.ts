@@ -246,3 +246,54 @@ describe("push recipients", () => {
     );
   });
 });
+
+describe("columns with switchable plural", () => {
+  it("reads both forms and stores the short one by default", async () => {
+    const { colName, colPlural, makeColumn } = await import("../src/format");
+    expect(colName("tonne")).toBe("tonne");
+    expect(colPlural("tonne")).toBe("tonnen");
+    expect(colPlural({ name: "artikel", plural: false })).toBeNull();
+    expect(colPlural({ name: "tonne", plural: "tonnen_liste" })).toBe("tonnen_liste");
+    expect(colPlural({ name: "farbe", plural: true })).toBe("farben");
+    expect(makeColumn("tonne", "tonnen")).toBe("tonne");
+    expect(makeColumn("artikel", null)).toEqual({ name: "artikel", plural: false });
+  });
+
+  it("toggles, renames and offers variables accordingly", async () => {
+    const { setColumnPlural } = await import("../src/format");
+    const r = rule({
+      filter: {
+        all_day: true,
+        keywords: {
+          columns: ["tonne", { name: "artikel", plural: false }],
+          rows: [{ match: "Papier", tonne: "Papiertonne", artikel: "die" }],
+        },
+      },
+    });
+    expect(availableVariables(r).slice(0, 3)).toEqual(["tonne", "tonnen", "artikel"]);
+    const off = setColumnPlural(r, 0, false);
+    expect(off.filter.keywords.columns[0]).toEqual({ name: "tonne", plural: false });
+    expect(availableVariables(off)).not.toContain("tonnen");
+    expect(setColumnPlural(off, 0, true).filter.keywords.columns[0]).toBe("tonne");
+
+    // Renaming keeps the setting: default follows the name, off stays off.
+    const renamed = renameColumn(renameColumn(r, 0, "behaelter"), 1, "art");
+    expect(renamed.filter.keywords.columns).toEqual(["behaelter", { name: "art", plural: false }]);
+    expect(renamed.filter.keywords.rows[0]).toEqual({
+      match: "Papier",
+      behaelter: "Papiertonne",
+      art: "die",
+    });
+    const own = rule({
+      filter: {
+        all_day: true,
+        keywords: { columns: [{ name: "tonne", plural: "liste" }], rows: [] },
+      },
+    });
+    expect(renameColumn(own, 0, "behaelter").filter.keywords.columns).toEqual([
+      { name: "behaelter", plural: "liste" },
+    ]);
+    // New signals use the plural only if there is one.
+    expect(defaultSignal("announce", off).text).toBe("{wann}: {tonne}");
+  });
+});

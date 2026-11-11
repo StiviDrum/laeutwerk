@@ -102,7 +102,7 @@ Wichtige Details:
 | Termin (immer) | `{titel}`, `{rest}` (Titel ohne gefundenes Stichwort), `{beschreibung}`, `{ort}`, `{kalender}`, `{wann}` (heute/morgen/am Donnerstag), `{datum}`, `{uhrzeit}` |
 | Gelegenheit | `{person}` (wer heimkam, wer die Lampe schaltete – soweit aus `context`/Trigger ermittelbar) |
 | Stichwort-Tabelle | je Spalte eine Variable mit frei gewähltem Namen, z. B. `{tonne}`, `{farbe}`, `{artikel}`, `{aufgabe}` |
-| Mehrere Treffer | je Spalte automatisch die Mehrzahl mit angehängtem `n`, verbunden mit „und“: `{tonnen}` = „Papiertonne und Biotonne“ |
+| Mehrere Treffer | je Spalte automatisch die Mehrzahl mit angehängtem `n`, verbunden mit „und“: `{tonnen}` = „Papiertonne und Biotonne“. Je Spalte abschaltbar (`{name: artikel, plural: false}`, Umschalter im Spaltenkopf) – dann keine Mehrzahl-Variable, und die Spalten-Variable enthält bei mehreren Treffern die verschiedenen Werte mit „und“ verbunden; eigener Mehrzahl-Name mit `{name: tonne, plural: tonnen_liste}` (seit 0.6.2) |
 | Zuständigkeit (0.6) | `{zustaendig}` |
 
 Textfelder mit einer Einzahl- und einer Mehrzahl-Variante (`text` / `text_plural`) für saubere Grammatik. Der Editor zeigt unter jedem Textfeld die verfügbaren Variablen als Chips und eine Vorschau mit dem nächsten echten Termin.

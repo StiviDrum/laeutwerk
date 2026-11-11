@@ -1,6 +1,6 @@
 /** Pure display logic of the card (tested with vitest). */
 import type { Localizer } from "./localize";
-import type { Reminder, Rule, Signal } from "./types";
+import type { ColumnSpec, Reminder, Rule, Signal } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -177,10 +177,45 @@ export function renderTemplate(
   return template.startsWith("{") ? capitalize(text) : text;
 }
 
+/** Name of a keyword column. */
+export function colName(spec: ColumnSpec): string {
+  return typeof spec === "string" ? spec : spec.name;
+}
+
+/** Plural variable of a column ("<name>n" by default), null if switched off. */
+export function colPlural(spec: ColumnSpec): string | null {
+  const name = colName(spec);
+  const plural = typeof spec === "string" ? true : (spec.plural ?? true);
+  if (plural === false) return null;
+  if (plural === true || !plural) return `${name}n`;
+  return plural;
+}
+
+/** Short form (the name) while the plural is the default, like the backend stores it. */
+export function makeColumn(name: string, plural: string | null): ColumnSpec {
+  if (plural === `${name}n`) return name;
+  return { name, plural: plural ?? false };
+}
+
+export function columnNames(rule: Rule): string[] {
+  return rule.filter.keywords.columns.map(colName);
+}
+
+/** Switch the plural variable of a column on (default name) or off. */
+export function setColumnPlural(rule: Rule, index: number, on: boolean): Rule {
+  const columns = rule.filter.keywords.columns.map((c, i) =>
+    i === index ? makeColumn(colName(c), on ? `${colName(c)}n` : null) : c,
+  );
+  return { ...rule, filter: { ...rule.filter, keywords: { ...rule.filter.keywords, columns } } };
+}
+
 /** All variables a rule offers: fixed ones plus columns and their plurals. */
 export function availableVariables(rule: Rule, opportunity = false): string[] {
   const fixed = ["wann", "titel", "rest", "datum", "uhrzeit", "ort", "beschreibung", "kalender"];
-  const columns = rule.filter.keywords.columns.flatMap((c) => [c, `${c}n`]);
+  const columns = rule.filter.keywords.columns.flatMap((c) => {
+    const plural = colPlural(c);
+    return plural ? [colName(c), plural] : [colName(c)];
+  });
   return [
     ...columns,
     ...fixed,
@@ -238,7 +273,7 @@ export const SIGNAL_ICONS: Record<string, string> = {
 /** A new signal with sensible defaults for its type. */
 export function defaultSignal(type: Signal["type"], rule: Rule): Signal {
   const first = rule.filter.keywords.columns[0];
-  const what = first ? `{${first}n}` : "{titel}";
+  const what = first ? `{${colPlural(first) ?? colName(first)}}` : "{titel}";
   const base = { type, enabled: true, when: "now" as const };
   if (type === "notify") {
     return {
@@ -250,9 +285,7 @@ export function defaultSignal(type: Signal["type"], rule: Rule): Signal {
     };
   }
   if (type === "light_signal") {
-    const colorColumn = ["farbe", "color", "colour"].find((c) =>
-      rule.filter.keywords.columns.includes(c),
-    );
+    const colorColumn = ["farbe", "color", "colour"].find((c) => columnNames(rule).includes(c));
     return {
       ...base,
       entities: [],
@@ -318,17 +351,24 @@ export function ruleComplete(rule: Rule): boolean {
 
 /** Rename a keyword column in the table and wherever signals refer to it. */
 export function renameColumn(rule: Rule, index: number, name: string): Rule {
-  const old = rule.filter.keywords.columns[index];
+  const spec = rule.filter.keywords.columns[index];
+  const old = colName(spec);
   const clean = name
     .trim()
     .toLowerCase()
     .replace(/[^\p{L}\p{N}_]/gu, "_");
-  const columns = rule.filter.keywords.columns.map((c, i) => (i === index ? clean : c));
+  // Keep the plural setting: default name follows, off stays off, own name stays.
+  const plural = colPlural(spec);
+  const nextPlural = plural === `${old}n` ? `${clean}n` : plural;
+  const columns = rule.filter.keywords.columns.map((c, i) =>
+    i === index ? makeColumn(clean, nextPlural) : c,
+  );
+  const names = columns.map(colName);
   const rows = rule.filter.keywords.rows.map((row) => {
     const next: typeof row = { match: row.match };
     if (row.mode) next.mode = row.mode;
     rule.filter.keywords.columns.forEach((c, i) => {
-      next[columns[i]] = row[c] ?? "";
+      next[names[i]] = row[colName(c)] ?? "";
     });
     return next;
   });
