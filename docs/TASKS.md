@@ -194,6 +194,15 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - No backend change: reopen already worked until the expiry; done reminders of future events are kept by the engine.
 - [x] Release v0.7.2
 
+## 0.7.3 – Rückfrage beim Erledigen, Regeln aus der kompakten Karte bearbeiten (11.11.2026)
+- [x] Rückfrage vor dem Erledigen (große und kompakte Karte)
+  - Shared popup `laeutwerk-confirm` (`confirmAction()`, appended to `<body>`, above the task dialog, Escape/backdrop = cancel). Confirm button = the rule's done label with ✓ (e.g. „Steht draußen“). Also used for reopening: ↶ in the card's done list and „Schon erledigt“ in the dialog (replaces the dialog's reopen page). The undo toast right after „done“ in the big card stays without a question (it undoes what was just done).
+  - The dialog's task page no longer asks itself; for planned tasks it notes „Noch nicht fällig – kann schon vorab erledigt werden.“, the popup asks.
+- [x] Bestehende Regeln im Fenster der kompakten Karte bearbeiten
+  - Section „Regeln“ (admins): all rules with ✎, opens the rule editor in the dialog; „+ Neue Regel“ below.
+- [x] Release v0.7.3
+  - Checked in the real frontend: cancel keeps the task open, confirm marks it done; compact popup; editor opens for a chosen rule.
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

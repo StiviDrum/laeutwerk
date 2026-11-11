@@ -303,7 +303,9 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   first, the one that expires first on top, then planned ones) with the rule's
   icon and the number of open tasks. Tapping opens a dialog: confirm *done*
   (also ahead of time for planned tasks), *Later*, pick another task, reopen
-  a task under *Done already*, or create a new rule (administrators).
+  a task under *Done already*, or edit / create rules (administrators).
+- **Confirmation:** marking a task as done and reopening one ask first – in
+  the card and in the compact card's dialog.
 - **Done ahead:** tasks done before their event stay visible under *Done*
   (card) / *Done already* (compact dialog) and can be undone until they
   expire.
@@ -408,8 +410,10 @@ Feste und variable Tags lassen sich mischen.
 - **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
   Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
   Nachfrage als erledigt markieren (geplante auch schon vorab), „Später“,
-  eine andere Aufgabe wählen, unter „Schon erledigt“ eine Aufgabe mit
-  Nachfrage wieder öffnen oder eine neue Regel anlegen (Admins).
+  eine andere Aufgabe wählen, unter „Schon erledigt“ eine Aufgabe wieder
+  öffnen oder Regeln bearbeiten und neu anlegen (Admins).
+- **Rückfrage:** Erledigen und Wieder-Öffnen fragen vorher nach – in der Karte
+  und im Fenster der kompakten Karte.
 - **Vorab erledigte Aufgaben** bleiben sichtbar – in der Karte unter
   „Erledigt“ mit ↶, im kompakten Fenster unter „Schon erledigt“ – und lassen
   sich bis zu ihrem Verfall rückgängig machen.

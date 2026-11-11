@@ -18,6 +18,7 @@ import {
   tasks,
 } from "./format";
 import { LaeutwerkCardEditor } from "./card-editor";
+import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
 import { LaeutwerkField } from "./ha-field";
 import { localizer, type Localizer, type StringKey } from "./localize";
 import { defineElements } from "./register";
@@ -236,7 +237,26 @@ export class LaeutwerkCard extends LitElement {
     this._toastTimer = window.setTimeout(() => (this._toast = undefined), undo ? 8000 : 3000);
   }
 
-  private async _done(reminder: Reminder): Promise<void> {
+  private _ask(title: string, text: string, confirm: string, icon: string): Promise<boolean> {
+    return confirmAction({
+      title,
+      text,
+      confirm,
+      cancel: this._l.t("cancel"),
+      icon,
+      dark: !!this.hass?.themes?.darkMode,
+    });
+  }
+
+  private async _done(reminder: Reminder, rule?: Rule): Promise<void> {
+    const l = this._l;
+    const asked = await this._ask(
+      reminderTitle(reminder),
+      l.t("confirm_done"),
+      rule ? doneLabel(rule, l) : l.t("done"),
+      "mdi:check",
+    );
+    if (!asked) return;
     // Who it was is resolved by Läutwerk from the user (person, else name).
     const ok = await this._call(reminder.id, "acknowledge", {
       rule: reminder.rule_id,
@@ -246,10 +266,21 @@ export class LaeutwerkCard extends LitElement {
       this._showToast(this._l.t("done_toast", { title: reminderTitle(reminder) }), reminder.id);
   }
 
+  /** Undo from the toast right after "done": no question (it was just done). */
   private async _undo(reminderId: string): Promise<void> {
     window.clearTimeout(this._toastTimer);
     this._toast = undefined;
     await this._call(`${reminderId}-undo`, "reopen", { reminder_id: reminderId });
+  }
+
+  /** Reopen a task from the done list – with a question, like in the dialog. */
+  private async _reopen(reminder: Reminder): Promise<void> {
+    const l = this._l;
+    if (
+      await this._ask(reminderTitle(reminder), l.t("confirm_reopen"), l.t("reopen"), "mdi:undo")
+    ) {
+      await this._call(`${reminder.id}-undo`, "reopen", { reminder_id: reminder.id });
+    }
   }
 
   private async _later(reminder: Reminder, choice: "1h" | "3h" | "morning"): Promise<void> {
@@ -562,7 +593,7 @@ export class LaeutwerkCard extends LitElement {
                 aria-label=${doneLabel(rule, l)}
                 title=${doneLabel(rule, l)}
                 ?disabled=${!!this._busy}
-                @click=${() => this._done(reminder)}
+                @click=${() => this._done(reminder, rule)}
               >
                 ${this._busy === reminder.id ? "…" : html`<ha-icon icon="mdi:check"></ha-icon>`}
               </button>
@@ -614,7 +645,7 @@ export class LaeutwerkCard extends LitElement {
                 aria-label=${l.t("undo")}
                 title=${l.t("undo")}
                 ?disabled=${!!this._busy}
-                @click=${() => this._undo(reminder.id)}
+                @click=${() => this._reopen(reminder)}
               >
                 <ha-icon icon="mdi:undo"></ha-icon>
               </button>`
@@ -1068,6 +1099,7 @@ void defineElements([
   ["laeutwerk-card-editor", LaeutwerkCardEditor],
   ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
   ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
+  ["laeutwerk-confirm", LaeutwerkConfirm],
 ]);
 
 declare global {

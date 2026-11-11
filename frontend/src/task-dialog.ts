@@ -16,6 +16,7 @@ import {
   tasks,
   type Task,
 } from "./format";
+import { confirmAction } from "./confirm-dialog";
 import type { Localizer } from "./localize";
 import { shared, tokens } from "./styles";
 import type { HomeAssistant, Rule } from "./types";
@@ -38,8 +39,6 @@ export class LaeutwerkTaskDialog extends LitElement {
   @state() private _busy = false;
   @state() private _error?: string;
   @state() private _laterOpen = false;
-  /** Done task whose "reopen?" question is shown. */
-  @state() private _reopening?: string;
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") this.close();
   };
@@ -82,8 +81,22 @@ export class LaeutwerkTaskDialog extends LitElement {
     }
   }
 
+  private _ask(task: Task, text: string, confirm: string, icon: string): Promise<boolean> {
+    return confirmAction({
+      title: reminderTitle(task.reminder),
+      text,
+      confirm,
+      cancel: this._l.t("cancel"),
+      icon,
+      dark: this.hasAttribute("dark"),
+    });
+  }
+
   private async _done(task: Task): Promise<void> {
-    // Confirmed in this dialog: also planned tasks can be done ahead of time.
+    const l = this._l;
+    const text = task.open ? l.t("confirm_done") : l.t("confirm_done_early");
+    if (!(await this._ask(task, text, doneLabel(task.rule, l), "mdi:check"))) return;
+    // Also planned tasks can be done ahead of time (asked above).
     const ok = await this._call("acknowledge", {
       rule: task.rule.id,
       reminder_id: task.reminder.id,
@@ -92,11 +105,10 @@ export class LaeutwerkTaskDialog extends LitElement {
   }
 
   private async _reopen(task: Task): Promise<void> {
+    const l = this._l;
+    if (!(await this._ask(task, l.t("confirm_reopen"), l.t("reopen"), "mdi:undo"))) return;
     const ok = await this._call("reopen", { reminder_id: task.reminder.id });
-    if (ok) {
-      this._selected = undefined;
-      this._reopening = undefined;
-    }
+    if (ok) this._selected = undefined;
   }
 
   private async _later(task: Task, choice: "1h" | "3h" | "morning"): Promise<void> {
@@ -146,8 +158,6 @@ export class LaeutwerkTaskDialog extends LitElement {
     const l = this._l;
     const all = this._tasks;
     const done = doneTasks(this.rules, new Date(), this.only);
-    const reopening = done.find((t) => t.reminder.id === this._reopening);
-    if (reopening) return this._reopenPage(reopening);
     const task = all.find((t) => t.reminder.id === this._selected) ?? all[0];
     const others = all.filter((t) => t !== task);
     const tz = this.hass?.config?.time_zone;
@@ -175,7 +185,7 @@ export class LaeutwerkTaskDialog extends LitElement {
                   </div>
                 </div>
               </div>
-              <div class="ask">${l.t(task.open ? "confirm_done" : "confirm_done_early")}</div>
+              ${task.open ? nothing : html`<div class="ask">${l.t("not_due_yet")}</div>`}
               ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
               ${
                 this._laterOpen && task.open
@@ -259,8 +269,8 @@ export class LaeutwerkTaskDialog extends LitElement {
                     html`<button
                       class="row item"
                       @click=${() => {
-                        this._reopening = t.reminder.id;
                         this._error = undefined;
+                        void this._reopen(t);
                       }}
                     >
                       ${this._icon(t.rule)}
@@ -276,38 +286,32 @@ export class LaeutwerkTaskDialog extends LitElement {
       }
       ${
         admin
-          ? html`<button class="chip dashed new" @click=${() => (this._page = "pick")}>
-              <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
-            </button>`
+          ? html`<div class="separator">${l.t("section_rules")}<span class="line"></span></div>
+              <div class="list">
+                ${this.rules.map(
+                  (rule) =>
+                    html`<button
+                      class="row item"
+                      @click=${() => {
+                        this._editing = rule;
+                        this._page = "edit";
+                      }}
+                    >
+                      ${this._icon(rule)}
+                      <span class="grow text">
+                        <span class="name">${rule.name}</span>
+                        ${rule.enabled ? nothing : html`<span class="sub">${l.t("rule_off")}</span>`}
+                      </span>
+                      <ha-icon class="undo" icon="mdi:pencil-outline"></ha-icon>
+                    </button>`,
+                )}
+              </div>
+              <button class="chip dashed new" @click=${() => (this._page = "pick")}>
+                <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
+              </button>`
           : nothing
       }
     `;
-  }
-
-  /** Question: open a done task again? */
-  private _reopenPage(task: Task): TemplateResult {
-    const l = this._l;
-    const now = new Date();
-    const tz = this.hass?.config?.time_zone;
-    return html`<div class="question">
-      <div class="row">
-        ${this._icon(task.rule)}
-        <div class="grow text">
-          <div class="title">${reminderTitle(task.reminder)}</div>
-          <div class="sub">${finishedLine(task.reminder, now, l, tz)}</div>
-        </div>
-      </div>
-      <div class="ask">${l.t("confirm_reopen")}</div>
-      ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
-      <div class="actions">
-        <button class="pill outline" @click=${() => (this._reopening = undefined)}>
-          ${l.t("cancel")}
-        </button>
-        <button class="pill primary" ?disabled=${this._busy} @click=${() => this._reopen(task)}>
-          ${this._busy ? "…" : html`<ha-icon icon="mdi:undo"></ha-icon>${l.t("reopen")}`}
-        </button>
-      </div>
-    </div>`;
   }
 
   private _icon(rule: Rule): TemplateResult {

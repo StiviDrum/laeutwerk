@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-11
+
+### Added
+- Confirmation before marking a task as done – in the card and in the
+  compact card's dialog – and before reopening one.
+- The compact card's dialog lists the rules for editing (administrators).
+
 ## [0.7.2] - 2026-11-11
 
 ### Added

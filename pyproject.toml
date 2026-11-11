@@ -1,6 +1,6 @@
 [project]
 name = "laeutwerk"
-version = "0.7.2"
+version = "0.7.3"
 description = "Reminders from calendar events that stay open until acknowledged"
 requires-python = ">=3.14.2"
 license = "MIT"
