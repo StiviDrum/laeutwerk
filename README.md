@@ -302,8 +302,11 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Compact** (`compact: true`): always the next task in one line (open ones
   first, the one that expires first on top, then planned ones) with the rule's
   icon and the number of open tasks. Tapping opens a dialog: confirm *done*
-  (also ahead of time for planned tasks), *Later*, pick another task, or
-  create a new rule (administrators).
+  (also ahead of time for planned tasks), *Later*, pick another task, reopen
+  a task under *Done already*, or create a new rule (administrators).
+- **Done ahead:** tasks done before their event stay visible under *Done*
+  (card) / *Done already* (compact dialog) and can be undone until they
+  expire.
 - **Everyday use:** *Later* offers 1 hour, 3 hours or tomorrow morning;
   after *Done* a short message offers **Undo** (also `laeutwerk.reopen`).
   Tap a reminder for its details: when it reminded, what was sent, what comes
@@ -405,7 +408,11 @@ Feste und variable Tags lassen sich mischen.
 - **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
   Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
   Nachfrage als erledigt markieren (geplante auch schon vorab), „Später“,
-  eine andere Aufgabe wählen oder eine neue Regel anlegen (Admins).
+  eine andere Aufgabe wählen, unter „Schon erledigt“ eine Aufgabe mit
+  Nachfrage wieder öffnen oder eine neue Regel anlegen (Admins).
+- **Vorab erledigte Aufgaben** bleiben sichtbar – in der Karte unter
+  „Erledigt“ mit ↶, im kompakten Fenster unter „Schon erledigt“ – und lassen
+  sich bis zu ihrem Verfall rückgängig machen.
 - Der Erledigt-Knopf in der Karte ist nur noch ein ✓; die Beschriftung kommt
   aus dem Erledigt-Knopf des Push-Signals.
 - **Später** bietet 1 Stunde, 3 Stunden oder „Morgen früh“ (07:00); nach

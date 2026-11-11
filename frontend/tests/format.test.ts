@@ -440,3 +440,47 @@ describe("compact card: next task and done label", () => {
     expect(doneLabel(rule(), de)).toBe("Erledigt");
   });
 });
+
+describe("tasks done ahead of time", () => {
+  it("lists them with today's done ones and offers undo while not expired", async () => {
+    const { canReopen, doneTasks, isAhead } = await import("../src/format");
+    const ahead = reminder({
+      id: "ahead",
+      state: "done",
+      start: "2026-11-23T23:00:00Z",
+      expires_at: "2026-11-24T11:00:00Z",
+      finished_at: "2026-11-14T08:00:00Z", // done days ago, event next week
+    });
+    const today = reminder({
+      id: "today",
+      state: "done",
+      finished_at: "2026-11-16T08:00:00Z",
+      expires_at: "2026-11-17T11:00:00Z",
+    });
+    const expired = reminder({
+      id: "old",
+      state: "done",
+      finished_at: "2026-11-10T08:00:00Z",
+      expires_at: "2026-11-11T11:00:00Z",
+    });
+    const missed = reminder({ id: "missed", state: "missed", expires_at: "2026-11-20T11:00:00Z" });
+    const r = rule({
+      status: {
+        state: "done",
+        current: null,
+        errors: {},
+        next_event: null,
+        reminders: [ahead, today, expired, missed],
+      },
+    });
+    expect(canReopen(ahead, NOW)).toBe(true);
+    expect(canReopen(expired, NOW)).toBe(false);
+    expect(canReopen(missed, NOW)).toBe(false);
+    expect(isAhead(ahead, NOW)).toBe(true);
+    expect(isAhead(today, NOW)).toBe(true); // event tomorrow, done today
+    // Overview: done today (incl. ahead) and done ahead earlier; not expired ones.
+    expect(buildOverview([r], NOW, TZ).done.map((x) => x.reminder.id)).toEqual(["today", "ahead"]);
+    expect(doneTasks([r], NOW).map((t) => t.reminder.id)).toEqual(["today", "ahead"]);
+    expect(doneTasks([r], NOW, ["other"])).toEqual([]);
+  });
+});

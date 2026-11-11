@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-11
+
+### Added
+- Tasks done ahead of their event stay visible and can be undone until they
+  expire: in the card under *Done* (↶ button), in the compact card's dialog
+  under *Done already* (with a confirmation).
+
 ## [0.7.1] - 2026-11-11
 
 ### Changed

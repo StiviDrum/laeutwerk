@@ -7,6 +7,8 @@ import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
   doneLabel,
+  doneTasks,
+  finishedLine,
   openStatus,
   relativeDay,
   relativeDayTime,
@@ -36,6 +38,8 @@ export class LaeutwerkTaskDialog extends LitElement {
   @state() private _busy = false;
   @state() private _error?: string;
   @state() private _laterOpen = false;
+  /** Done task whose "reopen?" question is shown. */
+  @state() private _reopening?: string;
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") this.close();
   };
@@ -87,6 +91,14 @@ export class LaeutwerkTaskDialog extends LitElement {
     if (ok) this.close();
   }
 
+  private async _reopen(task: Task): Promise<void> {
+    const ok = await this._call("reopen", { reminder_id: task.reminder.id });
+    if (ok) {
+      this._selected = undefined;
+      this._reopening = undefined;
+    }
+  }
+
   private async _later(task: Task, choice: "1h" | "3h" | "morning"): Promise<void> {
     const when = choice === "morning" ? { until: "07:00" } : { duration: choice };
     const ok = await this._call("snooze", {
@@ -133,6 +145,9 @@ export class LaeutwerkTaskDialog extends LitElement {
   private _taskPage(): TemplateResult {
     const l = this._l;
     const all = this._tasks;
+    const done = doneTasks(this.rules, new Date(), this.only);
+    const reopening = done.find((t) => t.reminder.id === this._reopening);
+    if (reopening) return this._reopenPage(reopening);
     const task = all.find((t) => t.reminder.id === this._selected) ?? all[0];
     const others = all.filter((t) => t !== task);
     const tz = this.hass?.config?.time_zone;
@@ -236,6 +251,30 @@ export class LaeutwerkTaskDialog extends LitElement {
           : nothing
       }
       ${
+        done.length
+          ? html`<div class="separator">${l.t("done_already")}<span class="line"></span></div>
+              <div class="list">
+                ${done.map(
+                  (t) =>
+                    html`<button
+                      class="row item"
+                      @click=${() => {
+                        this._reopening = t.reminder.id;
+                        this._error = undefined;
+                      }}
+                    >
+                      ${this._icon(t.rule)}
+                      <span class="grow text">
+                        <span class="name struck">${reminderTitle(t.reminder)}</span>
+                        <span class="sub">${finishedLine(t.reminder, now, l, tz)}</span>
+                      </span>
+                      <ha-icon class="undo" icon="mdi:undo"></ha-icon>
+                    </button>`,
+                )}
+              </div>`
+          : nothing
+      }
+      ${
         admin
           ? html`<button class="chip dashed new" @click=${() => (this._page = "pick")}>
               <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
@@ -243,6 +282,32 @@ export class LaeutwerkTaskDialog extends LitElement {
           : nothing
       }
     `;
+  }
+
+  /** Question: open a done task again? */
+  private _reopenPage(task: Task): TemplateResult {
+    const l = this._l;
+    const now = new Date();
+    const tz = this.hass?.config?.time_zone;
+    return html`<div class="question">
+      <div class="row">
+        ${this._icon(task.rule)}
+        <div class="grow text">
+          <div class="title">${reminderTitle(task.reminder)}</div>
+          <div class="sub">${finishedLine(task.reminder, now, l, tz)}</div>
+        </div>
+      </div>
+      <div class="ask">${l.t("confirm_reopen")}</div>
+      ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+      <div class="actions">
+        <button class="pill outline" @click=${() => (this._reopening = undefined)}>
+          ${l.t("cancel")}
+        </button>
+        <button class="pill primary" ?disabled=${this._busy} @click=${() => this._reopen(task)}>
+          ${this._busy ? "…" : html`<ha-icon icon="mdi:undo"></ha-icon>${l.t("reopen")}`}
+        </button>
+      </div>
+    </div>`;
   }
 
   private _icon(rule: Rule): TemplateResult {
@@ -342,6 +407,14 @@ export class LaeutwerkTaskDialog extends LitElement {
         font-size: 13px;
         color: var(--lw-text-2);
         white-space: nowrap;
+      }
+      .struck {
+        text-decoration: line-through;
+        color: var(--lw-text-2);
+        font-weight: 500;
+      }
+      .undo {
+        color: var(--lw-text-2);
       }
       .new {
         align-self: flex-start;

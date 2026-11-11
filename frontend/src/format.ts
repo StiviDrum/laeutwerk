@@ -125,9 +125,10 @@ export function buildOverview(
       if (reminder.state === "reminded") result.open.push(item);
       else if (reminder.state === "planned") result.upcoming.push(item);
       else if (
-        reminder.finished_at &&
-        dayDiff(new Date(reminder.finished_at), now, timeZone) === 0
+        (reminder.finished_at && dayDiff(new Date(reminder.finished_at), now, timeZone) === 0) ||
+        canReopen(reminder, now)
       ) {
+        // Finished today, or done ahead and still undoable (event not over).
         result.done.push(item);
       }
     }
@@ -136,10 +137,43 @@ export function buildOverview(
     a.reminder.start.localeCompare(b.reminder.start);
   result.open.sort(byStart);
   result.upcoming.sort(byStart);
-  result.done.sort((a, b) =>
-    (b.reminder.finished_at ?? "").localeCompare(a.reminder.finished_at ?? ""),
-  );
+  // Today's first (newest on top), then the ones done ahead by event date.
+  const today = (r: Reminder) =>
+    !!r.finished_at && dayDiff(new Date(r.finished_at), now, timeZone) === 0;
+  result.done.sort((a, b) => {
+    const ta = today(a.reminder) && !isAhead(a.reminder, now);
+    const tb = today(b.reminder) && !isAhead(b.reminder, now);
+    if (ta !== tb) return ta ? -1 : 1;
+    if (ta) return (b.reminder.finished_at ?? "").localeCompare(a.reminder.finished_at ?? "");
+    return a.reminder.start.localeCompare(b.reminder.start);
+  });
   return result;
+}
+
+/** Whether an acknowledged reminder can still be reopened (not expired yet). */
+export function canReopen(reminder: Reminder, now: Date): boolean {
+  return (
+    reminder.state === "done" &&
+    !!reminder.expires_at &&
+    new Date(reminder.expires_at).getTime() > now.getTime()
+  );
+}
+
+/** Done before its event started (acknowledged ahead of time). */
+export function isAhead(reminder: Reminder, now: Date): boolean {
+  return reminder.state === "done" && new Date(reminder.start).getTime() > now.getTime();
+}
+
+/** Done tasks that can still be undone, by event date (compact dialog). */
+export function doneTasks(rules: Rule[], now: Date, only?: string[]): Task[] {
+  const list: Task[] = [];
+  for (const rule of rules) {
+    if (only?.length && !only.includes(rule.id ?? "")) continue;
+    for (const reminder of rule.status?.reminders ?? []) {
+      if (canReopen(reminder, now)) list.push({ rule, reminder, open: false });
+    }
+  }
+  return list.sort((a, b) => a.reminder.start.localeCompare(b.reminder.start));
 }
 
 /** Readable form of a reminder time: "Vortag 17:00", "2 h vorher". */

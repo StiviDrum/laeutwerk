@@ -1,6 +1,6 @@
 {
   "name": "laeutwerk-card",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Lovelace card for the Läutwerk Home Assistant integration",
   "private": true,
   "type": "module",

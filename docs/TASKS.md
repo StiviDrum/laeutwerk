@@ -187,6 +187,13 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.7.1
   - Checked in the real frontend (compact line, dialog, confirm → done, next task follows).
 
+## 0.7.2 – Vorab erledigte Aufgaben anzeigen (Stevens Wunsch, 11.11.2026)
+- [x] Künftige, schon erledigte Aufgaben anzeigen und rückgängig machen können
+  - Card, section „Erledigt“: finished today **or** done and still reopenable (`canReopen`: state done and `expires_at` in the future); today's first, then the ones done ahead by event date; ↶ button calls `laeutwerk.reopen` (no question in the big card, like the undo toast).
+  - Compact dialog: section „Schon erledigt“ (`doneTasks()`); tapping asks „Diese Aufgabe wieder öffnen?“ (question instead of instant action, as decided for the compact card). Reopened tasks done ahead become planned again.
+  - No backend change: reopen already worked until the expiry; done reminders of future events are kept by the engine.
+- [x] Release v0.7.2
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

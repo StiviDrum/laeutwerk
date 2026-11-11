@@ -7,8 +7,10 @@ import { property, state } from "lit/decorators.js";
 import {
   buildOverview,
   doneLabel,
+  canReopen,
   finishedLine,
   formatDate,
+  isAhead,
   openStatus,
   relativeDay,
   relativeDayTime,
@@ -592,16 +594,33 @@ export class LaeutwerkCard extends LitElement {
   }
 
   private _doneRow(rule: Rule, reminder: Reminder): TemplateResult {
+    const l = this._l;
+    const ahead = isAhead(reminder, this._now);
     return html`<div class="entry">
-      <button class="row item finished tap" @click=${() => this._toggleDetails(reminder)}>
-        ${this._icon(rule, true)}
-        <div class="grow text">
-          <div class="name ${reminder.state === "done" ? "struck" : ""}">
-            ${reminder.titles.join(" + ")}
+      <div class="row">
+        <button class="row item finished tap grow" @click=${() => this._toggleDetails(reminder)}>
+          ${this._icon(rule, true)}
+          <div class="grow text">
+            <div class="name ${reminder.state === "done" ? "struck" : ""}">
+              ${ahead ? reminderTitle(reminder) : reminder.titles.join(" + ")}
+            </div>
+            <div class="sub">${finishedLine(reminder, this._now, l, this._tz)}</div>
           </div>
-          <div class="sub">${finishedLine(reminder, this._now, this._l, this._tz)}</div>
-        </div>
-      </button>
+        </button>
+        ${
+          canReopen(reminder, this._now)
+            ? html`<button
+                class="mini"
+                aria-label=${l.t("undo")}
+                title=${l.t("undo")}
+                ?disabled=${!!this._busy}
+                @click=${() => this._undo(reminder.id)}
+              >
+                <ha-icon icon="mdi:undo"></ha-icon>
+              </button>`
+            : nothing
+        }
+      </div>
       ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
     </div>`;
   }
