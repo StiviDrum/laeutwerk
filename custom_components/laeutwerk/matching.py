@@ -260,12 +260,21 @@ def hits_of(rule: Rule, events: Iterable[CalendarEvent]) -> list[KeywordRow]:
 COLOR_COLUMNS = ("farbe", "color", "colour")
 
 
+def keyword_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
+    """Own colours (#rrggbb) of the matching keyword rows, unique, in order."""
+    colors = [row.color for row in hits_of(rule, events) if row.color]
+    return list(dict.fromkeys(colors))
+
+
 def hit_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
     """Colours (#rrggbb) of the matching rows, for the dots in the card.
 
-    Taken from the column a light signal uses (``color_from``), else from a
-    column named farbe / color.
+    The keywords' own colours; for older tables the column a light signal
+    uses (``color_from``), else a column named farbe / color.
     """
+    events = list(events)
+    if own := keyword_colors(rule, events):
+        return own
     column = next(
         (s.config["color_from"] for s in rule.signals if s.config.get("color_from")),
         None,

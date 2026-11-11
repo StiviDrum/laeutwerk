@@ -215,7 +215,10 @@ def _keywords(value: Any) -> dict[str, Any]:
     rows = []
     for index, raw in enumerate(data["rows"], start=1):
         row = {str(key).lower(): val for key, val in raw.items()}
-        if unknown := set(row) - set(columns) - set(_ROW_KEYS):
+        # "color" is the keyword's own colour – unless an older table has a
+        # column of that name.
+        own = _ROW_KEYS if "color" in columns else (*_ROW_KEYS, "color")
+        if unknown := set(row) - set(columns) - set(own):
             raise vol.Invalid(
                 f"keyword row {index}: unknown column(s) {', '.join(sorted(unknown))}"
             )
@@ -238,6 +241,11 @@ def _keywords(value: Any) -> dict[str, Any]:
         clean: dict[str, Any] = {"match": match}
         if mode != MATCH_CONTAINS:
             clean["mode"] = mode
+        if "color" not in columns and row.get("color"):
+            try:
+                clean["color"] = _hex_color(row["color"])
+            except vol.Invalid as err:
+                raise vol.Invalid(f"keyword row {index}: {err}") from err
         for column in columns:
             clean[column] = _text(row.get(column, "") or "")
         rows.append(clean)
@@ -389,6 +397,8 @@ _SIGNAL_SCHEMAS = {
             ),
             vol.Optional("color"): _text,
             vol.Optional("color_from"): _column,
+            # Blink in the colours of the keywords that matched.
+            vol.Optional("color_from_keyword", default=False): cv.boolean,
             vol.Optional("brightness", default=100): vol.All(
                 vol.Coerce(int), vol.Range(min=1, max=100)
             ),

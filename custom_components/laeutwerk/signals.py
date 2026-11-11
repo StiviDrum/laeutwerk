@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, tzinfo
 import logging
 from typing import Any
@@ -74,6 +74,8 @@ class SignalRun:
     context: Context
     # Responsible person (entity id) for audience "assignee".
     assignee: str | None = None
+    # Colours of the matching keywords (#rrggbb), for "colour of the keyword".
+    colors: list[str] = field(default_factory=list)
 
     def text(self, key: str) -> str:
         """Render a text field, using its plural variant if it applies."""
@@ -300,16 +302,26 @@ def light_snapshot(state: State) -> dict[str, Any]:
     return {"on": True, "data": data}
 
 
-def light_color(run: SignalRun) -> tuple[int, int, int] | None:
-    """Colour of a light signal: from a keyword column or fixed."""
+def light_colors(run: SignalRun) -> list[tuple[int, int, int]]:
+    """Colours of a light signal, one per blink (they alternate).
+
+    The colours of the matching keywords, else a keyword column (older
+    tables), else the fixed colour; empty: the lamp keeps its colour.
+    """
     config = run.signal.config
+    if config.get("color_from_keyword"):
+        own = [rgb for value in run.colors if (rgb := parse_color(value))]
+        if own:
+            return own
     column = config.get("color_from")
-    from_column = parse_color(run.variables.get(column)) if column else None
-    return from_column or parse_color(config.get("color"))
+    rgb = (parse_color(run.variables.get(column)) if column else None) or parse_color(
+        config.get("color")
+    )
+    return [rgb] if rgb else []
 
 
 async def _async_light_one(
-    run: SignalRun, entity_id: str, rgb: tuple[int, int, int] | None
+    run: SignalRun, entity_id: str, colors: list[tuple[int, int, int]]
 ) -> bool:
     hass, config = run.hass, run.signal.config
     lock = _LIGHT_LOCKS.setdefault(entity_id, asyncio.Lock())
@@ -331,14 +343,16 @@ async def _async_light_one(
             "transition": transition,
         }
         modes = state.attributes.get("supported_color_modes") or []
-        if rgb and any(mode in COLOR_MODES for mode in modes):
-            on_data["rgb_color"] = list(rgb)
+        if not any(mode in COLOR_MODES for mode in modes):
+            colors = []  # lamps without colour just blink
 
         async def light(service: str, data: dict[str, Any]) -> bool:
             return await _async_call(hass, "light", service, data, run.context)
 
         ok = True
-        for _ in range(int(pattern.get("count", 3))):
+        for blink in range(int(pattern.get("count", 3))):
+            if colors:
+                on_data["rgb_color"] = list(colors[blink % len(colors)])
             ok = await light("turn_on", on_data) and ok
             await _sleep(interval)
             if pulse:
@@ -359,10 +373,10 @@ async def _async_light_one(
 
 
 async def _async_light(run: SignalRun) -> bool:
-    rgb = light_color(run)
+    colors = light_colors(run)
     results = await asyncio.gather(
         *(
-            _async_light_one(run, entity_id, rgb)
+            _async_light_one(run, entity_id, colors)
             for entity_id in run.signal.config.get("entities", [])
         )
     )

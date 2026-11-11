@@ -49,6 +49,7 @@ from .matching import (
     build_occurrences,
     build_variables,
     is_plural,
+    keyword_colors,
     render,
     template_variables,
 )
@@ -846,6 +847,7 @@ class RuleRunner:
             plural=is_plural(self.rule, item.events),
             context=context,
             assignee=item.assignee if isinstance(item, Reminder) else None,
+            colors=keyword_colors(self.rule, item.events),
         )
 
     async def _async_send(

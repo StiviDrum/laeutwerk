@@ -72,18 +72,24 @@ class KeywordRow:
     match: str
     mode: str = MATCH_CONTAINS
     values: dict[str, str] = field(default_factory=dict)
+    # Colour of the keyword (#rrggbb), e.g. the colour of the bin.
+    color: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> KeywordRow:
-        """Create from the stored (flat) form."""
+    def from_dict(
+        cls, data: dict[str, Any], *, color_is_column: bool = False
+    ) -> KeywordRow:
+        """Create from the stored (flat) form.
+
+        ``color_is_column``: an older table has a column named "color"; then
+        "color" is that column's value, not the keyword colour.
+        """
+        own = ("match", "mode") if color_is_column else ("match", "mode", "color")
         return cls(
             match=data["match"],
             mode=data.get("mode", MATCH_CONTAINS),
-            values={
-                key: str(value)
-                for key, value in data.items()
-                if key not in ("match", "mode")
-            },
+            values={key: str(value) for key, value in data.items() if key not in own},
+            color=None if color_is_column else (data.get("color") or None),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -91,6 +97,8 @@ class KeywordRow:
         data: dict[str, Any] = {"match": self.match}
         if self.mode != MATCH_CONTAINS:
             data["mode"] = self.mode
+        if self.color:
+            data["color"] = self.color
         return {**data, **self.values}
 
 
@@ -139,7 +147,13 @@ class Filter:
         return cls(
             all_day=bool(data.get("all_day", False)),
             columns=[column_name(spec) for spec in specs],
-            rows=[KeywordRow.from_dict(row) for row in keywords.get("rows", [])],
+            rows=[
+                KeywordRow.from_dict(
+                    row,
+                    color_is_column="color" in [column_name(s) for s in specs],
+                )
+                for row in keywords.get("rows", [])
+            ],
             plurals={column_name(spec): column_plural(spec) for spec in specs},
         )
 
