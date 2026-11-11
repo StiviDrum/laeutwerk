@@ -9,5 +9,162 @@
     "abort": {
       "single_instance_allowed": "Läutwerk ist bereits eingerichtet."
     }
+  },
+  "entity": {
+    "sensor": {
+      "state": {
+        "state": {
+          "planned": "Geplant",
+          "reminded": "Erinnert",
+          "done": "Erledigt",
+          "missed": "Verpasst",
+          "inactive": "Inaktiv"
+        }
+      },
+      "next_event": {
+        "name": "Nächster Termin"
+      }
+    },
+    "binary_sensor": {
+      "open": {
+        "name": "Offen"
+      }
+    },
+    "button": {
+      "done": {
+        "name": "Erledigt"
+      }
+    },
+    "switch": {
+      "rule": {
+        "name": "Aktiv"
+      }
+    }
+  },
+  "services": {
+    "acknowledge": {
+      "name": "Quittieren",
+      "description": "Markiert Erinnerungen als erledigt. Mit 'rule': die offenen Erinnerungen dieser Regel (oder ihre nächste geplante Erinnerung, wenn der erste Erinnerungszeitpunkt weniger als 24 h entfernt ist). Ohne 'rule': alle offenen Erinnerungen aller Regeln. Liefert auf Wunsch die quittierten Erinnerungs-IDs zurück.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Regel-ID (siehe get_rules). Leer: alle offenen Erinnerungen."
+        },
+        "reminder_id": {
+          "name": "Erinnerung",
+          "description": "Genau diese Erinnerung quittieren (ID aus get_rules → status.reminders)."
+        },
+        "person": {
+          "name": "Person",
+          "description": "Name, der als „erledigt von“ gespeichert wird. Standard: die Person des aufrufenden Benutzers."
+        }
+      }
+    },
+    "trigger": {
+      "name": "Auslösen",
+      "description": "Erinnert sofort: sendet die Sofort-Signale der Regel für ihre offene oder nächste geplante Erinnerung, unabhängig von den Erinnerungszeitpunkten.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Regel-ID."
+        }
+      }
+    },
+    "get_rules": {
+      "name": "Regeln abrufen",
+      "description": "Liefert die Regeln (Konfiguration wie bei create_rule/update_rule) mit Laufzeitstatus: Zustand (planned/reminded/done/missed/inactive), Erinnerungen mit Variablen, nächster passender Termin, Kalenderfehler.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Eine oder mehrere Regel-IDs. Leer: alle Regeln."
+        }
+      }
+    },
+    "create_rule": {
+      "name": "Regel anlegen",
+      "description": "Legt eine Regel an und liefert ihre ID. Nur Admin.",
+      "fields": {
+        "config": {
+          "name": "Regel",
+          "description": "Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste; type notify: targets = Liste von notify.xxx-Aktionen, title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data), ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
+        }
+      }
+    },
+    "update_rule": {
+      "name": "Regel ändern",
+      "description": "Ändert eine Regel: die angegebenen Schlüssel der obersten Ebene ersetzen die gespeicherten (z. B. nur 'signals' oder 'reminders'); offene Erinnerungen bleiben erhalten. Nur Admin.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Regel-ID."
+        },
+        "config": {
+          "name": "Änderungen",
+          "description": "Zu ersetzende Schlüssel der obersten Ebene des Regel-Objekts. Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste; type notify: targets = Liste von notify.xxx-Aktionen, title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data), ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
+        }
+      }
+    },
+    "delete_rule": {
+      "name": "Regel löschen",
+      "description": "Löscht eine Regel samt Erinnerungen und Entitäten. Nur Admin.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Regel-ID."
+        }
+      }
+    },
+    "duplicate_rule": {
+      "name": "Regel duplizieren",
+      "description": "Kopiert eine Regel; die Kopie ist ausgeschaltet. Liefert die neue ID. Nur Admin.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "ID der zu kopierenden Regel."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Name der Kopie."
+        },
+        "new_rule": {
+          "name": "Neue ID",
+          "description": "ID der Kopie (Standard: aus dem Namen abgeleitet)."
+        }
+      }
+    },
+    "enable": {
+      "name": "Einschalten",
+      "description": "Schaltet Regeln ein.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Eine oder mehrere Regel-IDs. Leer: alle Regeln."
+        }
+      }
+    },
+    "disable": {
+      "name": "Ausschalten",
+      "description": "Schaltet Regeln aus; ihre offenen Erinnerungen werden verworfen.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Eine oder mehrere Regel-IDs. Leer: alle Regeln."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Läutwerk ist nicht eingerichtet."
+    },
+    "unknown_rule": {
+      "message": "Unbekannte Regel: {rule}"
+    },
+    "rule_disabled": {
+      "message": "Die Regel {rule} ist ausgeschaltet."
+    },
+    "no_upcoming_event": {
+      "message": "Die Regel {rule} hat keinen anstehenden Termin, an den erinnert werden könnte."
+    }
   }
 }

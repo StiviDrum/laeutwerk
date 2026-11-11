@@ -1,0 +1,33 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "open": {
+        "default": "mdi:bell-outline",
+        "state": {
+          "on": "mdi:bell-ring"
+        }
+      }
+    },
+    "button": {
+      "done": {
+        "default": "mdi:check-circle-outline"
+      }
+    },
+    "sensor": {
+      "next_event": {
+        "default": "mdi:calendar-clock"
+      }
+    }
+  },
+  "services": {
+    "acknowledge": { "service": "mdi:check-circle-outline" },
+    "trigger": { "service": "mdi:bell-ring" },
+    "get_rules": { "service": "mdi:format-list-bulleted" },
+    "create_rule": { "service": "mdi:plus" },
+    "update_rule": { "service": "mdi:pencil" },
+    "delete_rule": { "service": "mdi:delete" },
+    "duplicate_rule": { "service": "mdi:content-copy" },
+    "enable": { "service": "mdi:toggle-switch" },
+    "disable": { "service": "mdi:toggle-switch-off-outline" }
+  }
+}

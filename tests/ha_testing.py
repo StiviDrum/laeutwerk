@@ -8,15 +8,25 @@ older versions (down to the minimum in hacs.json) are tested with
 from __future__ import annotations
 
 try:
-    from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
+    from pytest_homeassistant.common import (
+        MockConfigEntry,
+        async_fire_time_changed,
+        async_mock_service,
+    )
     from pytest_homeassistant.typing import WebSocketGenerator
 except ImportError:
     from pytest_homeassistant_custom_component.common import (  # type: ignore[no-redef]
         MockConfigEntry,
         async_fire_time_changed,
+        async_mock_service,
     )
     from pytest_homeassistant_custom_component.typing import (  # type: ignore[no-redef]
         WebSocketGenerator,
     )
 
-__all__ = ["MockConfigEntry", "WebSocketGenerator", "async_fire_time_changed"]
+__all__ = [
+    "MockConfigEntry",
+    "WebSocketGenerator",
+    "async_fire_time_changed",
+    "async_mock_service",
+]

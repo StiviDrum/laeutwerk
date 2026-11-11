@@ -9,5 +9,162 @@
     "abort": {
       "single_instance_allowed": "Läutwerk is already set up."
     }
+  },
+  "entity": {
+    "sensor": {
+      "state": {
+        "state": {
+          "planned": "Planned",
+          "reminded": "Reminded",
+          "done": "Done",
+          "missed": "Missed",
+          "inactive": "Inactive"
+        }
+      },
+      "next_event": {
+        "name": "Next event"
+      }
+    },
+    "binary_sensor": {
+      "open": {
+        "name": "Open"
+      }
+    },
+    "button": {
+      "done": {
+        "name": "Done"
+      }
+    },
+    "switch": {
+      "rule": {
+        "name": "Active"
+      }
+    }
+  },
+  "services": {
+    "acknowledge": {
+      "name": "Acknowledge",
+      "description": "Marks reminders as done. With 'rule': the open reminders of that rule (or its next planned reminder if the first reminder time is less than 24 h away). Without 'rule': all open reminders of all rules. Returns the acknowledged reminder ids when response data is requested.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id (see get_rules). Empty: all open reminders."
+        },
+        "reminder_id": {
+          "name": "Reminder",
+          "description": "Acknowledge exactly this reminder (id from get_rules → status.reminders)."
+        },
+        "person": {
+          "name": "Person",
+          "description": "Name stored as 'acknowledged by'. Default: the person of the calling user."
+        }
+      }
+    },
+    "trigger": {
+      "name": "Trigger",
+      "description": "Reminds now: sends the immediate signals of the rule for its open or next planned reminder, regardless of the reminder times.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id."
+        }
+      }
+    },
+    "get_rules": {
+      "name": "Get rules",
+      "description": "Returns the rules (configuration as used by create_rule/update_rule) with their runtime status: state (planned/reminded/done/missed/inactive), reminders with variables, next matching event, calendar errors.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "One or more rule ids. Empty: all rules."
+        }
+      }
+    },
+    "create_rule": {
+      "name": "Create rule",
+      "description": "Creates a rule and returns its id. Requires admin.",
+      "fields": {
+        "config": {
+          "name": "Rule",
+          "description": "Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list; type notify: targets = list of notify.xxx actions, title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data), ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
+        }
+      }
+    },
+    "update_rule": {
+      "name": "Update rule",
+      "description": "Changes a rule: the given top-level keys replace the stored ones (e.g. only 'signals' or 'reminders'); open reminders are kept. Requires admin.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id."
+        },
+        "config": {
+          "name": "Changes",
+          "description": "Top-level keys of the rule object to replace. Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list; type notify: targets = list of notify.xxx actions, title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data), ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
+        }
+      }
+    },
+    "delete_rule": {
+      "name": "Delete rule",
+      "description": "Deletes a rule with its reminders and entities. Requires admin.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id."
+        }
+      }
+    },
+    "duplicate_rule": {
+      "name": "Duplicate rule",
+      "description": "Copies a rule; the copy is switched off. Returns the new id. Requires admin.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id to copy."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Name of the copy."
+        },
+        "new_rule": {
+          "name": "New id",
+          "description": "Id of the copy (default: derived from the name)."
+        }
+      }
+    },
+    "enable": {
+      "name": "Enable",
+      "description": "Switches rules on.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "One or more rule ids. Empty: all rules."
+        }
+      }
+    },
+    "disable": {
+      "name": "Disable",
+      "description": "Switches rules off; their open reminders are dropped.",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "One or more rule ids. Empty: all rules."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Läutwerk is not set up."
+    },
+    "unknown_rule": {
+      "message": "Unknown rule: {rule}"
+    },
+    "rule_disabled": {
+      "message": "Rule {rule} is switched off."
+    },
+    "no_upcoming_event": {
+      "message": "Rule {rule} has no upcoming event to remind of."
+    }
   }
 }

@@ -19,12 +19,23 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] LICENSE, README-Gerüst (en + de), CHANGELOG; erster Push, CI grün
 
 ## 0.1 – Kern
-- [ ] Model, Store mit Migrationen, Config-Flow (Single Instance)
-- [ ] Kalender lesen (`calendar.get_events`, 14 Tage voraus, alle 15 min und bei Änderung), Filter, Stichwort-Tabelle, Variablen inkl. Mehrzahl
-- [ ] Erinnerungs-Lebenszyklus (B5), Zeitpunkte als Timer, Bündeln, Verfallen, Neustart-fest
-- [ ] Signal Push (sofort), Quittieren per Knopf, Dienst, Push-Aktion
-- [ ] Entitäten, Dienste (inkl. `get_rules`), Ereignisse
+- [x] Model, Store mit Migrationen, Config-Flow (Single Instance)
+  - `model.py` (Rule, Filter, KeywordRow, Signal, CalendarEvent, Reminder), `schema.py` (validation), `store.py` (rules + reminders per rule).
+- [x] Kalender lesen (`calendar.get_events`, 14 Tage voraus, alle 15 min und bei Änderung), Filter, Stichwort-Tabelle, Variablen inkl. Mehrzahl
+  - `sources.py`, `matching.py` (pure). Calendars expose no uid: event identity = calendar + start + title. Reminder id = `<rule>__<YYYYMMDD>` (bundle) or with a hash suffix (no bundle).
+  - `{titel}` / `{rest}` are joined over all bundled events; text starting with a variable is capitalised ("Morgen: …").
+- [x] Erinnerungs-Lebenszyklus (B5), Zeitpunkte als Timer, Bündeln, Verfallen, Neustart-fest
+  - `timespec.py`: `-1d 17:00`, `09:00`, `event_day 12:00`, `-2h`, `-7d`, `event_start`, `event_end` (default expiry). DST: gap -> first valid instant, repeated hour -> first pass.
+  - `engine.py` (RuleRunner, one timer per rule). Sent reminder times are stored per reminder (`fired`) -> no duplicates after restart; missed reminder times are caught up once. Events already expired when found create no reminder.
+  - Early acknowledge (planned -> done) is allowed from 24 h before the first reminder time (`EARLY_ACK_HOURS`).
+  - Switching a rule off drops its open reminders.
+- [x] Signal Push (sofort), Quittieren per Knopf, Dienst, Push-Aktion
+  - 0.1: `targets` = list of `notify.xxx` actions (audience comes with 0.2). Push carries `tag` + action `LAEUTWERK_ACK__<reminder id>`; on done/missed the notification is cleared on `notify.mobile_app_*` targets.
+- [x] Entitäten, Dienste (inkl. `get_rules`), Ereignisse
+  - Services: acknowledge, trigger, get_rules, create_rule, update_rule, delete_rule, duplicate_rule, enable, disable. `snooze` (0.3) and `test_signal` (0.2) follow. WebSocket API follows with the card (0.4).
 - [ ] Tests inkl. Sommer-/Winterzeit; Release v0.1.0
+  - Tests are written and green (88). Still open: check in the dev instance (`scripts/develop`, real local calendars), README section, CHANGELOG, version bump, tag `v0.1.0`.
+  - CI: the HACS job fails until the GitHub repo has a description and topics (repo settings, Steven).
 
 ## 0.2 – Signale
 - [ ] Licht-Signal (Muster, Farbe aus Spalte, Zustand wiederherstellen), Ansage (TTS announce, Lautstärke, Einzahl/Mehrzahl-Text), eigene Aktion

@@ -1,0 +1,96 @@
+acknowledge:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+    reminder_id:
+      required: false
+      example: muell__20261117
+      selector:
+        text:
+    person:
+      required: false
+      example: Steven
+      selector:
+        text:
+
+trigger:
+  fields:
+    rule:
+      required: true
+      example: muell
+      selector:
+        text:
+
+get_rules:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+          multiple: true
+
+create_rule:
+  fields:
+    config:
+      required: true
+      selector:
+        object:
+
+update_rule:
+  fields:
+    rule:
+      required: true
+      example: muell
+      selector:
+        text:
+    config:
+      required: true
+      selector:
+        object:
+
+delete_rule:
+  fields:
+    rule:
+      required: true
+      example: muell
+      selector:
+        text:
+
+duplicate_rule:
+  fields:
+    rule:
+      required: true
+      example: muell
+      selector:
+        text:
+    name:
+      required: false
+      selector:
+        text:
+    new_rule:
+      required: false
+      example: muell_2
+      selector:
+        text:
+
+enable:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+          multiple: true
+
+disable:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+          multiple: true
