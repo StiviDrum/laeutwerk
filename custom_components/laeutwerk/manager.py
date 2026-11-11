@@ -20,6 +20,7 @@ from .compat import vol
 from .const import (
     ACK_VIA_NOTIFICATION,
     ACTION_ACK_PREFIX,
+    ACTION_SNOOZE_PREFIX,
     DOMAIN,
     REFRESH_MINUTES,
     SIGNAL_RULE_STATUS,
@@ -35,6 +36,7 @@ from .schema import (
 )
 from .signals import async_clear_notifications, async_send_signal
 from .store import LaeutwerkStore, StoredData
+from .triggers import own_context
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -307,6 +309,23 @@ class LaeutwerkManager:
             )
         return done
 
+    async def async_snooze(
+        self,
+        minutes: int,
+        rule_id: str | None = None,
+        *,
+        reminder_id: str | None = None,
+    ) -> list[Reminder]:
+        """Remind later: the open reminders of one rule or of all rules."""
+        if rule_id is not None:
+            self.get_rule(rule_id)
+        snoozed: list[Reminder] = []
+        for runner in list(self.runners.values()):
+            if rule_id is not None and runner.rule.id != rule_id:
+                continue
+            snoozed += await runner.async_snooze(minutes, reminder_id=reminder_id)
+        return snoozed
+
     async def async_test_signal(
         self,
         rule_id: str,
@@ -347,11 +366,20 @@ class LaeutwerkManager:
             end=item.end,
             events=tuple(item.events),
         )
-        return await async_send_signal(runner.signal_run(signal, test_item, Context()))
+        return await async_send_signal(
+            runner.signal_run(signal, test_item, own_context())
+        )
 
     async def _async_notification_action(self, event: Event[Any]) -> None:
         """Handle a pressed button of a push notification."""
         action = str(event.data.get("action", ""))
+        if action.startswith(ACTION_SNOOZE_PREFIX):
+            minutes, _, reminder_id = action.removeprefix(
+                ACTION_SNOOZE_PREFIX
+            ).partition("__")
+            if minutes.isdigit() and reminder_id:
+                await self.async_snooze(int(minutes), reminder_id=reminder_id)
+            return
         if not action.startswith(ACTION_ACK_PREFIX):
             return
         await self.async_acknowledge(

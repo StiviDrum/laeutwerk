@@ -38,8 +38,12 @@ MATCH_ANY = "any"
 WHEN_NOW = "now"
 
 REPEAT_NONE = "none"
+DEFAULT_REPEAT_MAX = 24
 
 ACK_NOTIFY_ACTION = "notify_action"
+ACK_TAG = "tag"
+ACK_TRIGGER = "trigger"
+ACK_TYPES = (ACK_NOTIFY_ACTION, ACK_TAG, ACK_TRIGGER)
 
 STATE_PLANNED = "planned"
 STATE_REMINDED = "reminded"
@@ -119,6 +123,16 @@ class Signal:
     when: Any = WHEN_NOW
     config: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def opportunity(self) -> Any:
+        """Trigger configuration of an "on opportunity" signal, else None."""
+        return self.when.get("opportunity") if isinstance(self.when, dict) else None
+
+    @property
+    def manual_only(self) -> bool:
+        """Only real operation counts as opportunity (no automations)."""
+        return isinstance(self.when, dict) and bool(self.when.get("manual_only"))
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Signal:
         """Create from the stored (flat) form."""
@@ -163,6 +177,18 @@ class Rule:
     repeat: Any = REPEAT_NONE
     bundle: bool = True
     expire: str = DEFAULT_EXPIRE
+
+    @property
+    def repeat_every(self) -> int | None:
+        """Minutes between repetitions while a reminder is open."""
+        return self.repeat.get("every") if isinstance(self.repeat, dict) else None
+
+    @property
+    def repeat_max(self) -> int:
+        """Maximum number of repetitions per reminder."""
+        if isinstance(self.repeat, dict):
+            return int(self.repeat.get("max", DEFAULT_REPEAT_MAX))
+        return 0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Rule:
@@ -272,6 +298,11 @@ class Reminder:
     signal_last: dict[str, datetime] = field(default_factory=dict)
     # Signals held back by a quiet time: signal id -> when to send them.
     deferred: dict[str, datetime] = field(default_factory=dict)
+    # "Remind me later": planned again until this time.
+    snoozed_until: datetime | None = None
+    # Repetitions while reminding: how many and when last reminded.
+    repeats: int = 0
+    last_reminded: datetime | None = None
 
     @property
     def is_open(self) -> bool:
@@ -302,6 +333,9 @@ class Reminder:
             deferred={
                 key: _parse_dt(value) for key, value in data.get("deferred", {}).items()
             },
+            snoozed_until=_parse_opt(data.get("snoozed_until")),
+            repeats=int(data.get("repeats", 0)),
+            last_reminded=_parse_opt(data.get("last_reminded")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -326,6 +360,9 @@ class Reminder:
             "deferred": {
                 key: value.isoformat() for key, value in self.deferred.items()
             },
+            "snoozed_until": _format_opt(self.snoozed_until),
+            "repeats": self.repeats,
+            "last_reminded": _format_opt(self.last_reminded),
         }
 
 

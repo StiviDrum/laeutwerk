@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
+### Added
+- Signals "on opportunity": any Home Assistant trigger, active only while a
+  reminder is open; `manual_only` ignores automations and scripts; `{person}`.
+- Repeat while a reminder is open (`repeat: {every, max}`).
+- Snooze: action `laeutwerk.snooze` and push button `{snooze: 3h, label: …}`.
+- Acknowledge by NFC tag (`tag_scanned`) or any trigger (door contact, zone,
+  button).
+
 ## [0.2.0] - 2026-11-11
 
 ### Added

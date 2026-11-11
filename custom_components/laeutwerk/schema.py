@@ -15,12 +15,16 @@ from homeassistant.helpers import (
 from homeassistant.util import slugify
 
 from .compat import vol
+from .durations import duration_minutes
 from .matching import EVENT_VARIABLES
 from .model import (
     ACK_NOTIFY_ACTION,
+    ACK_TAG,
+    ACK_TRIGGER,
     AUDIENCE_PERSONS,
     AUDIENCES,
     DEFAULT_EXPIRE,
+    DEFAULT_REPEAT_MAX,
     EFFECT_BLINK,
     EFFECTS,
     MATCH_ALL,
@@ -39,6 +43,7 @@ from .model import (
     WHEN_NOW,
 )
 from .timespec import KIND_EVENT_END, KIND_EVENT_START, parse_timespec
+from .triggers import as_trigger_list, async_validate_triggers
 
 _COLUMN = re.compile(r"^[^\W\d][\w]*$")
 _ROW_KEYS = ("match", "mode")
@@ -162,8 +167,16 @@ _FILTER_SCHEMA = vol.Schema(
     }
 )
 
-_NOTIFY_ACTION_SCHEMA = vol.Schema(
-    {vol.Required("ack"): True, vol.Required("label"): _non_empty}
+
+def _snooze(value: Any) -> Any:
+    duration_minutes(value)
+    return value
+
+
+_NOTIFY_ACTION_SCHEMA = vol.Any(
+    vol.Schema({vol.Required("ack"): True, vol.Required("label"): _non_empty}),
+    vol.Schema({vol.Required("snooze"): _snooze, vol.Required("label"): _non_empty}),
+    msg="a push button needs a 'label' and either 'ack: true' or 'snooze: <duration>'",
 )
 
 
@@ -222,7 +235,18 @@ _SIGNAL_BASE = {
     vol.Optional("id"): cv.slug,
     vol.Required("type"): vol.In(SIGNAL_TYPES),
     vol.Optional("enabled", default=True): cv.boolean,
-    vol.Optional("when", default=WHEN_NOW): vol.In([WHEN_NOW]),
+    vol.Optional("when", default=WHEN_NOW): vol.Any(
+        WHEN_NOW,
+        vol.Schema(
+            {
+                # Any Home Assistant trigger(s), as in automations.
+                vol.Required("opportunity"): as_trigger_list,
+                # Only real operation counts (context without a parent).
+                vol.Optional("manual_only", default=False): cv.boolean,
+            }
+        ),
+        msg="'when' must be 'now' or an object with 'opportunity' (triggers)",
+    ),
     vol.Optional("conditions"): _conditions,
     vol.Optional("conditions_match", default=MATCH_ALL): vol.In([MATCH_ALL, MATCH_ANY]),
     vol.Optional("limit"): _LIMIT_SCHEMA,
@@ -331,7 +355,48 @@ def _signals(value: Any) -> list[dict[str, Any]]:
     return signals
 
 
-_ACK_SCHEMA = vol.Schema({vol.Required("type"): vol.In([ACK_NOTIFY_ACTION])})
+_ACK_SCHEMAS = {
+    ACK_NOTIFY_ACTION: vol.Schema({vol.Required("type"): ACK_NOTIFY_ACTION}),
+    ACK_TAG: vol.Schema(
+        {
+            vol.Required("type"): ACK_TAG,
+            vol.Required("tag_id"): _non_empty,
+            vol.Optional("name"): _text,
+        }
+    ),
+    # Door contact, zone, button ...: any Home Assistant trigger.
+    ACK_TRIGGER: vol.Schema(
+        {
+            vol.Required("type"): ACK_TRIGGER,
+            vol.Required("trigger"): as_trigger_list,
+            vol.Optional("name"): _text,
+            # Also before the reminder time (like the tag and the button).
+            vol.Optional("early", default=False): cv.boolean,
+        }
+    ),
+}
+
+
+def _ack(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or value.get("type") not in _ACK_SCHEMAS:
+        raise vol.Invalid(f"acknowledge type must be one of {', '.join(_ACK_SCHEMAS)}")
+    result: dict[str, Any] = _ACK_SCHEMAS[value["type"]](value)
+    return result
+
+
+_REPEAT_SCHEMA = vol.Any(
+    REPEAT_NONE,
+    vol.Schema(
+        {
+            # Minutes between repetitions while the reminder is open.
+            vol.Required("every"): duration_minutes,
+            vol.Optional("max", default=DEFAULT_REPEAT_MAX): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=1000)
+            ),
+        }
+    ),
+    msg="'repeat' must be 'none' or an object with 'every' (and 'max')",
+)
 
 RULE_SCHEMA = vol.Schema(
     {
@@ -350,9 +415,9 @@ RULE_SCHEMA = vol.Schema(
             vol.Length(min=1),
         ),
         vol.Optional("signals", default=list): _signals,
-        vol.Optional("acknowledge", default=list): [_ACK_SCHEMA],
+        vol.Optional("acknowledge", default=list): [_ack],
         vol.Optional("ack_label", default=None): vol.Any(None, _text),
-        vol.Optional("repeat", default=REPEAT_NONE): vol.In([REPEAT_NONE]),
+        vol.Optional("repeat", default=REPEAT_NONE): _REPEAT_SCHEMA,
         vol.Optional("bundle", default=True): cv.boolean,
         vol.Optional("expire", default=DEFAULT_EXPIRE): _expire_time,
     }
@@ -392,12 +457,21 @@ async def async_validate_rule(
                 await condition_helper.async_validate_conditions_config(
                     hass, cv.CONDITIONS_SCHEMA(conditions)
                 )
+            if isinstance(signal["when"], dict):
+                await async_validate_triggers(hass, signal["when"]["opportunity"])
             if signal["type"] == SIGNAL_ACTION:
                 await script_helper.async_validate_actions_config(
                     hass, cv.SCRIPT_SCHEMA(signal["actions"])
                 )
         except (vol.Invalid, HomeAssistantError) as err:
             raise vol.Invalid(f"signal '{signal['id']}': {err}") from err
+    for index, ack in enumerate(rule["acknowledge"], start=1):
+        if ack["type"] != ACK_TRIGGER:
+            continue
+        try:
+            await async_validate_triggers(hass, ack["trigger"])
+        except (vol.Invalid, HomeAssistantError) as err:
+            raise vol.Invalid(f"acknowledge {index}: {err}") from err
     return rule
 
 

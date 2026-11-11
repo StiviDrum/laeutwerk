@@ -24,15 +24,20 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ACK_VIA_TAG,
+    ACK_VIA_TRIGGER,
     EARLY_ACK_HOURS,
     EVENT_ACKNOWLEDGED,
     EVENT_MISSED,
     EVENT_REMINDED,
     EVENT_SIGNAL_SENT,
+    EVENT_TAG_SCANNED,
     LOOKAHEAD_DAYS,
 )
 from .matching import Occurrence, build_occurrences, build_variables, is_plural
 from .model import (
+    ACK_TAG,
+    ACK_TRIGGER,
     STATE_DONE,
     STATE_INACTIVE,
     STATE_MISSED,
@@ -54,6 +59,13 @@ from .signals import (
 )
 from .sources import async_fetch_events
 from .timespec import local_instant, parse_timespec, resolve
+from .triggers import (
+    TriggerListener,
+    is_manual,
+    is_own_context,
+    own_context,
+    person_of,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +102,10 @@ class RuleRunner:
         self._unsub_debounce: CALLBACK_TYPE | None = None
         self._stopped = False
         self._sending: set[tuple[str, str]] = set()
+        # Triggers that only listen while a reminder needs them.
+        self._opportunities: list[TriggerListener] = []
+        self._ack_triggers: list[tuple[TriggerListener, bool]] = []
+        self._unsub_tags: CALLBACK_TYPE | None = None
 
     # ------------------------------------------------------------ lifecycle
 
@@ -98,15 +114,112 @@ class RuleRunner:
         self._unsub_sources = async_track_state_change_event(
             self.hass, self.rule.sources, self._async_source_changed
         )
+        self._setup_listeners()
         await self.async_refresh()
 
     async def async_stop(self) -> None:
         """Cancel timers and listeners."""
         self._stopped = True
-        for attr in ("_unsub_timer", "_unsub_sources", "_unsub_debounce"):
+        for listener in [*self._opportunities, *(a for a, _ in self._ack_triggers)]:
+            listener.update(False)
+        for attr in (
+            "_unsub_timer",
+            "_unsub_sources",
+            "_unsub_debounce",
+            "_unsub_tags",
+        ):
             if unsub := getattr(self, attr):
                 unsub()
                 setattr(self, attr, None)
+
+    def _setup_listeners(self) -> None:
+        """Prepare opportunity and acknowledge triggers (attached on demand)."""
+        rule = self.rule
+        for signal in rule.signals:
+            if not signal.enabled or signal.opportunity is None:
+                continue
+
+            async def opportunity(
+                variables: dict[str, Any],
+                context: Context | None = None,
+                signal: Signal = signal,
+            ) -> None:
+                self._async_opportunity(signal, variables, context)
+
+            self._opportunities.append(
+                TriggerListener(
+                    self.hass,
+                    f"{rule.name}: {signal.id}",
+                    signal.opportunity,
+                    opportunity,
+                )
+            )
+        tags: set[str] = set()
+        for ack in rule.acknowledge:
+            if ack["type"] == ACK_TAG:
+                tags.add(ack["tag_id"])
+            elif ack["type"] == ACK_TRIGGER:
+                early = bool(ack.get("early"))
+
+                async def acknowledge(
+                    variables: dict[str, Any],
+                    context: Context | None = None,
+                    early: bool = early,
+                ) -> None:
+                    await self.async_acknowledge(
+                        by=person_of(self.hass, variables, context) or None,
+                        via=ACK_VIA_TRIGGER,
+                        early=early,
+                    )
+
+                self._ack_triggers.append(
+                    (
+                        TriggerListener(
+                            self.hass,
+                            f"{rule.name}: acknowledge",
+                            ack["trigger"],
+                            acknowledge,
+                        ),
+                        early,
+                    )
+                )
+        if tags:
+
+            async def tag_scanned(event: Event[Any]) -> None:
+                if event.data.get("tag_id") in tags:
+                    await self.async_acknowledge(
+                        by=person_of(self.hass, {}, event.context) or None,
+                        via=ACK_VIA_TAG,
+                    )
+
+            self._unsub_tags = self.hass.bus.async_listen(
+                EVENT_TAG_SCANNED, tag_scanned
+            )
+
+    def _sync_listeners(self) -> None:
+        """Listen to triggers only while a reminder can use them."""
+        if self._stopped:
+            return
+        reminding = any(r.state == STATE_REMINDED for r in self.reminders.values())
+        has_open = any(r.is_open for r in self.reminders.values())
+        for listener in self._opportunities:
+            listener.update(reminding)
+        for listener, early in self._ack_triggers:
+            listener.update(reminding or (early and has_open))
+
+    @callback
+    def _async_opportunity(
+        self, signal: Signal, variables: dict[str, Any], context: Context | None
+    ) -> None:
+        """Send a signal for the open reminders after its trigger fired."""
+        if is_own_context(context):
+            return
+        if signal.manual_only and not is_manual(context):
+            return
+        person = person_of(self.hass, variables, context)
+        for reminder in self.open_reminders:
+            self._dispatch(signal, reminder, extra={"person": person})
+        self._on_changed()
 
     @callback
     def _async_source_changed(self, _event: Event[EventStateChangedData]) -> None:
@@ -215,9 +328,10 @@ class RuleRunner:
         for reminder in list(self.reminders.values()):
             if reminder.id in known:
                 continue
-            if reminder.state == STATE_PLANNED or (
-                reminder.state == STATE_REMINDED and reminder.day >= today
-            ):
+            active = (
+                reminder.state == STATE_REMINDED or reminder.snoozed_until is not None
+            )
+            if (reminder.is_open and not active) or (active and reminder.day >= today):
                 # Event was removed or moved.
                 self._drop(reminder)
                 changed = True
@@ -258,6 +372,16 @@ class RuleRunner:
                 continue
             times = self.reminder_times(reminder)
             due = [at for at, when in times if when <= now and at not in reminder.fired]
+            if reminder.snoozed_until is not None:
+                # "Later": regular reminder times in between are skipped.
+                reminder.fired.extend(due)
+                changed = changed or bool(due)
+                due = []
+                if reminder.snoozed_until <= now:
+                    reminder.snoozed_until = None
+                    reminder.state = STATE_REMINDED
+                    self._remind(reminder, reminder_time="snooze")
+                    changed = True
             if due:
                 reminder.fired.extend(due)
                 reminder.state = STATE_REMINDED
@@ -273,10 +397,32 @@ class RuleRunner:
                 if signal and signal.enabled and reminder.state == STATE_REMINDED:
                     self._dispatch(signal, reminder)
             pending = [w for at, w in times if at not in reminder.fired]
+            if reminder.snoozed_until is not None:
+                pending.append(reminder.snoozed_until)
+            if (repeat_at := self._next_repeat(reminder)) is not None:
+                if repeat_at <= now:
+                    reminder.repeats += 1
+                    self._remind(reminder, reminder_time="repeat")
+                    changed = True
+                    repeat_at = self._next_repeat(reminder)
+                if repeat_at is not None:
+                    pending.append(repeat_at)
             candidate = min([*pending, *reminder.deferred.values(), expire])
             next_time = candidate if next_time is None else min(next_time, candidate)
         self._schedule(next_time)
         return changed
+
+    def _next_repeat(self, reminder: Reminder) -> datetime | None:
+        """When an open reminder is repeated next (None: no repetition left)."""
+        every = self.rule.repeat_every
+        if (
+            not every
+            or reminder.state != STATE_REMINDED
+            or reminder.repeats >= self.rule.repeat_max
+        ):
+            return None
+        last = reminder.last_reminded or reminder.reminded_at
+        return last + timedelta(minutes=every) if last else None
 
     def _schedule(self, when: datetime | None) -> None:
         if self._unsub_timer:
@@ -293,6 +439,7 @@ class RuleRunner:
         self._unsub_timer = async_track_point_in_utc_time(self.hass, _fired, when)
 
     def _finish(self, changed: bool, *, force_update: bool = False) -> None:
+        self._sync_listeners()
         if changed:
             self._on_changed()
         if changed or force_update:
@@ -332,12 +479,18 @@ class RuleRunner:
 
     def _remind(self, reminder: Reminder, *, reminder_time: str | None) -> None:
         """Fire the event and send all "now" signals."""
+        reminder.last_reminded = dt_util.utcnow()
         self._fire(EVENT_REMINDED, reminder, reminder_time=reminder_time)
         for signal in self.rule.signals:
             if signal.enabled and signal.when == WHEN_NOW:
                 self._dispatch(signal, reminder)
 
-    def _dispatch(self, signal: Signal, reminder: Reminder) -> None:
+    def _dispatch(
+        self,
+        signal: Signal,
+        reminder: Reminder,
+        extra: dict[str, str] | None = None,
+    ) -> None:
         """Send a signal unless its limits forbid it (quiet time may defer it)."""
         now = dt_util.utcnow()
         reminder.deferred.pop(signal.id, None)
@@ -352,10 +505,14 @@ class RuleRunner:
         # While it is being sent (a light signal takes seconds) the same
         # signal is not started again, so limits cannot be exceeded.
         self._sending.add(key)
-        self.hass.async_create_task(self._async_send(signal, reminder))
+        self.hass.async_create_task(self._async_send(signal, reminder, extra))
 
     def signal_run(
-        self, signal: Signal, item: Reminder | Occurrence, context: Context
+        self,
+        signal: Signal,
+        item: Reminder | Occurrence,
+        context: Context,
+        extra: dict[str, str] | None = None,
     ) -> SignalRun:
         """Build the data for sending a signal for a reminder / an event."""
         return SignalRun(
@@ -363,12 +520,14 @@ class RuleRunner:
             rule_name=self.rule.name,
             signal=signal,
             reminder_id=item.id,
-            variables=self.variables(item),
+            variables={"person": "", **self.variables(item), **(extra or {})},
             plural=is_plural(self.rule, item.events),
             context=context,
         )
 
-    async def _async_send(self, signal: Signal, reminder: Reminder) -> None:
+    async def _async_send(
+        self, signal: Signal, reminder: Reminder, extra: dict[str, str] | None
+    ) -> None:
         try:
             if not await async_conditions_met(self.hass, signal):
                 return
@@ -377,7 +536,7 @@ class RuleRunner:
                 reminder.signals_sent.get(signal.id, 0) + 1
             )
             self._on_changed()
-            run = self.signal_run(signal, reminder, Context())
+            run = self.signal_run(signal, reminder, own_context(), extra)
             if await async_send_signal(run):
                 self._fire(
                     EVENT_SIGNAL_SENT,
@@ -404,7 +563,11 @@ class RuleRunner:
         All reminders that are currently reminding; if there is none, the next
         planned one when its first reminder time is near (early acknowledge).
         """
-        reminded = [r for r in self.reminders.values() if r.state == STATE_REMINDED]
+        reminded = [
+            r
+            for r in self.reminders.values()
+            if r.state == STATE_REMINDED or r.snoozed_until is not None
+        ]
         if reminded:
             return reminded
         planned = sorted(
@@ -435,10 +598,16 @@ class RuleRunner:
             else:
                 targets = self._ackable(now)
                 if not early:
-                    targets = [r for r in targets if r.state == STATE_REMINDED]
+                    targets = [
+                        r
+                        for r in targets
+                        if r.state == STATE_REMINDED or r.snoozed_until is not None
+                    ]
             for reminder in targets:
+                was_reminding = reminder.state == STATE_REMINDED
                 reminder.state = STATE_DONE
                 reminder.finished_at = now
+                reminder.snoozed_until = None
                 reminder.deferred.clear()
                 reminder.acknowledged_by = by
                 reminder.acknowledged_via = via
@@ -448,9 +617,31 @@ class RuleRunner:
                     acknowledged_by=by,
                     acknowledged_via=via,
                 )
-                self._clear_notifications(reminder)
+                if was_reminding:
+                    self._clear_notifications(reminder)
             if targets:
                 self._process(now)  # re-plan the timer
+        self._finish(bool(targets))
+        return targets
+
+    async def async_snooze(
+        self, minutes: int, *, reminder_id: str | None = None
+    ) -> list[Reminder]:
+        """Remind again later: reminding -> planned until the time is over."""
+        async with self._lock:
+            now = dt_util.utcnow()
+            targets = [
+                r
+                for r in self.open_reminders
+                if reminder_id is None or r.id == reminder_id
+            ]
+            for reminder in targets:
+                reminder.state = STATE_PLANNED
+                reminder.snoozed_until = now + timedelta(minutes=minutes)
+                reminder.deferred.clear()
+                self._clear_notifications(reminder)
+            if targets:
+                self._process(now)
         self._finish(bool(targets))
         return targets
 
@@ -464,6 +655,7 @@ class RuleRunner:
             )
             reminder = candidates[0] if candidates else None
             if reminder is not None:
+                reminder.snoozed_until = None
                 reminder.state = STATE_REMINDED
                 reminder.reminded_at = reminder.reminded_at or now
                 self._remind(reminder, reminder_time=None)

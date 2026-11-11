@@ -16,6 +16,24 @@ acknowledge:
       selector:
         text:
 
+snooze:
+  fields:
+    rule:
+      required: false
+      example: muell
+      selector:
+        text:
+    reminder_id:
+      required: false
+      example: muell__20261117
+      selector:
+        text:
+    duration:
+      required: true
+      example: 3h
+      selector:
+        text:
+
 trigger:
   fields:
     rule:

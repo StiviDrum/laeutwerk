@@ -89,6 +89,8 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
                     else None
                 ),
             }
+            if current.snoozed_until:
+                attributes["snoozed_until"] = current.snoozed_until.isoformat()
         if runner.errors:
             attributes["errors"] = dict(runner.errors)
         return attributes

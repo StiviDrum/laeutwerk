@@ -25,7 +25,13 @@ from homeassistant.util import slugify
 
 from .colors import parse_color
 from .compat import vol
-from .const import ACTION_ACK_PREFIX, DOMAIN, NOTIFICATION_TAG_PREFIX
+from .const import (
+    ACTION_ACK_PREFIX,
+    ACTION_SNOOZE_PREFIX,
+    DOMAIN,
+    NOTIFICATION_TAG_PREFIX,
+)
+from .durations import duration_minutes
 from .matching import render
 from .model import (
     AUDIENCE_ALL,
@@ -223,15 +229,16 @@ def notify_payload(run: SignalRun) -> dict[str, Any]:
         **config.get("data", {}),
         "tag": notification_tag(run.reminder_id),
     }
-    if actions := config.get("actions"):
-        data["actions"] = [
-            {
-                "action": f"{ACTION_ACK_PREFIX}{run.reminder_id}",
-                "title": action["label"],
-            }
-            for action in actions
-            if action.get("ack")
-        ]
+    buttons = []
+    for action in config.get("actions", []):
+        if action.get("ack"):
+            action_id = f"{ACTION_ACK_PREFIX}{run.reminder_id}"
+        else:
+            minutes = duration_minutes(action["snooze"])
+            action_id = f"{ACTION_SNOOZE_PREFIX}{minutes}__{run.reminder_id}"
+        buttons.append({"action": action_id, "title": action["label"]})
+    if buttons:
+        data["actions"] = buttons
     payload: dict[str, Any] = {"message": run.text("message"), "data": data}
     if title := run.text("title"):
         payload["title"] = title

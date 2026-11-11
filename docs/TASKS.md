@@ -52,10 +52,16 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Dev instance: light signal can be watched on `light.stehleuchte`. No media player / TTS stand-in yet (the demo integration would add dozens of entities) – announcements are covered by tests only so far.
 
 ## 0.3 – Gelegenheiten und Quittierung
-- [ ] „Bei Gelegenheit“ mit beliebigem HA-Trigger, Zeitfenster, `manual_only` über `context`, `{person}`
-- [ ] Wiederholen, Snooze
-- [ ] Quittierung per NFC-Tag, Türkontakt, Zone, Taster
-- [ ] Release v0.3.0
+- [x] „Bei Gelegenheit“ mit beliebigem HA-Trigger, Zeitfenster, `manual_only` über `context`, `{person}`
+  - `when: {opportunity: <trigger(s)>, manual_only}`. `triggers.py`: `TriggerListener` attaches the triggers only while a reminder is reminding and detaches them afterwards.
+  - Manual = context without `parent_id` (automations/scripts act with a child context). Läutwerk's own signals use registered contexts (`own_context`) and are never an opportunity – verified with a real template light in `tests/test_real_light.py` (blink, restore, no self-trigger).
+  - `{person}`: changed person entity, person of a device tracker, else the person of the acting user; empty if unknown.
+- [x] Wiederholen, Snooze
+  - `repeat: none | {every: <minutes or 1h>, max: 24}`: re-sends the "now" signals (limits and quiet times apply), event `laeutwerk_reminded` with `reminder_time: repeat`.
+  - Snooze: reminded -> planned with `snoozed_until`; regular reminder times in between are skipped; expiry still applies; "done" works while snoozed. `signals_sent` is kept, so `per_reminder` limits also hold after a snooze.
+- [x] Quittierung per NFC-Tag, Türkontakt, Zone, Taster
+  - `acknowledge: [{type: tag, tag_id}, {type: trigger, trigger, early}]`. Tag and button also work before the reminder time (24 h window), triggers only with `early: true`.
+- [x] Release v0.3.0
 
 ## 0.4 – Karte
 - [ ] Ansicht „Heute & demnächst“ inkl. Leerzustand, Live-Updates

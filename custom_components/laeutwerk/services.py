@@ -27,9 +27,11 @@ from homeassistant.helpers import config_validation as cv
 
 from .compat import vol
 from .const import ACK_VIA_SERVICE, DOMAIN
+from .durations import duration_minutes
 from .manager import LaeutwerkManager, RuleNotFoundError, person_name
 
 SERVICE_ACKNOWLEDGE = "acknowledge"
+SERVICE_SNOOZE = "snooze"
 SERVICE_TRIGGER = "trigger"
 SERVICE_TEST_SIGNAL = "test_signal"
 SERVICE_GET_RULES = "get_rules"
@@ -116,6 +118,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
         if not call.return_response:
             return None
         return {"acknowledged": [reminder.id for reminder in done]}
+
+    async def snooze(call: ServiceCall) -> ServiceResponse:
+        manager = get_manager(hass)
+        rule_id: str | None = call.data.get(ATTR_RULE)
+        if rule_id is not None:
+            _check_rule(manager, rule_id)
+        snoozed = await manager.async_snooze(
+            call.data["duration"], rule_id, reminder_id=call.data.get("reminder_id")
+        )
+        if not call.return_response:
+            return None
+        return {"snoozed": [reminder.id for reminder in snoozed]}
 
     async def trigger(call: ServiceCall) -> None:
         manager = get_manager(hass)
@@ -224,6 +238,19 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional(ATTR_RULE): cv.string,
                 vol.Optional("reminder_id"): cv.string,
                 vol.Optional("person"): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    register(
+        DOMAIN,
+        SERVICE_SNOOZE,
+        snooze,
+        vol.Schema(
+            {
+                vol.Optional(ATTR_RULE): cv.string,
+                vol.Optional("reminder_id"): cv.string,
+                vol.Required("duration"): duration_minutes,
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,

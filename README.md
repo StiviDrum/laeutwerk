@@ -3,8 +3,8 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.2 contains the core (rules, reminders,
-> entities, services) and all signal types; the card to edit rules follows in 0.4 – until
+> **Status:** early development. 0.3 contains the complete engine (rules,
+> reminders, all signal types, opportunities, snooze, entities, services); the card to edit rules follows in 0.4 – until
 > then rules are created with the `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
@@ -91,7 +91,8 @@ data:
   `n`: `{tonnen}` = "Papiertonne und Biotonne". `title_plural` /
   `message_plural` are used when several keywords matched.
 - **Acknowledge:** the button in the push notification, the entity
-  `button.laeutwerk_<rule>_erledigt` or the action `laeutwerk.acknowledge`.
+  `button.laeutwerk_<rule>_erledigt`, the action `laeutwerk.acknowledge`, an
+  NFC tag or any trigger (see below).
   A reminder can be acknowledged up to 24 h before its first reminder time.
 
 ### Signals
@@ -139,6 +140,30 @@ signals:
           variables: {text: "{{ wann }}: {{ tonnen }}"}
 ```
 
+**On opportunity.** Instead of `when: now` a signal can wait for any Home
+Assistant trigger (state, zone, tag, event …) – it fires whenever the trigger
+fires while the reminder is open:
+
+```yaml
+  - id: lampe
+    type: light_signal
+    entity: light.stehleuchte
+    color_from: farbe
+    when:
+      opportunity: {trigger: state, entity_id: light.stehleuchte, to: "on"}
+      manual_only: true          # wall switch / app / dashboard, not automations
+    limit: {per_reminder: 1}
+  - id: ansage
+    type: announce
+    players: [media_player.sonos_wohnzimmer]
+    text: "{person}, stell bitte die {tonne} raus!"
+    when:
+      opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}
+```
+
+`{person}` is who came home or operated the device, as far as Home Assistant
+knows it. The triggers are only listened to while a reminder is open.
+
 - **Push audience:** the mobile app devices of all persons, of the persons who
   are at home, or of the listed persons.
 - **Light:** German and English colour names, `#rrggbb` or `r,g,b`. Lamps
@@ -150,6 +175,27 @@ signals:
   available as template variables (`{{ tonnen }}`, `{{ reminder_id }}`).
 - **Try it:** `laeutwerk.test_signal` sends one signal immediately (`rule` +
   `signal`, or `config` with an unsaved signal).
+
+### Repeat, snooze and ways to acknowledge
+
+```yaml
+repeat: {every: 1h, max: 5}      # while open: remind again every hour, 5 times
+acknowledge:
+  - {type: tag, tag_id: tonne}   # NFC tag (also before the reminder time)
+  - type: trigger                # door contact, zone, button: any trigger
+    trigger: {trigger: zone, entity_id: person.steven, zone: zone.kult61, event: enter}
+    early: false                 # true: also before the reminder time
+signals:
+  - type: notify
+    audience: present
+    message: "{wann}: {tonnen}"
+    actions:
+      - {ack: true, label: "Steht draußen"}
+      - {snooze: 3h, label: "Später"}
+```
+
+`laeutwerk.snooze` (or the push button) sets a reminder back to *planned*; it
+reminds again when the time is over, unless it expires first.
 
 ### Entities (one device per rule)
 
@@ -163,7 +209,7 @@ signals:
 
 ### Actions and events
 
-`laeutwerk.acknowledge`, `trigger`, `test_signal`, `get_rules`, `create_rule`, `update_rule`,
+`laeutwerk.acknowledge`, `snooze`, `trigger`, `test_signal`, `get_rules`, `create_rule`, `update_rule`,
 `delete_rule`, `duplicate_rule`, `enable`, `disable`. Editing actions need an
 admin (calls from automations are allowed).
 
@@ -196,8 +242,8 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.2 enthält den Kern (Regeln, Erinnerungen,
-> Entitäten, Dienste) und alle Signal-Arten; die Karte zum Bearbeiten folgt mit 0.4 –
+> **Status:** frühe Entwicklung. 0.3 enthält die komplette Logik (Regeln,
+> Erinnerungen, alle Signal-Arten, Gelegenheiten, Snooze, Entitäten, Dienste); die Karte zum Bearbeiten folgt mit 0.4 –
 > bis dahin legst du Regeln mit der Aktion `laeutwerk.create_rule` an (Beispiel
 > oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 
