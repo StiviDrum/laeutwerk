@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- NFC tag ids may use variables of the keyword table
+  (`acknowledge: [{type: tag, tag_id: "{nfc}"}]`): only the tag of the bin
+  that is due acknowledges; a bundle accepts the tag of each of its hits.
+  Fixed and variable tags can be mixed. The card offers the variables as chips
+  at the tag field and shows the resolved tag of the next match.
+
 ## [0.6.2] - 2026-11-11
 
 ### Added

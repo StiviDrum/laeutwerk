@@ -237,6 +237,8 @@ const en = {
   plural_off: "no plural",
   plural_hint_off:
     'Each column becomes a variable; with several matches it contains their different values, joined with "and".',
+  tag_variable_hint: "Only the tag of the due hit counts (resolved per event).",
+  tag_next: "Next match: {tags}",
   recipients: "Recipients",
   push_to_assignee: "To the responsible person",
   only_present: "Only who is at home right now",
@@ -500,6 +502,8 @@ const de: Strings = {
   plural_off: "keine Mehrzahl",
   plural_hint_off:
     "Jede Spalte wird eine Variable; bei mehreren Treffern enthält sie die verschiedenen Werte, mit „und“ verbunden.",
+  tag_variable_hint: "Es zählt nur der Tag des fälligen Treffers (je Termin aufgelöst).",
+  tag_next: "Nächster Treffer: {tags}",
   recipients: "Empfänger",
   push_to_assignee: "An die zuständige Person",
   only_present: "Nur wer gerade zu Hause ist",

@@ -17,7 +17,7 @@ from homeassistant.util import slugify
 
 from .compat import vol
 from .durations import duration_minutes
-from .matching import EVENT_VARIABLES
+from .matching import EVENT_VARIABLES, template_variables
 from .model import (
     ACK_NOTIFY_ACTION,
     ACK_TAG,
@@ -560,6 +560,19 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
             raise vol.Invalid(
                 f"signal '{signal['id']}': color_from '{column}' is not a column "
                 "of the keyword table"
+            )
+    specs = rule["filter"]["keywords"]["columns"]
+    available = set(EVENT_VARIABLES) | set(columns)
+    available |= {plural for spec in specs if (plural := column_plural(spec))}
+    for index, ack in enumerate(rule["acknowledge"], start=1):
+        if ack["type"] != ACK_TAG:
+            continue
+        if unknown := template_variables(ack["tag_id"]) - available:
+            raise vol.Invalid(
+                f"acknowledge {index}: unknown variable(s) "
+                f"{', '.join('{' + name + '}' for name in sorted(unknown))} in "
+                f"tag_id (columns of the keyword table: "
+                f"{', '.join(columns) or 'none'})"
             )
     if not rule["sources"] and not rule["interval"]:
         raise vol.Invalid("a rule needs at least one source or an 'interval'")

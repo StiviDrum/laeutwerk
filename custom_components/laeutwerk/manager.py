@@ -573,6 +573,7 @@ class LaeutwerkManager:
             payload["expires_at"] = runner.expire_at(reminder).isoformat()
             payload["next_reminder_at"] = next_time.isoformat() if next_time else None
             payload["assignee_name"] = runner.assignee_name(reminder.assignee)
+            payload["tags"] = runner.tag_ids(reminder)
         return payload
 
     def assignee_stats(self, rule_id: str) -> dict[str, int]:
@@ -626,6 +627,7 @@ def occurrence_payload(
         "titles": [event.summary for event in occurrence.events],
         "days_until": (occurrence.day - today).days,
         "colors": hit_colors(runner.rule, occurrence.events),
+        "tags": runner.tag_ids(occurrence),
         "all_day": all(event.all_day for event in occurrence.events),
         "variables": runner.variables(occurrence),
     }

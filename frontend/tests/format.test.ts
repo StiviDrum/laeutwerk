@@ -297,3 +297,31 @@ describe("columns with switchable plural", () => {
     expect(defaultSignal("announce", off).text).toBe("{wann}: {tonne}");
   });
 });
+
+describe("tag ids with variables", () => {
+  it("offers columns, finds variables and keeps only valid tags for the preview", async () => {
+    const { tagVariables, templateVariables, validTagAcks, renderTemplate } =
+      await import("../src/format");
+    const r = rule({
+      filter: {
+        all_day: true,
+        keywords: { columns: ["tonne", { name: "nfc", plural: false }], rows: [] },
+      },
+      acknowledge: [
+        { type: "tag", tag_id: "{nfc}" },
+        { type: "tag", tag_id: "{chip}" },
+        { type: "tag", tag_id: "haustuer" },
+        { type: "notify_action" },
+      ],
+    });
+    expect(tagVariables(r).slice(0, 3)).toEqual(["tonne", "tonnen", "nfc"]);
+    expect(tagVariables(r)).not.toContain("wann");
+    expect(templateVariables("tonne_{nfc}_{x}")).toEqual(["nfc", "x"]);
+    expect(validTagAcks(r)).toEqual([
+      { type: "tag", tag_id: "{nfc}" },
+      { type: "tag", tag_id: "haustuer" },
+    ]);
+    // Tag ids are identifiers: no capital first letter.
+    expect(renderTemplate("{nfc}", { nfc: "restmuelltonne" }, false)).toBe("restmuelltonne");
+  });
+});

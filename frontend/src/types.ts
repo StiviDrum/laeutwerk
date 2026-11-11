@@ -115,6 +115,8 @@ export interface UpcomingEvent {
   variables: Record<string, string>;
   reminder_times?: string[];
   expires_at?: string;
+  /** Resolved NFC tag ids ("{nfc}" per hit). */
+  tags?: string[];
 }
 
 export interface RuleStatus {

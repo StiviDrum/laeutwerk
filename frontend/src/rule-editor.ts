@@ -16,6 +16,9 @@ import {
   renameColumn,
   ruleComplete,
   setColumnPlural,
+  tagVariables,
+  templateVariables,
+  validTagAcks,
   signalSummary,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -116,6 +119,8 @@ export class LaeutwerkRuleEditor extends LitElement {
       bundle: rule.bundle,
       reminders: rule.reminders.length ? rule.reminders : [{ at: "09:00" }],
       expire: rule.expire,
+      // Tags with {variables}: the preview shows them resolved.
+      acknowledge: validTagAcks(rule),
     };
     if (season?.from && season?.to) preview.activation = { season };
     try {
@@ -846,7 +851,40 @@ export class LaeutwerkRuleEditor extends LitElement {
                   .value=${a.tag_id ?? ""}
                   placeholder=${l.t("ack_tag_placeholder")}
                   @input=${(e: Event) => setAt(i, { tag_id: (e.target as HTMLInputElement).value })}
+                  @change=${() => this._schedulePreview(300)}
                 />
+                ${
+                  this._rule.filter.keywords.columns.length
+                    ? html`<div class="wrap vars">
+                        ${tagVariables(this._rule).map(
+                          (name) =>
+                            html`<button
+                              class="chip"
+                              @click=${() => {
+                                setAt(i, { tag_id: `${a.tag_id ?? ""}{${name}}` });
+                                this._schedulePreview(300);
+                              }}
+                            >
+                              {${name}}
+                            </button>`,
+                        )}
+                      </div>`
+                    : nothing
+                }
+                ${
+                  templateVariables(a.tag_id).length
+                    ? html`<div class="hint">
+                        ${l.t("tag_variable_hint")}
+                        ${
+                          this._preview?.events[0]?.tags?.length
+                            ? html`<br />${l.t("tag_next", {
+                                  tags: this._preview.events[0].tags.join(", "),
+                                })}`
+                            : nothing
+                        }
+                      </div>`
+                    : nothing
+                }
                 ${
                   scanned && scanned !== "unknown"
                     ? html`<div class="hint">
@@ -1344,6 +1382,15 @@ export class LaeutwerkRuleEditor extends LitElement {
       .segmented.small button {
         min-height: 32px;
         padding: 0 12px;
+      }
+      .vars .chip {
+        min-height: 32px;
+        font-family: ui-monospace, monospace;
+      }
+      .ackrow .grow {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
       }
       .ackblock {
         display: flex;

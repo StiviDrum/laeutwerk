@@ -193,6 +193,7 @@ knows it. The triggers are only listened to while a reminder is open.
 repeat: {every: 1h, max: 5}      # while open: remind again every hour, 5 times
 acknowledge:
   - {type: tag, tag_id: tonne}   # NFC tag (also before the reminder time)
+  - {type: tag, tag_id: "{nfc}"} # tag per bin from the keyword column "nfc"
   - type: trigger                # door contact, zone, button: any trigger
     trigger: {trigger: zone, entity_id: person.steven, zone: zone.kult61, event: enter}
     early: false                 # true: also before the reminder time
@@ -204,6 +205,11 @@ signals:
       - {ack: true, label: "Steht draußen"}
       - {snooze: 3h, label: "Später"}
 ```
+
+**Tag per keyword:** with a column such as `nfc` (tag id per bin) and
+`tag_id: "{nfc}"`, only the tag of the bin that is due acknowledges; for a
+bundle (Rest + Bio on one day) each of its tags acknowledges the whole bundle.
+Other tags do nothing. Fixed and variable tags can be mixed.
 
 `laeutwerk.snooze` (or the push button) sets a reminder back to *planned*; it
 reminds again when the time is over, unless it expires first.
@@ -368,6 +374,14 @@ schreibst die Spalte als `{name: artikel, plural: false}`. Dann gibt es kein
 `{artikeln}`, und `{artikel}` enthält bei mehreren Treffern die verschiedenen
 Werte, mit „und“ verbunden („die“ bzw. „die und den“). Ein eigener Name für
 die Mehrzahl: `{name: tonne, plural: tonnen_liste}`.
+
+## NFC-Tag je Tonne
+
+Mit einer Spalte wie `nfc` (Tag-ID je Tonne) und `tag_id: "{nfc}"` quittiert
+nur der Tag der Tonne, die gerade fällig ist – im Editor unter „Erledigt
+durch“ per Variablen-Chip. Bei einem Bündel (Rest + Bio am selben Tag)
+quittiert jeder der beiden Tags die ganze Erinnerung, andere Tags nichts.
+Feste und variable Tags lassen sich mischen.
 
 ## Installation (HACS, benutzerdefiniertes Repository)
 

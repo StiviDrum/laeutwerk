@@ -16,7 +16,7 @@ Abgrenzung: Läutwerk holt keine Termine selbst. Waste Collection Schedule, Goog
 | Filter / Stichwort-Tabelle | Stichwörter (enthält / beginnt mit / Regex), optional nur Ganztags-Termine; **frei definierbare Spalten**, jede Spalte wird eine Variable (siehe B4) |
 | Zeitpunkte | relativ zum Terminbeginn, mehrere pro Regel (z. B. `-1d 17:00`, `-2h`) |
 | Signale | beliebig viele, jedes voll konfigurierbar (siehe B3) |
-| Quittierung | Knopf in der Push, NFC-Tag (`tag_scanned`), Taster, Türkontakt, Zone, Dashboard, Dienst |
+| Quittierung | Knopf in der Push, NFC-Tag (`tag_scanned`), Taster, Türkontakt, Zone, Dashboard, Dienst. Die Tag-ID darf Variablen enthalten (`tag_id: "{nfc}"`): je Termin aufgelöst, es quittiert nur der Tag des fälligen Treffers (seit 0.6.3) |
 | Wiederholen | einmal, alle n Minuten, bis erledigt (mit Maximum) |
 | Bündeln | Termine derselben Regel am selben Tag werden **eine** Erinnerung („Morgen: Papier + Bio“); ein Quittieren erledigt alle |
 | Verfallen | wann eine offene Erinnerung als verpasst gilt (z. B. Abholtag 12:00) |
@@ -101,7 +101,7 @@ Wichtige Details:
 |---|---|
 | Termin (immer) | `{titel}`, `{rest}` (Titel ohne gefundenes Stichwort), `{beschreibung}`, `{ort}`, `{kalender}`, `{wann}` (heute/morgen/am Donnerstag), `{datum}`, `{uhrzeit}` |
 | Gelegenheit | `{person}` (wer heimkam, wer die Lampe schaltete – soweit aus `context`/Trigger ermittelbar) |
-| Stichwort-Tabelle | je Spalte eine Variable mit frei gewähltem Namen, z. B. `{tonne}`, `{farbe}`, `{artikel}`, `{aufgabe}` |
+| Stichwort-Tabelle | je Spalte eine Variable mit frei gewähltem Namen, z. B. `{tonne}`, `{farbe}`, `{artikel}`, `{aufgabe}`, `{nfc}` (auch in der Tag-ID zum Quittieren nutzbar) |
 | Mehrere Treffer | je Spalte automatisch die Mehrzahl mit angehängtem `n`, verbunden mit „und“: `{tonnen}` = „Papiertonne und Biotonne“. Je Spalte abschaltbar (`{name: artikel, plural: false}`, Umschalter im Spaltenkopf) – dann keine Mehrzahl-Variable, und die Spalten-Variable enthält bei mehreren Treffern die verschiedenen Werte mit „und“ verbunden; eigener Mehrzahl-Name mit `{name: tonne, plural: tonnen_liste}` (seit 0.6.2) |
 | Zuständigkeit (0.6) | `{zustaendig}` |
 

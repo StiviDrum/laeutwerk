@@ -169,12 +169,34 @@ export function describeTimespec(text: string, l: Localizer): string {
 export function renderTemplate(
   template: string | undefined,
   variables: Record<string, string>,
+  capitalizeFirst = true,
 ): string {
   if (!template) return "";
   const text = template.replace(/(?<!\{)\{([^\W\d]\w*)\}(?!\})/gu, (all, name: string) =>
     name in variables ? variables[name] : all,
   );
-  return template.startsWith("{") ? capitalize(text) : text;
+  return capitalizeFirst && template.startsWith("{") ? capitalize(text) : text;
+}
+
+/** Names of the {variables} used in a text. */
+export function templateVariables(template: string | undefined): string[] {
+  return [...(template ?? "").matchAll(/(?<!\{)\{([^\W\d]\w*)\}(?!\})/gu)].map((m) => m[1]);
+}
+
+/** Variables a tag id may use: keyword columns (and plurals) plus the event ones. */
+export function tagVariables(rule: Rule): string[] {
+  return availableVariables(rule).filter(
+    (name) => !["wann", "datum", "uhrzeit", "zustaendig"].includes(name),
+  );
+}
+
+/** Tag acknowledgements whose variables all exist (safe to send to the preview). */
+export function validTagAcks(rule: Rule): { type: "tag"; tag_id: string }[] {
+  const known = new Set([...availableVariables(rule), "wann", "datum", "uhrzeit"]);
+  return rule.acknowledge
+    .filter((a) => a.type === "tag" && a.tag_id?.trim())
+    .filter((a) => templateVariables(a.tag_id).every((name) => known.has(name)))
+    .map((a) => ({ type: "tag" as const, tag_id: a.tag_id!.trim() }));
 }
 
 /** Name of a keyword column. */

@@ -325,12 +325,18 @@ def build_variables(
     return variables
 
 
-def render(template: str | None, variables: Mapping[str, str]) -> str:
-    """Replace ``{name}`` placeholders; unknown names stay as they are."""
+def render(
+    template: str | None, variables: Mapping[str, str], *, capitalize: bool = True
+) -> str:
+    """Replace ``{name}`` placeholders; unknown names stay as they are.
+
+    Texts that start with a variable get a capital first letter ("{wann}: …"
+    -> "Morgen: …"); identifiers such as tag ids use ``capitalize=False``.
+    """
     if not template:
         return ""
     text = _VARIABLE.sub(lambda m: variables.get(m[1], m[0]), template)
-    if template.startswith("{"):  # "{wann}: ..." -> "Morgen: ..."
+    if capitalize and template.startswith("{"):
         text = text[:1].upper() + text[1:]
     return text
 

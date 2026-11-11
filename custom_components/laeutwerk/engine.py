@@ -44,7 +44,14 @@ from .const import (
     LOOKAHEAD_DAYS,
 )
 from .durations import duration_minutes
-from .matching import Occurrence, build_occurrences, build_variables, is_plural
+from .matching import (
+    Occurrence,
+    build_occurrences,
+    build_variables,
+    is_plural,
+    render,
+    template_variables,
+)
 from .model import (
     ACK_TAG,
     ACK_TRIGGER,
@@ -132,6 +139,11 @@ class RuleRunner:
         self._opportunities: list[TriggerListener] = []
         self._ack_triggers: list[tuple[TriggerListener, bool]] = []
         self._unsub_tags: CALLBACK_TYPE | None = None
+        self._tag_templates: list[str] = [
+            ack["tag_id"]
+            for ack in rule.acknowledge
+            if ack["type"] == ACK_TAG and template_variables(ack["tag_id"])
+        ]
 
     # ------------------------------------------------------------ lifecycle
 
@@ -248,11 +260,14 @@ class RuleRunner:
                     opportunity,
                 )
             )
-        tags: set[str] = set()
+        # Fixed tag ids; ids with {variables} are resolved per event.
+        tags = {
+            ack["tag_id"]
+            for ack in rule.acknowledge
+            if ack["type"] == ACK_TAG and not template_variables(ack["tag_id"])
+        }
         for ack in rule.acknowledge:
-            if ack["type"] == ACK_TAG:
-                tags.add(ack["tag_id"])
-            elif ack["type"] == ACK_TRIGGER:
+            if ack["type"] == ACK_TRIGGER:
                 early = bool(ack.get("early"))
 
                 async def acknowledge(
@@ -279,13 +294,34 @@ class RuleRunner:
                         early,
                     )
                 )
-        if tags:
+        if tags or self._tag_templates:
 
             async def tag_scanned(event: Event[Any]) -> None:
-                if event.data.get("tag_id") in tags:
-                    name, person = person_ref(self.hass, {}, event.context)
+                tag_id = event.data.get("tag_id")
+                if not tag_id:
+                    return
+                name, person = person_ref(self.hass, {}, event.context)
+                if tag_id in tags:
                     await self.async_acknowledge(
                         by=name or None, via=ACK_VIA_TAG, person=person
+                    )
+                    return
+                if not self._tag_templates:
+                    return
+                matching = self.reminders_for_tag(tag_id)
+                if not matching:
+                    _LOGGER.debug(
+                        "Rule %s: tag %s does not belong to a due reminder",
+                        self.rule.id,
+                        tag_id,
+                    )
+                    return
+                for reminder in matching:
+                    await self.async_acknowledge(
+                        reminder_id=reminder.id,
+                        by=name or None,
+                        via=ACK_VIA_TAG,
+                        person=person,
                     )
 
             self._unsub_tags = self.hass.bus.async_listen(
@@ -692,6 +728,40 @@ class RuleRunner:
             if self.rule.assignee
             else None
         )
+        return self._variables_of(reminder.events, assignee)
+
+    def tag_ids(self, item: Reminder | Occurrence) -> list[str]:
+        """Tag ids from tag templates such as "{nfc}", one set per event.
+
+        Resolved per event, so a bundle accepts the tag of each of its hits.
+        """
+        found: list[str] = []
+        for event in item.events:
+            variables = self._variables_of([event], None)
+            for template in self._tag_templates:
+                tag = render(template, variables, capitalize=False).strip()
+                if tag and "{" not in tag and tag not in found:
+                    found.append(tag)
+        return found
+
+    def reminders_for_tag(self, tag_id: str) -> list[Reminder]:
+        """Open reminders (or ones within the early window) a tag belongs to."""
+        now = dt_util.utcnow()
+        candidates = []
+        for reminder in self.reminders.values():
+            if reminder.state == STATE_REMINDED or reminder.snoozed_until is not None:
+                candidates.append(reminder)
+            elif reminder.state == STATE_PLANNED:
+                first = self.next_reminder_time(reminder)
+                if first and first - timedelta(hours=EARLY_ACK_HOURS) <= now:
+                    candidates.append(reminder)
+        return [r for r in candidates if tag_id in self.tag_ids(r)]
+
+    def _variables_of(
+        self,
+        events: list[CalendarEvent] | tuple[CalendarEvent, ...],
+        assignee: str | None,
+    ) -> dict[str, str]:
         names = {
             entity_id: state.name
             for entity_id in self.rule.sources
@@ -699,7 +769,7 @@ class RuleRunner:
         }
         return build_variables(
             self.rule,
-            reminder.events,
+            list(events),
             today=dt_util.now().date(),
             tz=dt_util.get_default_time_zone(),
             language=self.hass.config.language,
