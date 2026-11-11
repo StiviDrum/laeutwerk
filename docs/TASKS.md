@@ -74,7 +74,7 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Test uses `laeutwerk.test_signal` with the unsaved signal config (needs a saved rule).
 - [x] Release v0.4.0 → Steven kann die Müll-Regel parallel zur bestehenden Automation testen
   - Layout checked with `frontend/dev/preview.html` (mocked hass) in headless Chromium at 390 px, dark + light: overview, editor, signal editor, compact, empty. Fixed: overflowing footer, squeezed rows.
-  - **Not yet checked inside a real Home Assistant frontend:** the HA trigger/condition/action editors inside the card (`ha-selector`) – first thing to verify on Steven's system / in the dev instance.
+  - Checked in the real HA 2026.11 frontend (dev instance, `scripts/check_card.py`): card loads, `ha-selector` is available inside the card – trigger editor, condition editor, entity and icon pickers render in the rule and signal editors.
   - Bundle: 26 KB gzip.
 
 ## Findings (CI)
@@ -82,9 +82,15 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - HACS validation needs a repository description (set 2026-11-11 with `gh repo edit`). CI fully green since then.
 
 ## 0.5 – Feinschliff
-- [ ] Verlauf je Regel, Kompakt-Modus, visueller Karteneditor
-- [ ] Übersetzungen de/en vollständig, Reparaturen, Diagnose
-- [ ] Release v0.5.0
+- [x] Verlauf je Regel, Kompakt-Modus, visueller Karteneditor
+  - History: up to 50 finished reminders per rule in storage 1.2 (`history`, migration from 1.1 tested), websocket `laeutwerk/history`; shown in `view: rule`, reloaded when the rule's reminders change.
+  - Compact mode came with 0.4. Card editor: `ha-form` with fallback; `cleanCardConfig` drops keys of the other view.
+- [x] Übersetzungen de/en vollständig, Reparaturen, Diagnose
+  - Repair issue `missing_entities` per enabled rule: missing entities (sources, lights, players, persons, TTS, entity ids in conditions/triggers/actions) and missing notify actions; re-checked on rule changes and entity registry updates.
+  - Diagnostics: rules, status, history, references, invalid stored rules.
+  - Text variables (`{wann}` …) follow the **server** language (`hass.config.language`), the card UI the user's language. Dev instance now `language: de`.
+- [x] Release v0.5.0
+  - Bundle: 27 KB gzip.
 
 ## 0.6 – Erweiterungen (B7)
 - [ ] Intervall ab Erledigung

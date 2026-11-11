@@ -3,8 +3,8 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.4 contains the engine and the card with
-> the rule editor; rules can also be created with the
+> **Status:** early development. 0.5 contains the engine, the card with the
+> rule editor, history, repairs and diagnostics; rules can also be created with the
 > `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
@@ -238,12 +238,24 @@ compact: false        # one line for the top of a dashboard
 - **Rule editor** (administrators, *+* or tap a rule): calendar, keyword table
   with free columns (scrolls sideways), live preview of the next matches,
   reminder times, repeat, signals, ways to acknowledge, bundling and expiry.
+- **One rule** (`view: rule`): the rule's reminders plus its history (last
+  10 finished reminders: done by whom and how, or missed).
+- **Visual editor:** all options can be set in the dashboard's card editor.
 - **Signal editor:** type, *immediately / on opportunity* with Home
   Assistant's trigger editor, *only if* with the condition editor, the fields
   of the type with variable chips and a text preview, limits and quiet times,
   *Test* and *Edit as YAML*.
 
-The card bundle is 26 KB gzipped (measured with `gzip -9` on 0.4.0).
+The card bundle is 27 KB gzipped (measured with `gzip -9` on 0.5.0).
+
+## Troubleshooting
+
+- **Repairs:** a rule that refers to a calendar, light, speaker, person or
+  notify action that does not exist (any more) gets a repair issue under
+  *Settings → System → Repairs*. It disappears when everything is back.
+- **Diagnostics:** *Settings → Devices & services → Läutwerk → ⋮ → Download
+  diagnostics* (or on a rule's device page) contains the rules, their
+  reminders and history – please attach it to bug reports.
 
 ## Development
 
@@ -260,6 +272,8 @@ Card preview without Home Assistant (mocked data): `npm run build` in
 `frontend/`, then `python3 -m http.server 8000` in the repo root and open
 `http://localhost:8000/frontend/dev/preview.html` (`?page=editor`, `signal`,
 `compact`, `rule`, `done`, `empty`; `?theme=light`, `?lang=en`, `?admin=0`).
+`scripts/check_card.py` opens the card in the real frontend of the running dev
+instance (headless Chromium) and takes screenshots.
 
 The dev instance comes with two seeded local calendars ("Abfallkalender",
 "Kult61") and helper stand-ins for presence, the front door and a lamp.
@@ -275,8 +289,8 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.4 enthält die komplette Logik und die Karte
-> mit Regel-Editor; Regeln legst du in der Karte an (*+*) oder
+> **Status:** frühe Entwicklung. 0.5 enthält die komplette Logik, die Karte mit
+> Regel-Editor, Verlauf, Reparaturen und Diagnose; Regeln legst du in der Karte an (*+*) oder
 > mit der Aktion `laeutwerk.create_rule` (Beispiel oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 
 Eine *Regel* beschreibt einen Anlass: welcher Kalender, welche Termine

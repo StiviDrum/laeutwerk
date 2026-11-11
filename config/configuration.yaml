@@ -16,6 +16,7 @@ homeassistant:
   name: Läutwerk Dev
   time_zone: Europe/Berlin
   country: DE
+  language: de
   unit_system: metric
   latitude: 50.11
   longitude: 8.68

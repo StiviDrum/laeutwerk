@@ -1,6 +1,6 @@
 [project]
 name = "laeutwerk"
-version = "0.4.0"
+version = "0.5.0"
 description = "Reminders from calendar events that stay open until acknowledged"
 requires-python = ">=3.14.2"
 license = "MIT"
@@ -19,6 +19,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "PLR2004", "PLC0415"]
 "scripts/**" = ["T20", "D"]
+# Dev tool with long inline JavaScript; starts Chromium as a subprocess.
+"scripts/check_card.py" = ["T20", "D", "E501", "ASYNC220"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true

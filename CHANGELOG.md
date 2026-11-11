@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
+### Added
+- History of finished reminders per rule (who, how, when or missed), shown
+  in the card's single rule view; websocket `laeutwerk/history`.
+- Visual card editor (view, rule / rules filter, sections, compact).
+- Repair issues for rules that refer to missing entities or notify actions.
+- Diagnostics download for the integration and per rule device.
+
+### Changed
+- Storage version 1.2 (adds the history; older data is migrated).
+
+### Fixed
+- Announcement test no longer imports the optional TTS component (CI).
+
 ## [0.4.0] - 2026-11-11
 
 ### Added
