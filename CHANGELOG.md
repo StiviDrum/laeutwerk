@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-11
+
 ### Added
 - Plural per keyword column can be switched off (`{name: artikel, plural:
   false}`, toggle in the column header of the card) or given an own name
