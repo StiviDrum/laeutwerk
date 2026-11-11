@@ -56,7 +56,7 @@ Danach:
 ## A4. Lokale Entwicklung (WSL2)
 
 - Entwicklung in WSL2/Ubuntu im Linux-Dateisystem (`~/laeutwerk`), nicht unter `/mnt/c/...`.
-- Skripte wie bei Zeitwerk: `scripts/setup`, `scripts/develop` (lokale HA-Testinstanz unter `http://localhost:8123` mit `./config`), `scripts/lint`, `scripts/test`, `npm run watch` für die Karte.
+- Skripte wie bei Zeitwerk: `scripts/setup`, `scripts/develop` (lokale HA-Testinstanz unter `http://localhost:8123` mit `./config`), `scripts/lint`, `scripts/check` (nur lesend), `scripts/test`, `npm run watch` für die Karte.
 - `config/configuration.yaml` der Testinstanz bildet Stevens Fälle mit Helfern nach: ein lokaler Kalender „Abfallkalender“ mit Terminen Papier/Bio/Rest/Gelb, ein Kalender „Kult61“ mit „Dienst: …“-Terminen, `input_boolean` als Stand-ins für Anwesenheit, Haustür und Lampe, `light` per Template/Demo-Plattform zum Blinken.
 - **Niemals mit Stevens produktivem Home Assistant verbinden oder ihn verändern.** Steven installiert Läutwerk selbst über HACS, sobald ein Release existiert.
 - Zeitabhängige Tests mit eingefrorener Zeit (`freezer`, `async_fire_time_changed`); Sommer-/Winterzeit-Tage (letzter Sonntag im März/Oktober, Europe/Berlin) sind Pflicht.
@@ -82,6 +82,39 @@ Steven arbeitet ggf. abwechselnd mit **Claude Fable 5.1** (Architektur, Engine, 
 - Keine großen UI-Bibliotheken; HA-eigene Elemente (`ha-selector`, `ha-icon`, `ha-switch`, `ha-dialog`, Aktions-/Bedingungs-/Trigger-Editor) nutzen, mit Fallback.
 - Keine Zahlen in Doku/README erfinden (Bundle-Größe usw.) – messen.
 - Keinen Sprachassistenten-/Assist-Teil bauen (bewusst ausgeschlossen).
+
+## A8. Orchestrierung mit Subagenten
+
+Die Hauptsitzung (Opus / Fable) ist **Orchestration-Lead**: Sie plant, zerlegt Aufgaben, delegiert schreibenden Code an Subagenten, lässt prüfen und **committet selbst – erst nach grünen Checks**. Subagenten liegen in `.claude/agents/`:
+
+| Agent | Modell | Domäne | Darf |
+|---|---|---|---|
+| `ha-backend` | sonnet | `custom_components/laeutwerk/**` (ohne gebautes `frontend/`), `tests/**`, `scripts/*.py` | Code + Tests schreiben, `git add` |
+| `lovelace-frontend` | sonnet | `frontend/src/**`, `frontend/tests/**` | Code + Tests schreiben, `git add` |
+| `tester` | haiku | ganzes Repo, nur lesend | Checks ausführen, berichten |
+
+Ablauf je Aufgabe:
+1. Plan kurz in `docs/TASKS.md` festhalten (offene Aufgabe), bei Bedarf in Backend- und Frontend-Teil zerlegen; Schnittstelle (Datenformat, WebSocket-Typ, Feldnamen) im Auftrag an beide Agenten **ausdrücklich** nennen.
+2. Auftrag an den Agenten: Ziel, betroffene Dateien/Funktionen, erwartete Tests, Akzeptanzkriterien. Unabhängige Aufträge parallel starten.
+3. `tester` ausführen lassen (`scripts/check` + `npm run build`). Rot → gezielter Fix-Auftrag an den zuständigen Agenten.
+4. Orchestrator prüft den Diff (`git diff --staged`), sichtet UI-Änderungen bei Bedarf im echten Frontend (`scripts/check_card.py`, lokale Testinstanz), pflegt Doku (`README.md`, `CHANGELOG.md`, `docs/*`, Versionen) und committet nach Conventional Commits; Push/Tag/Release wie in A2.
+
+Regeln für alle Subagenten: nur in der eigenen Domäne arbeiten; **niemals `git commit`, `git push`, `git tag` oder Branch-/History-Befehle**; nie Stevens produktives Home Assistant ansprechen; `config/.storage` und Secrets nie lesen. Kleine, klar umrissene Aufgaben (Architektur und knifflige Engine-Logik behält der Orchestrator).
+
+Befehle (aus dem Repo-Root):
+
+| Zweck | Befehl |
+|---|---|
+| Setup | `scripts/setup` (`.venv` mit Python ≥ 3.14, `npm ci`) |
+| Formatieren + Autofix | `scripts/lint` (ändert Dateien) |
+| Alle Checks, nur lesend | `scripts/check` (ruff format --check, ruff check, prettier --check, eslint, tsc, pytest, vitest) |
+| Tests | `scripts/test` (pytest + vitest) |
+| Karte bauen | `cd frontend && npm run build` (bzw. `npm run watch`) |
+| Übersetzungen erzeugen | `python scripts/build_translations.py` |
+| Lokale HA-Testinstanz | `scripts/develop` → `http://localhost:8123` |
+| Echtes Frontend prüfen | `python scripts/check_card.py <ausgabeordner>` (Testinstanz muss laufen) |
+
+Token-Schutz: `.claude/settings.json` sperrt das Lesen von `.venv`, `node_modules`, Caches, gebautem Bundle, `config/.storage` und Logs (`.claudeignore` dokumentiert dieselbe Liste; beide synchron halten).
 
 ---
 

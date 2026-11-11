@@ -1,0 +1,34 @@
+# Paths Claude should not read (keeps the context small and secrets out).
+# Note: Claude Code does not read this file itself – the effective rules are
+# the "deny" entries in .claude/settings.json. Keep both lists in sync.
+
+# Version control
+.git/
+
+# Python
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / build output
+node_modules/
+dist/
+coverage/
+custom_components/laeutwerk/frontend/*.js
+custom_components/laeutwerk/frontend/*.js.map
+
+# Local HA dev instance (auth tokens, databases, logs) – only configuration.yaml matters
+config/.storage/
+config/*.db
+config/*.db-*
+config/*.log*
+config/custom_components/
+config/tts/
+config/deps/
+
+# Logs
+*.log

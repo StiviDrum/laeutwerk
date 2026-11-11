@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Read-only checks (no file changes): format check, lint, typecheck, tests.
+# Use this to verify; use scripts/lint to auto-fix formatting.
+set -e
+source "$(dirname "$0")/_venv"
+ruff format --check .
+ruff check .
+(cd frontend && npm run format:check && npm run lint && npm run typecheck)
+python -m pytest -q "$@"
+(cd frontend && npm test)

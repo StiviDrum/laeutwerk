@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.git/**)",
+      "Read(./.venv/**)",
+      "Read(./**/__pycache__/**)",
+      "Read(./.pytest_cache/**)",
+      "Read(./.ruff_cache/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/dist/**)",
+      "Read(./frontend/coverage/**)",
+      "Read(./custom_components/laeutwerk/frontend/*.js)",
+      "Read(./custom_components/laeutwerk/frontend/*.js.map)",
+      "Read(./config/.storage/**)",
+      "Read(./config/*.db)",
+      "Read(./config/*.db-*)",
+      "Read(./config/*.log*)",
+      "Read(./config/custom_components/**)",
+      "Read(./config/deps/**)",
+      "Read(./**/*.log)"
+    ]
+  }
+}
