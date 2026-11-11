@@ -236,3 +236,13 @@ describe("0.6 helpers", () => {
     expect(signalSummary(toAssignee, de)).toBe("sofort · an Zuständige");
   });
 });
+
+describe("push recipients", () => {
+  it("summarises chosen persons, also only when home", () => {
+    const base = { ...defaultSignal("notify", rule()), persons: ["person.steven", "person.anna"] };
+    expect(signalSummary({ ...base, audience: "persons" }, de)).toBe("sofort · an steven, anna");
+    expect(signalSummary({ ...base, audience: "persons", only_present: true }, de)).toBe(
+      "sofort · an steven, anna (nur Anwesende)",
+    );
+  });
+});

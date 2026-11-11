@@ -35,6 +35,7 @@ export interface Signal {
   // notify
   targets?: string[];
   audience?: "all" | "present" | "persons" | "assignee";
+  only_present?: boolean;
   stage?: number;
   persons?: string[];
   title?: string;
@@ -151,6 +152,14 @@ export interface Rule {
   assignee?: { persons: string[]; rotation?: Rotation } | null;
   escalation?: { after: string }[];
   status?: RuleStatus;
+}
+
+export interface PersonInfo {
+  entity_id: string;
+  name: string;
+  state: string;
+  /** Notify actions of the person's phones with the companion app. */
+  notify: string[];
 }
 
 export type Rotation = "fixed" | "weekly" | "per_event" | "after_last";

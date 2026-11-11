@@ -105,8 +105,10 @@ A rule can have any number of signals. Every signal has a type, optional
 signals:
   - id: push
     type: notify
-    audience: present            # all | present | persons (+ persons: [person.x])
-    targets: [notify.mobile_app_tablet]   # optional, in addition to the audience
+    audience: persons            # all | present | persons | assignee
+    persons: [person.steven, person.anna]   # their phones (companion app)
+    only_present: true           # only those of them who are at home
+    targets: [notify.alexa_media_kueche]    # optional: further notify actions
     title: "{wann}: {tonnen}"
     message: "Bitte heute Abend rausstellen."
     actions:
@@ -165,8 +167,10 @@ fires while the reminder is open:
 `{person}` is who came home or operated the device, as far as Home Assistant
 knows it. The triggers are only listened to while a reminder is open.
 
-- **Push audience:** the mobile app devices of all persons, of the persons who
-  are at home, or of the listed persons.
+- **Push recipients:** in the card you simply tick persons; Läutwerk sends to
+  their phones (companion app; persons without one are flagged). Optionally
+  only to those who are at home, or to the responsible person. Notify actions
+  are only needed for other devices.
 - **Light:** German and English colour names, `#rrggbb` or `r,g,b`. Lamps
   without colour just blink. A lamp that was off is switched off again.
 - **Announcement:** played with `announce: true`, so players that support it

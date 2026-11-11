@@ -8,7 +8,13 @@ logbook:
 system_log:
 calendar:
 tag:
+# Persons for push recipients (no phones in the dev instance: the card
+# shows "no companion app" for them).
 person:
+  - name: Steven
+    id: steven
+  - name: Anna
+    id: anna
 zone:
 mobile_app:
 

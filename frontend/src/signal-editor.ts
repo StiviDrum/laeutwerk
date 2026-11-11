@@ -8,7 +8,15 @@ import { property, state } from "lit/decorators.js";
 import { SIGNAL_ICONS, availableVariables, defaultSignal, renderTemplate } from "./format";
 import type { Localizer, StringKey } from "./localize";
 import { shared, tokens } from "./styles";
-import type { HaConfig, HomeAssistant, PushButton, QuietTime, Rule, Signal } from "./types";
+import type {
+  HaConfig,
+  HomeAssistant,
+  PersonInfo,
+  PushButton,
+  QuietTime,
+  Rule,
+  Signal,
+} from "./types";
 
 const TYPES: Signal["type"][] = ["notify", "light_signal", "announce", "action"];
 /** Shared empty list: a new [] on every render would look like a new value. */
@@ -38,6 +46,19 @@ export class LaeutwerkSignalEditor extends LitElement {
   @state() private _yamlError?: string;
   @state() private _testState?: string;
   @state() private _focus = "message";
+  /** Persons with their phones (laeutwerk/persons), loaded once. */
+  @state() private _persons?: PersonInfo[];
+  @state() private _showTargets = false;
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    if (this._persons === undefined && this.hass) {
+      this.hass
+        .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
+        .then((res) => (this._persons = res.persons))
+        .catch(() => (this._persons = []));
+    }
+  }
 
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("signal") && this.signal) {
@@ -258,55 +279,8 @@ export class LaeutwerkSignalEditor extends LitElement {
     const setButtons = (nextAck?: PushButton, nextSnooze?: PushButton) =>
       this._set({ actions: [nextAck, nextSnooze].filter((b): b is PushButton => !!b) });
     return html`
-      <label class="field"
-        >${l.t("audience")}
-        <select
-          .value=${s.audience ?? ""}
-          @change=${(e: Event) =>
-            this._set({
-              audience: ((e.target as HTMLSelectElement).value || undefined) as Signal["audience"],
-            })}
-        >
-          ${(
-            ["", "all", "present", "persons", ...(this.rule.assignee ? ["assignee"] : [])] as const
-          ).map(
-            (a) =>
-              html`<option value=${a} ?selected=${(s.audience ?? "") === a}>
-                ${l.t(a ? (`audience_${a}` as StringKey) : "audience_none")}
-              </option>`,
-          )}
-        </select>
-      </label>
-      ${
-        s.audience === "persons"
-          ? html`<laeutwerk-field
-              .hass=${this.hass}
-              .localize=${l}
-              .label=${l.t("persons")}
-              .selector=${{ entity: { domain: "person", multiple: true } }}
-              .value=${s.persons ?? EMPTY}
-              @value-changed=${(e: CustomEvent<{ value: string[] }>) =>
-                this._set({ persons: e.detail.value })}
-            ></laeutwerk-field>`
-          : nothing
-      }
-      <label class="field"
-        >${l.t("targets")}
-        <input
-          .value=${(s.targets ?? []).join(", ")}
-          placeholder="notify.mobile_app_…"
-          @change=${(e: Event) => {
-            const targets = (e.target as HTMLInputElement).value
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean);
-            this._set({ targets: targets.length ? targets : undefined });
-          }}
-        />
-        <span class="hint">${l.t("targets_hint")}</span>
-      </label>
-      ${this._text("title", l.t("push_title"))} ${this._text("message", l.t("push_message"), true)}
-      ${this._variables(false)}
+      ${this._recipients()} ${this._text("title", l.t("push_title"))}
+      ${this._text("message", l.t("push_message"), true)} ${this._variables(false)}
       <div class="sublabel">${l.t("push_buttons")}</div>
       ${this._toggle(l.t("btn_done"), !!ack, (v) =>
         setButtons(
@@ -344,6 +318,110 @@ export class LaeutwerkSignalEditor extends LitElement {
               />
             </div>`
           : nothing
+      }
+    `;
+  }
+
+  /** Push recipients: tick persons (their phones), optionally only who is home. */
+  private _recipients(): TemplateResult {
+    const l = this._l;
+    const s = this._sig;
+    const persons = this._persons ?? [];
+    const all = persons.map((p) => p.entity_id);
+    const toAssignee = s.audience === "assignee";
+    const ticked =
+      s.audience === "all" || s.audience === "present"
+        ? all
+        : s.audience === "persons"
+          ? (s.persons ?? [])
+          : [];
+    const onlyPresent = s.audience === "present" || !!s.only_present;
+    const setPersons = (next: string[], present: boolean) =>
+      this._set(
+        next.length
+          ? { audience: "persons", persons: next, only_present: present || undefined }
+          : { audience: undefined, persons: undefined, only_present: undefined },
+      );
+    const showTargets = this._showTargets || !!s.targets?.length;
+    return html`
+      <div class="sublabel">${l.t("recipients")}</div>
+      ${
+        this.rule.assignee
+          ? this._toggle(l.t("push_to_assignee"), toAssignee, (v) =>
+              v
+                ? this._set({ audience: "assignee", persons: undefined, only_present: undefined })
+                : setPersons(all, onlyPresent),
+            )
+          : nothing
+      }
+      ${
+        toAssignee
+          ? nothing
+          : html`
+              ${
+                this._persons === undefined
+                  ? html`<div class="hint">${l.t("loading")}</div>`
+                  : persons.length
+                    ? html`<div class="persons">
+                        ${persons.map((p) => {
+                          const on = ticked.includes(p.entity_id);
+                          return html`<button
+                            class="person"
+                            role="checkbox"
+                            aria-checked=${on}
+                            @click=${() =>
+                              setPersons(
+                                on
+                                  ? ticked.filter((id) => id !== p.entity_id)
+                                  : [...ticked, p.entity_id],
+                                onlyPresent,
+                              )}
+                          >
+                            <span class="box"
+                              >${on ? html`<ha-icon icon="mdi:check"></ha-icon>` : nothing}</span
+                            >
+                            <span class="grow text">
+                              <span class="pname">${p.name}</span>
+                              <span class="sub ${p.notify.length ? "" : "warn"}">
+                                ${
+                                  p.notify.length
+                                    ? p.notify
+                                        .map((t) => t.replace("notify.mobile_app_", ""))
+                                        .join(", ")
+                                    : l.t("no_app")
+                                }
+                              </span>
+                            </span>
+                          </button>`;
+                        })}
+                      </div>`
+                    : html`<div class="hint">${l.t("no_persons")}</div>`
+              }
+              ${this._toggle(l.t("only_present"), onlyPresent, (v) => setPersons(ticked, v))}
+            `
+      }
+      ${
+        showTargets
+          ? html`<label class="field"
+              >${l.t("targets")}
+              <input
+                .value=${(s.targets ?? []).join(", ")}
+                placeholder="notify.alexa_media_…"
+                @change=${(e: Event) => {
+                  const targets = (e.target as HTMLInputElement).value
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean);
+                  this._set({ targets: targets.length ? targets : undefined });
+                }}
+              />
+              <span class="hint">${l.t("targets_hint")}</span>
+            </label>`
+          : html`<div class="wrap">
+              <button class="chip dashed" @click=${() => (this._showTargets = true)}>
+                <ha-icon icon="mdi:plus"></ha-icon>${l.t("more_targets")}
+              </button>
+            </div>`
       }
     `;
   }
@@ -671,6 +749,52 @@ export class LaeutwerkSignalEditor extends LitElement {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 8px;
+      }
+      .persons {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .person {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 48px;
+        text-align: left;
+        width: 100%;
+        padding: 0 4px;
+      }
+      .box {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        border: 2px solid var(--lw-text-2);
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+      }
+      .person[aria-checked="true"] .box {
+        background: var(--lw-accent);
+        border-color: var(--lw-accent);
+        color: var(--lw-on-accent);
+      }
+      .box ha-icon {
+        --mdc-icon-size: 16px;
+      }
+      .text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .pname {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .warn {
+        color: var(--lw-danger);
       }
       .tile {
         min-height: 64px;

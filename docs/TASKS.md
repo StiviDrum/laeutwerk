@@ -113,6 +113,14 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Note for shell use: `pkill -f` / `pgrep -f` with a pattern that appears in the own command line kill the own shell – use `pgrep -f "[b]in/hass --config"`.
   - Bundle: 31 KB gzip.
 
+## 0.6.1 – Feedback Steven (test of 0.5.0)
+- [x] Editor reset all edits regularly
+  - Cause: the signal editor assigned its edits to the `signal` property passed by the rule editor; Lit re-sets object properties on every parent render (`!isPrimitive(value)` always commits), and the card re-renders the editor on every hass update → original signal restored. Rule: **child elements never write their input properties**; edit a copy in `@state` (`_sig`), emit events. `laeutwerk-field` no longer writes `value`; empty lists use a shared constant.
+  - Reproduced and verified in the real frontend; `scripts/check_card.py` now types into the signal editor and posts state changes (fails if the edit is lost).
+- [x] Push recipients by ticking persons instead of notify actions
+  - `laeutwerk/persons` lists persons with their companion-app notify actions; signal option `only_present` for `audience: persons`. Notify actions only as optional extra field.
+- [x] Release v0.6.1
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

@@ -25,6 +25,7 @@ from .manager import (
 from .matching import build_occurrences
 from .model import Rule
 from .schema import validate_rule
+from .signals import person_notify_targets
 from .sources import async_fetch_events
 from .timespec import local_instant
 
@@ -408,6 +409,24 @@ async def ws_import(
     )
 
 
+@websocket_api.websocket_command({vol.Required("type"): "laeutwerk/persons"})
+@callback
+def ws_persons(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Persons with the phones (mobile app notify actions) a push reaches."""
+    persons = [
+        {
+            "entity_id": state.entity_id,
+            "name": state.name,
+            "state": state.state,
+            "notify": person_notify_targets(hass, state),
+        }
+        for state in sorted(hass.states.async_all("person"), key=lambda s: s.name)
+    ]
+    connection.send_result(msg["id"], {"persons": persons})
+
+
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
@@ -426,5 +445,6 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_templates_delete,
         ws_export,
         ws_import,
+        ws_persons,
     ):
         websocket_api.async_register_command(hass, command)

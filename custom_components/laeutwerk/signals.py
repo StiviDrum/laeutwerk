@@ -221,6 +221,7 @@ def notify_targets(
             state
             for entity_id in config.get("persons", [])
             if (state := hass.states.get(entity_id)) is not None
+            and (not config.get("only_present") or state.state == "home")
         ]
     for person in persons:
         for target in person_notify_targets(hass, person):

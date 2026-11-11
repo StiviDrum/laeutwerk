@@ -202,7 +202,8 @@ export function signalSummary(signal: Signal, l: Localizer): string {
           : signal.audience === "present"
             ? l.t("audience_present")
             : signal.audience === "persons"
-              ? (signal.persons ?? []).map((p) => p.replace("person.", "")).join(", ")
+              ? (signal.persons ?? []).map((p) => p.replace("person.", "")).join(", ") +
+                (signal.only_present ? ` (${l.t("audience_present")})` : "")
               : (signal.targets ?? [])
                   .map((t) => t.replace(/^notify\.(mobile_app_)?/, ""))
                   .join(", ");

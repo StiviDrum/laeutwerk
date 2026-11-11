@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-11
+
+### Fixed
+- Card: edits in the signal editor were reset to the previous values on
+  every Home Assistant state change, so signals could hardly be edited.
+
+### Changed
+- Push recipients: tick persons in the signal editor (their companion app
+  phones get the push; persons without the app are flagged), optionally
+  "only who is at home". Notify actions moved to an optional field for other
+  devices. New signal option `only_present` for `audience: persons`.
+
+### Added
+- Websocket `laeutwerk/persons` (persons with their notify actions).
+
 ## [0.6.0] - 2026-11-11
 
 ### Added

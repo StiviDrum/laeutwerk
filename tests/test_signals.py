@@ -579,3 +579,83 @@ async def test_test_signal_service(
         await test(
             config={"type": "notify", "targets": ["notify.nobody"], "message": "x"}
         )
+
+
+async def _persons(hass: HomeAssistant) -> dict[str, list[ServiceCall]]:
+    """Steven (phone, home), Anna (phone, away), Gast (no app, home)."""
+    registry = er.async_get(hass)
+    phones: dict[str, list[ServiceCall]] = {}
+    for person, device, where in (
+        ("steven", "Stevens Handy", "home"),
+        ("anna", "Annas iPhone", "not_home"),
+        ("gast", None, "home"),
+    ):
+        trackers = []
+        if device:
+            entry = MockConfigEntry(domain="mobile_app", data={"device_name": device})
+            entry.add_to_hass(hass)
+            trackers.append(
+                registry.async_get_or_create(
+                    "device_tracker", "mobile_app", person, config_entry=entry
+                ).entity_id
+            )
+            service = f"mobile_app_{device.lower().replace(' ', '_')}"
+            phones[person] = async_mock_service(hass, "notify", service)
+        hass.states.async_set(
+            f"person.{person}",
+            where,
+            {"friendly_name": person.capitalize(), "device_trackers": trackers},
+        )
+    return phones
+
+
+async def test_chosen_persons_only_when_home(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, pushes: list[ServiceCall]
+) -> None:
+    phones = await _persons(hass)
+    chosen = ["person.steven", "person.anna"]
+    await start(
+        hass,
+        freezer,
+        {
+            "type": "notify",
+            "message": "x",
+            "audience": "persons",
+            "persons": chosen,
+            "id": "a",
+        },
+        {
+            "type": "notify",
+            "message": "y",
+            "audience": "persons",
+            "persons": chosen,
+            "only_present": True,
+            "id": "b",
+        },
+    )
+    await tick(hass, freezer, at(MON, 17, 0))
+    assert sorted(c.data["message"] for c in phones["steven"]) == ["x", "y"]
+    assert [c.data["message"] for c in phones["anna"]] == ["x"]
+
+
+async def test_persons_websocket(hass: HomeAssistant, hass_ws_client) -> None:
+    await _persons(hass)
+    await setup_integration(hass)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "laeutwerk/persons"})
+    result = (await ws.receive_json())["result"]["persons"]
+    assert result == [
+        {
+            "entity_id": "person.anna",
+            "name": "Anna",
+            "state": "not_home",
+            "notify": ["notify.mobile_app_annas_iphone"],
+        },
+        {"entity_id": "person.gast", "name": "Gast", "state": "home", "notify": []},
+        {
+            "entity_id": "person.steven",
+            "name": "Steven",
+            "state": "home",
+            "notify": ["notify.mobile_app_stevens_handy"],
+        },
+    ]

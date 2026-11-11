@@ -323,6 +323,8 @@ _SIGNAL_SCHEMAS = {
             vol.Optional("persons"): vol.All(
                 cv.ensure_list, [_domain_entity("person")]
             ),
+            # With audience "persons": only those of them who are at home.
+            vol.Optional("only_present"): cv.boolean,
             vol.Optional("title"): _text,
             vol.Optional("title_plural"): _text,
             vol.Required("message"): _non_empty,
