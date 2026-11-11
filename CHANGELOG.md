@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-11
+
 ### Added
 - NFC tag ids may use variables of the keyword table
   (`acknowledge: [{type: tag, tag_id: "{nfc}"}]`): only the tag of the bin
