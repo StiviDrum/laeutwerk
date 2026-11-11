@@ -3,9 +3,9 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.3 contains the complete engine (rules,
-> reminders, all signal types, opportunities, snooze, entities, services); the card to edit rules follows in 0.4 – until
-> then rules are created with the `laeutwerk.create_rule` action. See
+> **Status:** early development. 0.4 contains the engine and the card with
+> the rule editor; rules can also be created with the
+> `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
 A *rule* describes an occasion: which calendar, which events (keyword table),
@@ -217,6 +217,34 @@ Events on the bus: `laeutwerk_reminded`, `laeutwerk_signal_sent`,
 `laeutwerk_acknowledged`, `laeutwerk_missed` (data: `rule_id`, `reminder_id`,
 `titles`, `variables`, …).
 
+## Card
+
+The card registers itself – add it to a dashboard via *Add card → Läutwerk*
+or in YAML:
+
+```yaml
+type: custom:laeutwerk-card
+view: overview        # overview | rule
+rule: muell           # with view: rule
+rules: [muell, kult61]   # optional filter for the overview
+show_upcoming: true
+show_done: true
+compact: false        # one line for the top of a dashboard
+```
+
+- **Today & upcoming:** open reminders with *Later* (3 h) and the done button
+  of the rule, upcoming reminders, today's finished ones ("done by Steven ·
+  20:41 · NFC tag"), "All done" when nothing is open. Updates live.
+- **Rule editor** (administrators, *+* or tap a rule): calendar, keyword table
+  with free columns (scrolls sideways), live preview of the next matches,
+  reminder times, repeat, signals, ways to acknowledge, bundling and expiry.
+- **Signal editor:** type, *immediately / on opportunity* with Home
+  Assistant's trigger editor, *only if* with the condition editor, the fields
+  of the type with variable chips and a text preview, limits and quiet times,
+  *Test* and *Edit as YAML*.
+
+The card bundle is 26 KB gzipped (measured with `gzip -9` on 0.4.0).
+
 ## Development
 
 Requires Python ≥ 3.14.2 and Node ≥ 20 (WSL2/Linux).
@@ -227,6 +255,11 @@ scripts/develop    # local Home Assistant on http://localhost:8123 using ./confi
 scripts/lint       # ruff + eslint + prettier
 scripts/test       # pytest + vitest
 ```
+
+Card preview without Home Assistant (mocked data): `npm run build` in
+`frontend/`, then `python3 -m http.server 8000` in the repo root and open
+`http://localhost:8000/frontend/dev/preview.html` (`?page=editor`, `signal`,
+`compact`, `rule`, `done`, `empty`; `?theme=light`, `?lang=en`, `?admin=0`).
 
 The dev instance comes with two seeded local calendars ("Abfallkalender",
 "Kult61") and helper stand-ins for presence, the front door and a lamp.
@@ -242,10 +275,9 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.3 enthält die komplette Logik (Regeln,
-> Erinnerungen, alle Signal-Arten, Gelegenheiten, Snooze, Entitäten, Dienste); die Karte zum Bearbeiten folgt mit 0.4 –
-> bis dahin legst du Regeln mit der Aktion `laeutwerk.create_rule` an (Beispiel
-> oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
+> **Status:** frühe Entwicklung. 0.4 enthält die komplette Logik und die Karte
+> mit Regel-Editor; Regeln legst du in der Karte an (*+*) oder
+> mit der Aktion `laeutwerk.create_rule` (Beispiel oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 
 Eine *Regel* beschreibt einen Anlass: welcher Kalender, welche Termine
 (Stichwort-Tabelle), wann erinnern, welche Signale (Push, Licht, Ansage,

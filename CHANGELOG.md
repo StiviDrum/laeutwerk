@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
+### Added
+- Card `custom:laeutwerk-card`: "today & upcoming" overview with open,
+  upcoming and finished reminders, *Later* and done buttons, colour dots,
+  empty state, rule list with on/off switches; single rule view; compact line.
+- Rule editor in the card: calendar, keyword table with free columns
+  (horizontally scrollable), live preview, reminder times, repeat, signals,
+  ways to acknowledge, bundling, expiry.
+- Signal editor with Home Assistant's trigger, condition and action editors,
+  variable chips, text preview, limits, quiet times, test and YAML view.
+- Websocket API `laeutwerk/rules/list|get|create|update|duplicate|delete|subscribe`
+  and `laeutwerk/preview` (also for unsaved rules).
+
 ## [0.3.0] - 2026-11-11
 
 ### Added

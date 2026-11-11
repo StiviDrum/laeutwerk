@@ -64,10 +64,19 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.3.0
 
 ## 0.4 – Karte
-- [ ] Ansicht „Heute & demnächst“ inkl. Leerzustand, Live-Updates
-- [ ] Regel-Editor mit Stichwort-Tabelle (horizontal scrollbar), Vorschau (`laeutwerk/preview`), Signal-Liste
-- [ ] Signal-Editor mit HA-Trigger-/Bedingungs-/Aktions-Editor, YAML-Ansicht
-- [ ] Release v0.4.0 → Steven kann die Müll-Regel parallel zur bestehenden Automation testen
+- [x] Ansicht „Heute & demnächst“ inkl. Leerzustand, Live-Updates
+  - One `laeutwerk/rules/subscribe` per card (unsubscribed in `disconnectedCallback`); rule status (reminders with variables, colours, next times) comes with every rule. `shouldUpdate` ignores `hass` updates (only language/theme/admin), except while the editor is open (entity pickers).
+  - "Later" = `laeutwerk.snooze` 3 h; done = `laeutwerk.acknowledge` with the reminder id and the user's name.
+  - Colour dots: column of the light signal's `color_from`, else a column named farbe/color (backend `hit_colors`, German names → hex).
+- [x] Regel-Editor mit Stichwort-Tabelle (horizontal scrollbar), Vorschau (`laeutwerk/preview`), Signal-Liste
+  - Preview works for unsaved rules (debounced 500 ms). Renaming a column also renames it in the rows and in `color_from`.
+- [x] Signal-Editor mit HA-Trigger-/Bedingungs-/Aktions-Editor, YAML-Ansicht
+  - `laeutwerk-field` wraps `ha-selector` (trigger/condition/action/entity/icon/object) and falls back to text/JSON fields when HA's selectors are not loaded (preview page).
+  - Test uses `laeutwerk.test_signal` with the unsaved signal config (needs a saved rule).
+- [x] Release v0.4.0 → Steven kann die Müll-Regel parallel zur bestehenden Automation testen
+  - Layout checked with `frontend/dev/preview.html` (mocked hass) in headless Chromium at 390 px, dark + light: overview, editor, signal editor, compact, empty. Fixed: overflowing footer, squeezed rows.
+  - **Not yet checked inside a real Home Assistant frontend:** the HA trigger/condition/action editors inside the card (`ha-selector`) – first thing to verify on Steven's system / in the dev instance.
+  - Bundle: 26 KB gzip.
 
 ## 0.5 – Feinschliff
 - [ ] Verlauf je Regel, Kompakt-Modus, visueller Karteneditor
