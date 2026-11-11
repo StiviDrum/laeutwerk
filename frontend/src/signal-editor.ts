@@ -369,7 +369,7 @@ export class LaeutwerkSignalEditor extends LitElement {
                 this._persons === undefined
                   ? html`<div class="hint">${l.t("loading")}</div>`
                   : persons.length
-                    ? html`<div class="persons">
+                    ? html`<div class="persons divided">
                         ${persons.map((p) => {
                           const on = ticked.includes(p.entity_id);
                           return html`<button
@@ -670,33 +670,35 @@ export class LaeutwerkSignalEditor extends LitElement {
         </label>
       </div>
       <div class="sublabel">${l.t("quiet_times")}</div>
-      ${quiet.map(
-        (q, i) =>
-          html`<div class="row quiet">
-            <input
-              type="time"
-              .value=${q.from}
-              @change=${(e: Event) => setQuiet(i, { from: (e.target as HTMLInputElement).value })}
-            />
-            <span>–</span>
-            <input
-              type="time"
-              .value=${q.to}
-              @change=${(e: Event) => setQuiet(i, { to: (e.target as HTMLInputElement).value })}
-            />
-            <select
-              class="grow"
-              @change=${(e: Event) =>
-                setQuiet(i, { mode: (e.target as HTMLSelectElement).value as QuietTime["mode"] })}
-            >
-              <option value="skip" ?selected=${q.mode !== "defer"}>${l.t("quiet_skip")}</option>
-              <option value="defer" ?selected=${q.mode === "defer"}>${l.t("quiet_defer")}</option>
-            </select>
-            <button class="mini" aria-label=${l.t("remove")} @click=${() => setQuiet(i, null)}>
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-          </div>`,
-      )}
+      <div class="divided">
+        ${quiet.map(
+          (q, i) =>
+            html`<div class="row quiet">
+              <input
+                type="time"
+                .value=${q.from}
+                @change=${(e: Event) => setQuiet(i, { from: (e.target as HTMLInputElement).value })}
+              />
+              <span>–</span>
+              <input
+                type="time"
+                .value=${q.to}
+                @change=${(e: Event) => setQuiet(i, { to: (e.target as HTMLInputElement).value })}
+              />
+              <select
+                class="grow"
+                @change=${(e: Event) =>
+                  setQuiet(i, { mode: (e.target as HTMLSelectElement).value as QuietTime["mode"] })}
+              >
+                <option value="skip" ?selected=${q.mode !== "defer"}>${l.t("quiet_skip")}</option>
+                <option value="defer" ?selected=${q.mode === "defer"}>${l.t("quiet_defer")}</option>
+              </select>
+              <button class="mini" aria-label=${l.t("remove")} @click=${() => setQuiet(i, null)}>
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>`,
+        )}
+      </div>
       <div class="wrap">
         <button
           class="chip dashed"

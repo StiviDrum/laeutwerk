@@ -425,7 +425,7 @@ export class LaeutwerkCard extends LitElement {
       ${
         cfg.show_upcoming && overview.upcoming.length
           ? html`<div class="separator">${l.t("section_upcoming")}<span class="line"></span></div>
-              <div class="list quiet">
+              <div class="list quiet divided">
                 ${overview.upcoming.map(({ rule, reminder }) => this._upcomingRow(rule, reminder))}
               </div>`
           : nothing
@@ -433,7 +433,7 @@ export class LaeutwerkCard extends LitElement {
       ${
         cfg.show_done && overview.done.length
           ? html`<div class="separator">${l.t("section_done")}<span class="line"></span></div>
-              <div class="list quiet">
+              <div class="list quiet divided">
                 ${overview.done.map(({ rule, reminder }) => this._doneRow(rule, reminder))}
               </div>`
           : nothing
@@ -684,7 +684,7 @@ export class LaeutwerkCard extends LitElement {
             />`
           : nothing
       }
-      <div class="list">
+      <div class="divided">
         ${rules.map((rule, index) => {
           if (this._sorting) {
             return html`<div class="row item">
@@ -763,7 +763,7 @@ export class LaeutwerkCard extends LitElement {
     return html`<div class="separator">${l.t("section_history")}<span class="line"></span></div>
       ${
         entries.length
-          ? html`<div class="list quiet">
+          ? html`<div class="list quiet divided">
               ${entries.map(
                 (entry) =>
                   html`<div class="row item finished">

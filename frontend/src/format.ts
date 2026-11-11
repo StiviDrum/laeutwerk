@@ -281,31 +281,76 @@ export function availableVariables(rule: Rule, opportunity = false): string[] {
 }
 
 /** "blinkt bei Gelegenheit · max. 1× · nicht 0–10 Uhr". */
+/** Default stage colours (stage 1, 2, …) when a stage has none of its own. */
+export const STAGE_COLORS = ["#ffb020", "#ff5a6e", "#c58cff", "#6fa8ff", "#4ad295"];
+
+/** Colour of an escalation stage; null for stage 0 (from the start). */
+export function stageColor(rule: Rule, stage: number | undefined): string | null {
+  if (!stage) return null;
+  return rule.escalation?.[stage - 1]?.color ?? STAGE_COLORS[(stage - 1) % STAGE_COLORS.length];
+}
+
+function entityIdsIn(node: unknown, found: string[]): void {
+  if (Array.isArray(node)) {
+    node.forEach((item) => entityIdsIn(item, found));
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "entity_id") {
+        for (const id of Array.isArray(value) ? value : [value]) {
+          if (typeof id === "string" && id.includes(".") && !id.includes("{")) found.push(id);
+        }
+      } else {
+        entityIdsIn(value, found);
+      }
+    }
+  }
+}
+
+/** Who / what a signal reaches, by name (lamps, speakers, persons, entities). */
+export function signalTargets(
+  signal: Signal,
+  l: Localizer,
+  names: (entityId: string) => string = (id) => id,
+): string[] {
+  if (signal.type === "light_signal") return (signal.entities ?? []).map(names);
+  if (signal.type === "announce") return (signal.players ?? []).map(names);
+  if (signal.type === "action") {
+    const found: string[] = [];
+    entityIdsIn(signal.actions, found);
+    return [...new Set(found)].map(names);
+  }
+  const who: string[] = [];
+  if (signal.audience === "assignee") who.push(l.t("audience_assignee"));
+  else if (signal.audience === "all") who.push(l.t("audience_all"));
+  else if (signal.audience === "present") who.push(l.t("audience_present"));
+  else if (signal.audience === "persons") {
+    const persons = (signal.persons ?? []).map(names).join(", ");
+    who.push(signal.only_present ? `${persons} (${l.t("audience_present")})` : persons);
+  }
+  for (const target of signal.targets ?? []) who.push(target.replace(/^notify\./, ""));
+  return who.filter(Boolean);
+}
+
+/** "Licht · Stehleuchte", "Push · Steven, Anna". */
+export function signalTitle(
+  signal: Signal,
+  l: Localizer,
+  names?: (entityId: string) => string,
+): string {
+  const type = l.t(`type_${signal.type}` as StringKey);
+  const targets = signalTargets(signal, l, names);
+  return targets.length ? `${type} · ${targets.join(", ")}` : type;
+}
+
+/** Short description below the title: when, pattern, limits, quiet times. */
 export function signalSummary(signal: Signal, l: Localizer): string {
   const bits: string[] = [];
   bits.push(signal.when === "now" ? l.t("s_now") : l.t("s_opportunity"));
-  if (signal.type === "notify") {
-    const who =
-      signal.audience === "assignee"
-        ? l.t("audience_assignee")
-        : signal.audience === "all"
-          ? l.t("audience_all")
-          : signal.audience === "present"
-            ? l.t("audience_present")
-            : signal.audience === "persons"
-              ? (signal.persons ?? []).map((p) => p.replace("person.", "")).join(", ") +
-                (signal.only_present ? ` (${l.t("audience_present")})` : "")
-              : (signal.targets ?? [])
-                  .map((t) => t.replace(/^notify\.(mobile_app_)?/, ""))
-                  .join(", ");
-    if (who) bits.push(l.t("s_to", { who }));
-  }
   if (signal.type === "light_signal") {
     bits.push(
       `${l.t(signal.pattern?.effect === "pulse" ? "effect_pulse" : "effect_blink")} ${signal.pattern?.count ?? 3}×`,
     );
   }
-  if (signal.stage) bits.push(l.t("stage_n", { n: signal.stage }));
   if (signal.limit?.per_reminder) bits.push(l.t("s_max", { n: signal.limit.per_reminder }));
   for (const quiet of signal.quiet ?? []) {
     bits.push(l.t("s_quiet", { from: shortClock(quiet.from), to: shortClock(quiet.to) }));

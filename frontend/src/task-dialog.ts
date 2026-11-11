@@ -237,7 +237,7 @@ export class LaeutwerkTaskDialog extends LitElement {
       ${
         others.length
           ? html`<div class="separator">${l.t("more_tasks")}<span class="line"></span></div>
-              <div class="list">
+              <div class="divided">
                 ${others.map(
                   (t) =>
                     html`<button
@@ -263,7 +263,7 @@ export class LaeutwerkTaskDialog extends LitElement {
       ${
         done.length
           ? html`<div class="separator">${l.t("done_already")}<span class="line"></span></div>
-              <div class="list">
+              <div class="divided">
                 ${done.map(
                   (t) =>
                     html`<button
@@ -287,7 +287,7 @@ export class LaeutwerkTaskDialog extends LitElement {
       ${
         admin
           ? html`<div class="separator">${l.t("section_rules")}<span class="line"></span></div>
-              <div class="list">
+              <div class="divided">
                 ${this.rules.map(
                   (rule) =>
                     html`<button

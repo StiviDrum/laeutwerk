@@ -242,7 +242,7 @@ assignee:
 # a signal with "stage: n" is active from that stage on.
 escalation:
   - {after: 2h}
-  - {after: "21:30"}
+  - {after: "21:30", color: "#c58cff"}   # optional colour of the stage in the card
 
 # Home Assistant actions when a reminder is acknowledged
 # (variables: person, via, titel, tonne … as in texts).
@@ -323,6 +323,9 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **One rule** (`view: rule`): the rule's reminders plus its history (last
   10 finished reminders: done by whom and how, or missed).
 - **Visual editor:** all options can be set in the dashboard's card editor.
+- **Signal list:** each signal shows what it reaches ("Light · Stehleuchte",
+  "Push · Steven, Anna"); signals of an escalation stage are marked in the
+  stage's colour (set per stage in step 7). Lists have thin dividers.
 - **Signal editor:** type, *immediately / on opportunity* with Home
   Assistant's trigger editor, *only if* with the condition editor, the fields
   of the type with variable chips and a text preview, limits and quiet times,
@@ -427,6 +430,10 @@ Feste und variable Tags lassen sich mischen.
   Regeln füllst du Schritt für Schritt („Weiter“). Fehlendes wird vor dem
   Speichern am jeweiligen Schritt angezeigt, ungespeicherte Änderungen
   brauchen eine Bestätigung und bleiben als Entwurf im Browser.
+- **Signale** zeigen, wen oder was sie erreichen („Licht · Stehleuchte“,
+  „Push · Steven, Anna“); Signale einer Eskalationsstufe sind in deren Farbe
+  markiert – die Farben legst du in Schritt 7 je Stufe fest. Listen haben
+  feine Trennlinien.
 - **Stichwörter** werden aus den Termintiteln des Kalenders vorgeschlagen,
   **NFC-Tags** aus den in Home Assistant angelernten Tags ausgewählt, und
   Signale lassen sich schon vor dem Speichern **testen**.

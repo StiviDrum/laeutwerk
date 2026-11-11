@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-11
+
+### Added
+- Escalation stages can have a colour (`escalation[].color`, picker in step 7);
+  signals of a stage are marked in that colour in the signal list.
+
+### Changed
+- The signal list names what each signal reaches ("Light · Stehleuchte",
+  "Push · Steven, Anna").
+- Lists in the editor, the card and the compact dialog have thin dividers.
+
 ## [0.7.3] - 2026-11-11
 
 ### Added

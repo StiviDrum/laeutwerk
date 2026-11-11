@@ -157,7 +157,7 @@ export interface Rule {
   } | null;
   on_done?: HaConfig[];
   assignee?: { persons: string[]; rotation?: Rotation } | null;
-  escalation?: { after: string }[];
+  escalation?: { after: string; color?: string }[];
   status?: RuleStatus;
 }
 

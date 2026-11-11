@@ -13,6 +13,8 @@ import {
   relativeDayTime,
   colName,
   colPlural,
+  signalTitle,
+  stageColor,
   columnNames,
   errorStep,
   ruleProblems,
@@ -164,6 +166,10 @@ export class LaeutwerkRuleEditor extends LitElement {
   private get _dirty(): boolean {
     return JSON.stringify(this._rule) !== this._initial;
   }
+
+  /** Display name of an entity (friendly name, else the id). */
+  private _names = (entityId: string): string =>
+    (this.hass?.states[entityId]?.attributes.friendly_name as string | undefined) ?? entityId;
 
   private _toggleStep(num: number): void {
     const open = new Set(this._open);
@@ -878,7 +884,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       ${errors.map(([entity, error]) => html`<div class="error">${entity}: ${error}</div>`)}
       ${
         preview.events.length
-          ? html`<div class="list">
+          ? html`<div class="divided">
               ${preview.events.map(
                 (e) =>
                   html`<div class="prev">
@@ -1054,31 +1060,40 @@ export class LaeutwerkRuleEditor extends LitElement {
       "step_signals",
       html`
         ${signals.length ? nothing : html`<div class="hint">${l.t("no_signals")}</div>`}
-        <div class="list">
-          ${signals.map(
-            (s, i) =>
-              html`<div class="sig">
-                <button class="sigmain" @click=${() => this._openSignal(i)}>
-                  <span class="icon small"><ha-icon .icon=${SIGNAL_ICONS[s.type]}></ha-icon></span>
-                  <span class="grow">
-                    <span class="name">${l.t(`type_${s.type}` as StringKey)}</span>
-                    <span class="sub">${signalSummary(s, l)}</span>
+        <div class="divided">
+          ${signals.map((s, i) => {
+            const color = stageColor(this._rule, s.stage);
+            return html`<div class="sig" style=${color ? `--stage: ${color}` : ""}>
+              <button class="sigmain" @click=${() => this._openSignal(i)}>
+                <span class="icon small ${color ? "staged" : ""}"
+                  ><ha-icon .icon=${SIGNAL_ICONS[s.type]}></ha-icon
+                ></span>
+                <span class="grow">
+                  <span class="name">${signalTitle(s, l, this._names)}</span>
+                  <span class="sub">
+                    ${
+                      color
+                        ? html`<span class="stagechip">${l.t("stage_n", { n: s.stage! })}</span>`
+                        : nothing
+                    }
+                    ${signalSummary(s, l)}
                   </span>
-                </button>
-                <button
-                  class="switch"
-                  role="switch"
-                  aria-checked=${s.enabled}
-                  aria-label=${l.t(`type_${s.type}` as StringKey)}
-                  @click=${() =>
-                    this._update({
-                      signals: signals.map((x, j) => (j === i ? { ...x, enabled: !x.enabled } : x)),
-                    })}
-                >
-                  <span></span>
-                </button>
-              </div>`,
-          )}
+                </span>
+              </button>
+              <button
+                class="switch"
+                role="switch"
+                aria-checked=${s.enabled}
+                aria-label=${l.t(`type_${s.type}` as StringKey)}
+                @click=${() =>
+                  this._update({
+                    signals: signals.map((x, j) => (j === i ? { ...x, enabled: !x.enabled } : x)),
+                  })}
+              >
+                <span></span>
+              </button>
+            </div>`;
+          })}
         </div>
         <div class="wrap">
           ${(["notify", "light_signal", "announce", "action"] as const).map(
@@ -1114,91 +1129,93 @@ export class LaeutwerkRuleEditor extends LitElement {
       5,
       "step_ack",
       html`
-        <div class="ackrow">
-          <ha-icon icon="mdi:cellphone-check"></ha-icon>
-          <span class="grow">${pushDone ? l.t("ack_push") : l.t("ack_push_none")}</span>
-        </div>
-        ${acks.map((a, i) => {
-          if (a.type === "notify_action") return nothing;
-          if (a.type === "tag") {
-            const scanned = a.tag_id ? lastScan(a.tag_id) : undefined;
-            return html`<div class="ackrow">
-              <ha-icon icon="mdi:nfc-variant"></ha-icon>
-              <div class="grow">
-                <input
-                  .value=${a.tag_id ?? ""}
-                  placeholder=${l.t("ack_tag_placeholder")}
-                  @input=${(e: Event) => setAt(i, { tag_id: (e.target as HTMLInputElement).value })}
-                  @change=${() => this._schedulePreview(300)}
-                  list="lw-known-tags"
-                />
-                ${this._knownTagChips((id) => {
-                  setAt(i, { tag_id: id });
-                  this._schedulePreview(300);
-                })}
-                ${
-                  this._rule.filter.keywords.columns.length
-                    ? html`<div class="wrap vars">
-                        ${tagVariables(this._rule).map(
-                          (name) =>
-                            html`<button
-                              class="chip"
-                              @click=${() => {
-                                setAt(i, { tag_id: `${a.tag_id ?? ""}{${name}}` });
-                                this._schedulePreview(300);
-                              }}
-                            >
-                              {${name}}
-                            </button>`,
-                        )}
-                      </div>`
-                    : nothing
-                }
-                ${
-                  templateVariables(a.tag_id).length
-                    ? html`<div class="hint">
-                        ${l.t("tag_variable_hint")}
-                        ${
-                          this._preview?.events[0]?.tags?.length
-                            ? html`<br />${l.t("tag_next", {
-                                  tags: this._preview.events[0].tags.join(", "),
-                                })}`
-                            : nothing
-                        }
-                      </div>`
-                    : nothing
-                }
-                ${
-                  scanned && scanned !== "unknown"
-                    ? html`<div class="hint">
-                        ${relativeDayTime(scanned, new Date(), l, this.hass?.config?.time_zone)}
-                      </div>`
-                    : nothing
-                }
+        <div class="divided">
+          <div class="ackrow">
+            <ha-icon icon="mdi:cellphone-check"></ha-icon>
+            <span class="grow">${pushDone ? l.t("ack_push") : l.t("ack_push_none")}</span>
+          </div>
+          ${acks.map((a, i) => {
+            if (a.type === "notify_action") return nothing;
+            if (a.type === "tag") {
+              const scanned = a.tag_id ? lastScan(a.tag_id) : undefined;
+              return html`<div class="ackrow">
+                <ha-icon icon="mdi:nfc-variant"></ha-icon>
+                <div class="grow">
+                  <input
+                    .value=${a.tag_id ?? ""}
+                    placeholder=${l.t("ack_tag_placeholder")}
+                    @input=${(e: Event) => setAt(i, { tag_id: (e.target as HTMLInputElement).value })}
+                    @change=${() => this._schedulePreview(300)}
+                    list="lw-known-tags"
+                  />
+                  ${this._knownTagChips((id) => {
+                    setAt(i, { tag_id: id });
+                    this._schedulePreview(300);
+                  })}
+                  ${
+                    this._rule.filter.keywords.columns.length
+                      ? html`<div class="wrap vars">
+                          ${tagVariables(this._rule).map(
+                            (name) =>
+                              html`<button
+                                class="chip"
+                                @click=${() => {
+                                  setAt(i, { tag_id: `${a.tag_id ?? ""}{${name}}` });
+                                  this._schedulePreview(300);
+                                }}
+                              >
+                                {${name}}
+                              </button>`,
+                          )}
+                        </div>`
+                      : nothing
+                  }
+                  ${
+                    templateVariables(a.tag_id).length
+                      ? html`<div class="hint">
+                          ${l.t("tag_variable_hint")}
+                          ${
+                            this._preview?.events[0]?.tags?.length
+                              ? html`<br />${l.t("tag_next", {
+                                    tags: this._preview.events[0].tags.join(", "),
+                                  })}`
+                              : nothing
+                          }
+                        </div>`
+                      : nothing
+                  }
+                  ${
+                    scanned && scanned !== "unknown"
+                      ? html`<div class="hint">
+                          ${relativeDayTime(scanned, new Date(), l, this.hass?.config?.time_zone)}
+                        </div>`
+                      : nothing
+                  }
+                </div>
+                <button class="mini" aria-label=${l.t("remove")} @click=${() => setAt(i, null)}>
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+              </div>`;
+            }
+            return html`<div class="ackblock">
+              <div class="ackrow">
+                <ha-icon icon="mdi:door-open"></ha-icon>
+                <span class="grow">${l.t("ack_trigger")}</span>
+                <button class="mini" aria-label=${l.t("remove")} @click=${() => setAt(i, null)}>
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
               </div>
-              <button class="mini" aria-label=${l.t("remove")} @click=${() => setAt(i, null)}>
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
+              <laeutwerk-field
+                .hass=${this.hass}
+                .localize=${l}
+                .selector=${{ trigger: {} }}
+                .value=${Array.isArray(a.trigger) ? a.trigger : a.trigger ? [a.trigger] : []}
+                @value-changed=${(e: CustomEvent<{ value: HaConfig[] }>) => setAt(i, { trigger: e.detail.value })}
+              ></laeutwerk-field>
+              ${this._toggle(l.t("ack_early"), !!a.early, (v) => setAt(i, { early: v }))}
             </div>`;
-          }
-          return html`<div class="ackblock">
-            <div class="ackrow">
-              <ha-icon icon="mdi:door-open"></ha-icon>
-              <span class="grow">${l.t("ack_trigger")}</span>
-              <button class="mini" aria-label=${l.t("remove")} @click=${() => setAt(i, null)}>
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
-            </div>
-            <laeutwerk-field
-              .hass=${this.hass}
-              .localize=${l}
-              .selector=${{ trigger: {} }}
-              .value=${Array.isArray(a.trigger) ? a.trigger : a.trigger ? [a.trigger] : []}
-              @value-changed=${(e: CustomEvent<{ value: HaConfig[] }>) => setAt(i, { trigger: e.detail.value })}
-            ></laeutwerk-field>
-            ${this._toggle(l.t("ack_early"), !!a.early, (v) => setAt(i, { early: v }))}
-          </div>`;
-        })}
+          })}
+        </div>
         <div class="wrap">
           <button
             class="chip dashed"
@@ -1389,33 +1406,50 @@ export class LaeutwerkRuleEditor extends LitElement {
 
         <div class="sublabel">${l.t("escalation")}</div>
         <div class="hint">${l.t("escalation_hint")}</div>
-        ${stages.map(
-          (stage, i) =>
-            html`<div class="row">
-              <span class="chip accent">${l.t("stage_n", { n: i + 1 })}</span>
-              ${this._stageInput(stage.after, (after) =>
-                this._update({
-                  escalation: stages.map((x, j) => (j === i ? { after } : x)),
-                }),
-              )}
-              <button
-                class="mini"
-                aria-label=${l.t("remove")}
-                ?disabled=${i !== stages.length - 1}
-                @click=${() =>
+        <div class="divided">
+          ${stages.map(
+            (stage, i) =>
+              html`<div class="row stage-row">
+                <label class="stagecolor" title=${l.t("stage_color")}>
+                  <span class="chip" style="--stage: ${stageColor(r, i + 1)}"
+                    >${l.t("stage_n", { n: i + 1 })}</span
+                  >
+                  <input
+                    type="color"
+                    aria-label=${`${l.t("stage_n", { n: i + 1 })} ${l.t("stage_color")}`}
+                    .value=${stageColor(r, i + 1) ?? "#ffb020"}
+                    @change=${(e: Event) =>
+                      this._update({
+                        escalation: stages.map((x, j) =>
+                          j === i ? { ...x, color: (e.target as HTMLInputElement).value } : x,
+                        ),
+                      })}
+                  />
+                </label>
+                ${this._stageInput(stage.after, (after) =>
                   this._update({
-                    escalation: stages.slice(0, -1),
-                    signals: r.signals.map((sig) =>
-                      (sig.stage ?? 0) > stages.length - 1
-                        ? { ...sig, stage: stages.length - 1 }
-                        : sig,
-                    ),
-                  })}
-              >
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
-            </div>`,
-        )}
+                    escalation: stages.map((x, j) => (j === i ? { ...x, after } : x)),
+                  }),
+                )}
+                <button
+                  class="mini"
+                  aria-label=${l.t("remove")}
+                  ?disabled=${i !== stages.length - 1}
+                  @click=${() =>
+                    this._update({
+                      escalation: stages.slice(0, -1),
+                      signals: r.signals.map((sig) =>
+                        (sig.stage ?? 0) > stages.length - 1
+                          ? { ...sig, stage: stages.length - 1 }
+                          : sig,
+                      ),
+                    })}
+                >
+                  <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+              </div>`,
+          )}
+        </div>
         <div class="wrap">
           <button
             class="chip dashed"
@@ -1702,6 +1736,43 @@ export class LaeutwerkRuleEditor extends LitElement {
       }
       .extra {
         flex-wrap: wrap;
+      }
+      .sig {
+        border-left: 3px solid var(--stage, transparent);
+        padding-left: 6px;
+      }
+      .icon.staged {
+        background: color-mix(in srgb, var(--stage) 25%, transparent);
+        color: var(--stage);
+      }
+      .stagechip {
+        display: inline-block;
+        padding: 0 6px;
+        margin-right: 4px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        background: color-mix(in srgb, var(--stage) 22%, transparent);
+        color: var(--lw-text);
+      }
+      .stagecolor {
+        position: relative;
+        display: inline-flex;
+        flex-shrink: 0;
+        cursor: pointer;
+      }
+      .stagecolor .chip {
+        background: color-mix(in srgb, var(--stage) 30%, transparent);
+        border: 2px solid var(--stage);
+        min-height: 32px;
+      }
+      .stagecolor input[type="color"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
       }
       .monthday {
         display: inline-flex;

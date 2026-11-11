@@ -439,3 +439,15 @@ async def test_escalation_stages(
         validate_rule(muell_rule(escalation=[{"after": "1h"}], signals=[push(stage=3)]))
     with pytest.raises(vol.Invalid, match="invalid escalation time"):
         validate_rule(muell_rule(escalation=[{"after": "bald"}]))
+
+
+def test_escalation_stage_colors() -> None:
+    rule = validate_rule(
+        muell_rule(escalation=[{"after": "2h", "color": "#FFB020"}, {"after": "21:30"}])
+    )
+    assert rule["escalation"] == [
+        {"after": "2h", "color": "#ffb020"},
+        {"after": "21:30"},
+    ]
+    with pytest.raises(vol.Invalid, match="not a colour"):
+        validate_rule(muell_rule(escalation=[{"after": "2h", "color": "orange"}]))

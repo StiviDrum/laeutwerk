@@ -130,6 +130,13 @@ def _month_day(value: Any) -> str:
     return f"{month:02d}-{day:02d}"
 
 
+def _hex_color(value: Any) -> str:
+    text = _non_empty(value).lower()
+    if not re.fullmatch(r"#[0-9a-f]{6}", text):
+        raise vol.Invalid(f"'{value}' is not a colour (#rrggbb)")
+    return text
+
+
 def _escalation_after(value: Any) -> str:
     text = _non_empty(value).lower()
     if re.fullmatch(r"\d{1,2}:\d{2}", text):
@@ -544,7 +551,13 @@ RULE_SCHEMA = vol.Schema(
         vol.Optional("on_done", default=list): _actions_or_empty,
         vol.Optional("assignee", default=None): vol.Any(None, _ASSIGNEE_SCHEMA),
         vol.Optional("escalation", default=list): [
-            vol.Schema({vol.Required("after"): _escalation_after})
+            vol.Schema(
+                {
+                    vol.Required("after"): _escalation_after,
+                    # Colour of the stage in the card (signals of this stage).
+                    vol.Optional("color"): _hex_color,
+                }
+            )
         ],
     }
 )

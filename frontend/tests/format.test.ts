@@ -13,6 +13,7 @@ import {
   renameColumn,
   renderTemplate,
   signalSummary,
+  signalTitle,
 } from "../src/format";
 import { localizer } from "../src/localize";
 import type { Reminder, Rule } from "../src/types";
@@ -207,7 +208,8 @@ describe("rule editing", () => {
       audience: undefined,
       targets: ["notify.mobile_app_steven"],
     };
-    expect(signalSummary(push, en)).toBe("immediately · to steven");
+    expect(signalSummary(push, en)).toBe("immediately");
+    expect(signalTitle(push, en)).toBe("Push · mobile_app_steven");
   });
 });
 
@@ -231,18 +233,21 @@ describe("0.6 helpers", () => {
     expect(availableVariables(withAssignee)).toContain("zustaendig");
     expect(availableVariables(rule())).not.toContain("zustaendig");
     const ansage = { ...defaultSignal("announce", rule()), stage: 2 };
-    expect(signalSummary(ansage, de)).toBe("sofort · Stufe 2 · max. 1×");
+    // The stage is shown as a coloured chip next to the summary.
+    expect(signalSummary(ansage, de)).toBe("sofort · max. 1×");
     const toAssignee = { ...defaultSignal("notify", rule()), audience: "assignee" as const };
-    expect(signalSummary(toAssignee, de)).toBe("sofort · an Zuständige");
+    expect(signalSummary(toAssignee, de)).toBe("sofort");
+    expect(signalTitle(toAssignee, de)).toBe("Push · Zuständige");
   });
 });
 
 describe("push recipients", () => {
   it("summarises chosen persons, also only when home", () => {
     const base = { ...defaultSignal("notify", rule()), persons: ["person.steven", "person.anna"] };
-    expect(signalSummary({ ...base, audience: "persons" }, de)).toBe("sofort · an steven, anna");
-    expect(signalSummary({ ...base, audience: "persons", only_present: true }, de)).toBe(
-      "sofort · an steven, anna (nur Anwesende)",
+    const names = (id: string) => ({ "person.steven": "Steven", "person.anna": "Anna" })[id] ?? id;
+    expect(signalTitle({ ...base, audience: "persons" }, de, names)).toBe("Push · Steven, Anna");
+    expect(signalTitle({ ...base, audience: "persons", only_present: true }, de, names)).toBe(
+      "Push · Steven, Anna (nur Anwesende)",
     );
   });
 });
@@ -482,5 +487,32 @@ describe("tasks done ahead of time", () => {
     expect(buildOverview([r], NOW, TZ).done.map((x) => x.reminder.id)).toEqual(["today", "ahead"]);
     expect(doneTasks([r], NOW).map((t) => t.reminder.id)).toEqual(["today", "ahead"]);
     expect(doneTasks([r], NOW, ["other"])).toEqual([]);
+  });
+});
+
+describe("signal titles and stage colours", () => {
+  it("names the lamps, speakers and entities of a signal", async () => {
+    const { signalTitle, stageColor } = await import("../src/format");
+    const names = (id: string) =>
+      ({ "light.stehleuchte": "Stehleuchte", "media_player.sonos": "Sonos Wohnzimmer" })[id] ?? id;
+    const lamp = { ...defaultSignal("light_signal", rule()), entities: ["light.stehleuchte"] };
+    expect(signalTitle(lamp, de, names)).toBe("Licht · Stehleuchte");
+    const announce = { ...defaultSignal("announce", rule()), players: ["media_player.sonos"] };
+    expect(signalTitle(announce, de, names)).toBe("Ansage · Sonos Wohnzimmer");
+    const action = {
+      ...defaultSignal("action", rule()),
+      actions: [
+        { action: "light.turn_on", target: { entity_id: ["light.stehleuchte", "{{ x }}"] } },
+        { action: "script.turn_on", entity_id: "script.muell" },
+      ],
+    };
+    expect(signalTitle(action, de, names)).toBe("Eigene · Stehleuchte, script.muell");
+    expect(signalTitle(defaultSignal("action", rule()), de)).toBe("Eigene");
+
+    const staged = rule({ escalation: [{ after: "2h", color: "#123456" }, { after: "21:30" }] });
+    expect(stageColor(staged, 0)).toBeNull();
+    expect(stageColor(staged, undefined)).toBeNull();
+    expect(stageColor(staged, 1)).toBe("#123456");
+    expect(stageColor(staged, 2)).toBe("#ff5a6e"); // default for stage 2
   });
 });

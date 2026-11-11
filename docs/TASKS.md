@@ -203,6 +203,16 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.7.3
   - Checked in the real frontend: cancel keeps the task open, confirm marks it done; compact popup; editor opens for a chosen rule.
 
+## 0.7.4 – Signal-Liste mit Namen und Stufenfarben, Trennlinien (11.11.2026)
+- [x] Signal-Beschriftung mit Entitätsnamen
+  - `signalTitle()` / `signalTargets()`: lamps, speakers, persons (friendly names), audience words, extra notify actions, entity ids found in custom actions. The recipients moved from the summary into the title.
+- [x] Signale nach Eskalationsstufe einfärben, Farben je Stufe in Schritt 7
+  - Backend: optional `escalation[].color` (#rrggbb, validated). Card: `stageColor()` (stage 0 = neutral; default palette amber, red, violet, blue, green when a stage has no colour); signal row with coloured left bar, tinted icon and a „Stufe n“ chip; in step 7 the stage chip opens a colour picker.
+- [x] Trennlinien in Listen
+  - Shared `.divided` style: signals, ways to acknowledge, escalation stages, next matches, push recipients, quiet times; card lists (upcoming, done, rules) and the compact dialog's lists.
+- [x] Release v0.7.4
+  - Checked in the real frontend (steps 4, 5, 7 with staged signals).
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

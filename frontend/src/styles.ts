@@ -68,6 +68,19 @@ export const shared = css`
     flex-direction: column;
     gap: 8px;
   }
+  /* Lists with a thin line between the entries. */
+  .divided {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .divided > * {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .divided > * + * {
+    border-top: 1px solid var(--lw-border);
+  }
   .row {
     display: flex;
     align-items: center;
