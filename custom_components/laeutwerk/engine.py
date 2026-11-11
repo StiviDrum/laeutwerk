@@ -87,6 +87,7 @@ class RuleRunner:
         *,
         on_update: Callable[[RuleRunner], None],
         on_changed: Callable[[], None],
+        on_finished: Callable[[Reminder], None] | None = None,
     ) -> None:
         """Initialise; ``reminders`` is the persisted dict owned by the manager."""
         self.hass = hass
@@ -96,6 +97,7 @@ class RuleRunner:
         self.errors: dict[str, str] = {}
         self._on_update = on_update
         self._on_changed = on_changed
+        self._on_finished = on_finished
         self._lock = asyncio.Lock()
         self._unsub_timer: CALLBACK_TYPE | None = None
         self._unsub_sources: CALLBACK_TYPE | None = None
@@ -475,6 +477,8 @@ class RuleRunner:
         }
 
     def _fire(self, event_type: str, reminder: Reminder, **extra: Any) -> None:
+        if self._on_finished and event_type in (EVENT_MISSED, EVENT_ACKNOWLEDGED):
+            self._on_finished(reminder)
         self.hass.bus.async_fire(event_type, {**self.event_data(reminder), **extra})
 
     def _remind(self, reminder: Reminder, *, reminder_time: str | None) -> None:

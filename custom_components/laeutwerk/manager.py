@@ -10,7 +10,7 @@ from typing import Any
 
 from homeassistant.core import CALLBACK_TYPE, Context, Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.start import async_at_started
@@ -22,10 +22,12 @@ from .const import (
     ACTION_ACK_PREFIX,
     ACTION_SNOOZE_PREFIX,
     DOMAIN,
+    HISTORY_MAX,
     REFRESH_MINUTES,
     SIGNAL_RULE_STATUS,
 )
 from .engine import RuleRunner
+from .issues import async_check_rule, async_clear_rule
 from .matching import Occurrence, hit_colors, sample_occurrence
 from .model import STATE_INACTIVE, Reminder, Rule, Signal
 from .schema import (
@@ -74,6 +76,7 @@ class LaeutwerkManager:
         self.rules: dict[str, Rule] = {}
         self.runners: dict[str, RuleRunner] = {}
         self.reminders: dict[str, dict[str, Reminder]] = {}
+        self.history: dict[str, list[dict[str, Any]]] = {}
         self._invalid: list[dict[str, Any]] = []  # kept so nothing is lost
         self._listeners: list[RuleListener] = []
         self._started = False
@@ -85,6 +88,7 @@ class LaeutwerkManager:
     async def async_setup(self) -> None:
         """Load rules; runners start once Home Assistant has started."""
         data = await self.store.async_load()
+        self.history = data["history"]
         for raw in data["rules"]:
             try:
                 rule = Rule.from_dict(validate_rule(raw))
@@ -118,6 +122,17 @@ class LaeutwerkManager:
                 self.hass, self._async_interval, timedelta(minutes=REFRESH_MINUTES)
             )
         )
+        self._unsubs.append(
+            self.hass.bus.async_listen(
+                er.EVENT_ENTITY_REGISTRY_UPDATED, self._async_registry_updated
+            )
+        )
+
+    @callback
+    def _async_registry_updated(self, _event: Event[Any]) -> None:
+        """Entities were added, removed or renamed: re-check rule references."""
+        for rule in self.rules.values():
+            async_check_rule(self.hass, rule)
 
     async def _async_interval(self, _now: datetime) -> None:
         for runner in list(self.runners.values()):
@@ -142,6 +157,7 @@ class LaeutwerkManager:
     def _data(self) -> StoredData:
         return {
             "rules": [rule.to_dict() for rule in self.rules.values()] + self._invalid,
+            "history": self.history,
             "reminders": {
                 rule_id: [reminder.to_dict() for reminder in reminders.values()]
                 for rule_id, reminders in self.reminders.items()
@@ -175,6 +191,7 @@ class LaeutwerkManager:
         self._notify(EVENT_UPDATED, runner.rule.id)
 
     async def _async_start_runner(self, rule: Rule) -> None:
+        async_check_rule(self.hass, rule)
         if not rule.enabled:
             return
         runner = RuleRunner(
@@ -183,9 +200,44 @@ class LaeutwerkManager:
             self.reminders.setdefault(rule.id, {}),
             on_update=self._runner_updated,
             on_changed=self.async_schedule_save,
+            on_finished=lambda reminder, rule_id=rule.id: self._add_history(
+                rule_id, reminder
+            ),
         )
         self.runners[rule.id] = runner
         await runner.async_start()
+
+    @callback
+    def _add_history(self, rule_id: str, reminder: Reminder) -> None:
+        """Remember a finished reminder (newest first, limited)."""
+        entries = [
+            e for e in self.history.get(rule_id, []) if e["reminder_id"] != reminder.id
+        ]
+        entries.insert(
+            0,
+            {
+                "reminder_id": reminder.id,
+                "day": reminder.day.isoformat(),
+                "titles": [event.summary for event in reminder.events],
+                "state": reminder.state,
+                "reminded_at": (
+                    reminder.reminded_at.isoformat() if reminder.reminded_at else None
+                ),
+                "finished_at": (
+                    reminder.finished_at.isoformat() if reminder.finished_at else None
+                ),
+                "acknowledged_by": reminder.acknowledged_by,
+                "acknowledged_via": reminder.acknowledged_via,
+                "signals_sent": sum(reminder.signals_sent.values()),
+            },
+        )
+        self.history[rule_id] = entries[:HISTORY_MAX]
+        self.async_schedule_save()
+
+    @property
+    def invalid_rules(self) -> list[dict[str, Any]]:
+        """Stored rules that could not be loaded (kept, shown in diagnostics)."""
+        return list(self._invalid)
 
     async def _async_stop_runner(self, rule_id: str, *, drop_open: bool) -> None:
         """Stop a runner; optionally forget its open reminders."""
@@ -266,6 +318,7 @@ class LaeutwerkManager:
                 await self._async_start_runner(rule)
         else:
             await self._async_stop_runner(rule_id, drop_open=True)
+            async_clear_rule(self.hass, rule_id)
         self._notify(EVENT_UPDATED, rule_id)
 
     async def async_delete_rule(self, rule_id: str) -> None:
@@ -274,6 +327,8 @@ class LaeutwerkManager:
         await self._async_stop_runner(rule_id, drop_open=True)
         del self.rules[rule_id]
         self.reminders.pop(rule_id, None)
+        self.history.pop(rule_id, None)
+        async_clear_rule(self.hass, rule_id)
         self.async_schedule_save()
         self._notify(EVENT_REMOVED, rule_id)
         registry = dr.async_get(self.hass)

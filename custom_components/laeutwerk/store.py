@@ -9,7 +9,7 @@ from typing import Any, TypedDict
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import STORAGE_KEY, STORAGE_VERSION
+from .const import STORAGE_KEY, STORAGE_MINOR_VERSION, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +22,8 @@ class StoredData(TypedDict):
     rules: list[dict[str, Any]]
     # per rule id: reminders (open ones and recently finished ones)
     reminders: dict[str, list[dict[str, Any]]]
+    # per rule id: finished reminders, newest first (added in 1.2)
+    history: dict[str, list[dict[str, Any]]]
 
 
 class _VersionedStore(Store[StoredData]):
@@ -33,13 +35,17 @@ class _VersionedStore(Store[StoredData]):
         old_minor_version: int,
         old_data: dict[str, Any],
     ) -> StoredData:
-        """Migrate older storage versions (none yet)."""
+        """Migrate older storage versions.
+
+        1.1 -> 1.2: history per rule (starts empty).
+        """
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
         )
         return {
             "rules": list(old_data.get("rules", [])),
             "reminders": dict(old_data.get("reminders", {})),
+            "history": dict(old_data.get("history", {})),
         }
 
 
@@ -49,16 +55,17 @@ class LaeutwerkStore:
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialise the store."""
         self._store = _VersionedStore(
-            hass, STORAGE_VERSION, STORAGE_KEY, minor_version=1
+            hass, STORAGE_VERSION, STORAGE_KEY, minor_version=STORAGE_MINOR_VERSION
         )
 
     async def async_load(self) -> StoredData:
         """Load stored data (empty layout when nothing is stored)."""
         data = await self._store.async_load()
         if not data:
-            return {"rules": [], "reminders": {}}
+            return {"rules": [], "reminders": {}, "history": {}}
         data.setdefault("rules", [])
         data.setdefault("reminders", {})
+        data.setdefault("history", {})
         return data
 
     def async_schedule_save(self, data_func: Callable[[], StoredData]) -> None:

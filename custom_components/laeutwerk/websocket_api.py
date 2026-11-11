@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from .compat import vol
-from .const import DOMAIN, LOOKAHEAD_DAYS
+from .const import DOMAIN, HISTORY_MAX, LOOKAHEAD_DAYS
 from .engine import RuleRunner
 from .manager import (
     EVENT_REMOVED,
@@ -285,6 +285,29 @@ async def ws_preview(
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/history",
+        vol.Required("rule_id"): cv.string,
+        vol.Optional("limit", default=20): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=HISTORY_MAX)
+        ),
+    }
+)
+@websocket_api.async_response
+@_with_manager
+async def ws_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Finished reminders of a rule, newest first."""
+    manager.get_rule(msg["rule_id"])
+    entries = manager.history.get(msg["rule_id"], [])[: msg["limit"]]
+    connection.send_result(msg["id"], {"history": entries})
+
+
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
@@ -297,5 +320,6 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_delete,
         ws_subscribe,
         ws_preview,
+        ws_history,
     ):
         websocket_api.async_register_command(hass, command)
