@@ -187,6 +187,17 @@ const en = {
   s_quiet: "not {from}–{to}",
   s_only_if: "only if …",
   s_to: "to {who}",
+  // card editor
+  ed_view: "View",
+  ed_view_overview: "Today & upcoming",
+  ed_view_rule: "One rule",
+  ed_rule: "Rule",
+  ed_rules: "Rules (empty = all)",
+  ed_show_upcoming: "Show upcoming",
+  ed_show_done: "Show done",
+  ed_compact: "Compact (one line)",
+  section_history: "History",
+  history_empty: "Nothing finished yet.",
   // weekdays
   weekdays_short: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
 };
@@ -381,6 +392,16 @@ const de: Strings = {
   s_quiet: "nicht {from}–{to} Uhr",
   s_only_if: "nur wenn …",
   s_to: "an {who}",
+  ed_view: "Ansicht",
+  ed_view_overview: "Heute & demnächst",
+  ed_view_rule: "Eine Regel",
+  ed_rule: "Regel",
+  ed_rules: "Regeln (leer = alle)",
+  ed_show_upcoming: "Demnächst anzeigen",
+  ed_show_done: "Erledigt anzeigen",
+  ed_compact: "Kompakt (einzeilig)",
+  section_history: "Verlauf",
+  history_empty: "Noch nichts abgeschlossen.",
   weekdays_short: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
 };
 

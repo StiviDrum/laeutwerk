@@ -198,6 +198,16 @@ const hass = {
   async callWS(msg) {
     console.log("callWS", msg);
     if (msg.type === "laeutwerk/preview") return preview;
+    if (msg.type === "laeutwerk/rules/list") return { rules };
+    if (msg.type === "laeutwerk/history") {
+      return {
+        history: [
+          { reminder_id: "h1", day: at(-6, 0).slice(0, 10), titles: ["Rest"], state: "done", finished_at: at(-7, 20, 41), acknowledged_by: "Steven", acknowledged_via: "tag", signals_sent: 2 },
+          { reminder_id: "h2", day: at(-13, 0).slice(0, 10), titles: ["Papier", "Bio"], state: "missed", finished_at: at(-13, 12), acknowledged_by: null, acknowledged_via: null, signals_sent: 3 },
+          { reminder_id: "h3", day: at(-20, 0).slice(0, 10), titles: ["Gelb"], state: "done", finished_at: at(-21, 18, 5), acknowledged_by: null, acknowledged_via: "notify_action", signals_sent: 1 },
+        ],
+      };
+    }
     return msg.rule ?? {};
   },
   async callService(domain, service, data) {

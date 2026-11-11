@@ -8,11 +8,13 @@ import {
   buildOverview,
   emptyRule,
   finishedLine,
+  formatDate,
   openStatus,
   relativeDay,
   relativeDayTime,
   reminderTitle,
 } from "./format";
+import { LaeutwerkCardEditor } from "./card-editor";
 import { LaeutwerkField } from "./ha-field";
 import { localizer, type Localizer } from "./localize";
 import { defineElements } from "./register";
@@ -20,7 +22,14 @@ import { applyRuleEvent } from "./rule-events";
 import { LaeutwerkRuleEditor } from "./rule-editor";
 import { LaeutwerkSignalEditor } from "./signal-editor";
 import { shared, tokens } from "./styles";
-import type { HomeAssistant, LaeutwerkCardConfig, Reminder, Rule, RuleEvent } from "./types";
+import type {
+  HistoryEntry,
+  HomeAssistant,
+  LaeutwerkCardConfig,
+  Reminder,
+  Rule,
+  RuleEvent,
+} from "./types";
 import { CARD_VERSION } from "./version";
 
 const DEFAULT_ICON = "mdi:bell-ring-outline";
@@ -40,6 +49,9 @@ export class LaeutwerkCard extends LitElement {
   /** Rule open in the editor (new rule: without id). */
   @state() private _editing?: Rule;
   @state() private _now = new Date();
+  /** History of the rule shown with view: rule. */
+  @state() private _history?: HistoryEntry[];
+  private _historyKey?: string;
   private _unsub?: Promise<() => Promise<void> | void>;
   private _clock?: number;
 
@@ -61,6 +73,10 @@ export class LaeutwerkCard extends LitElement {
   public getGridOptions() {
     if (this._config?.compact) return { columns: 12, min_columns: 6, rows: 1, min_rows: 1 };
     return { columns: 12, min_columns: 6, rows: "auto" };
+  }
+
+  public static getConfigElement(): HTMLElement {
+    return document.createElement("laeutwerk-card-editor");
   }
 
   public static async getStubConfig(hass?: HomeAssistant): Promise<Partial<LaeutwerkCardConfig>> {
@@ -103,6 +119,7 @@ export class LaeutwerkCard extends LitElement {
       this.toggleAttribute("dark", !!this.hass.themes?.darkMode);
       if (!this._unsub && this.isConnected) this._subscribe();
     }
+    if (changed.has("_rules") || changed.has("_config")) this._maybeLoadHistory();
   }
 
   private _startClock(): void {
@@ -138,6 +155,26 @@ export class LaeutwerkCard extends LitElement {
       this._unsub = undefined;
       this._error = errorMessage(err);
     });
+  }
+
+  /** Reload the history when the shown rule's reminders change. */
+  private _maybeLoadHistory(): void {
+    if (this._config?.view !== "rule" || !this._config.rule || !this.hass) return;
+    const rule = this._rules?.find((r) => r.id === this._config!.rule);
+    if (!rule) return;
+    const key = JSON.stringify(
+      (rule.status?.reminders ?? []).map((r) => [r.id, r.state, r.finished_at]),
+    );
+    if (key === this._historyKey) return;
+    this._historyKey = key;
+    this.hass
+      .callWS<{ history: HistoryEntry[] }>({
+        type: "laeutwerk/history",
+        rule_id: rule.id,
+        limit: 10,
+      })
+      .then((res) => (this._history = res.history))
+      .catch(() => (this._history = []));
   }
 
   private get _l(): Localizer {
@@ -222,7 +259,10 @@ export class LaeutwerkCard extends LitElement {
     return only?.length ? rules.filter((r) => only.includes(r.id ?? "")) : rules;
   }
 
-  private _renderOverview(rules = this._rulesFiltered()): TemplateResult {
+  private _renderOverview(
+    rules = this._rulesFiltered(),
+    extra: TemplateResult | typeof nothing = nothing,
+  ): TemplateResult {
     const l = this._l;
     const cfg = this._config!;
     const overview = buildOverview(rules, this._now, this._tz);
@@ -290,7 +330,7 @@ export class LaeutwerkCard extends LitElement {
               </div>`
           : nothing
       }
-      ${this._isAdmin && rules.length ? this._rulesList(rules) : nothing}
+      ${extra} ${this._isAdmin && rules.length ? this._rulesList(rules) : nothing}
     </ha-card>`;
   }
 
@@ -421,7 +461,36 @@ export class LaeutwerkCard extends LitElement {
         ><div class="message">${l.t("rule_missing", { rule: id })}</div></ha-card
       >`;
     }
-    return this._renderOverview([rule]);
+    return this._renderOverview([rule], this._historySection());
+  }
+
+  private _historySection(): TemplateResult {
+    const l = this._l;
+    const entries = this._history ?? [];
+    return html`<div class="separator">${l.t("section_history")}<span class="line"></span></div>
+      ${
+        entries.length
+          ? html`<div class="list quiet">
+              ${entries.map(
+                (entry) =>
+                  html`<div class="row item finished">
+                    <span class="icon small hist ${entry.state}">
+                      <ha-icon
+                        .icon=${entry.state === "done" ? "mdi:check" : "mdi:close"}
+                      ></ha-icon>
+                    </span>
+                    <div class="grow text">
+                      <div class="name">${entry.titles.join(" + ")}</div>
+                      <div class="sub">
+                        ${finishedLine(entry as unknown as Reminder, this._now, l, this._tz)}
+                      </div>
+                    </div>
+                    <span class="when">${formatDate(`${entry.day}T12:00:00`, l, this._tz)}</span>
+                  </div>`,
+              )}
+            </div>`
+          : html`<div class="hint">${l.t("history_empty")}</div>`
+      }`;
   }
 
   private _renderCompact(): TemplateResult {
@@ -615,6 +684,12 @@ export class LaeutwerkCard extends LitElement {
         justify-content: center;
         box-sizing: border-box;
       }
+      .hist.done {
+        color: var(--lw-ok);
+      }
+      .hist.missed {
+        color: var(--lw-danger);
+      }
       .pill.small {
         min-height: 44px;
         padding: 0 14px;
@@ -630,6 +705,7 @@ void defineElements([
   ["laeutwerk-rule-editor", LaeutwerkRuleEditor],
   ["laeutwerk-signal-editor", LaeutwerkSignalEditor],
   ["laeutwerk-field", LaeutwerkField],
+  ["laeutwerk-card-editor", LaeutwerkCardEditor],
 ]);
 
 declare global {

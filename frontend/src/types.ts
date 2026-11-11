@@ -86,6 +86,18 @@ export interface Reminder {
   expires_at?: string;
 }
 
+export interface HistoryEntry {
+  reminder_id: string;
+  day: string;
+  titles: string[];
+  state: "done" | "missed";
+  reminded_at: string | null;
+  finished_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_via: string | null;
+  signals_sent: number;
+}
+
 export interface UpcomingEvent {
   id: string;
   day: string;

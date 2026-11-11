@@ -26,3 +26,21 @@ describe("localizer", () => {
     expect(localizer(undefined).weekdayShort(0)).toBe("Mon");
   });
 });
+
+describe("card editor", () => {
+  it("drops empty values and keys of the other view", async () => {
+    const { cleanCardConfig } = await import("../src/card-editor");
+    expect(
+      cleanCardConfig({
+        type: "custom:laeutwerk-card",
+        view: "overview",
+        rule: "muell",
+        rules: [],
+        compact: false,
+      }),
+    ).toEqual({ type: "custom:laeutwerk-card", view: "overview", compact: false });
+    expect(
+      cleanCardConfig({ type: "", view: "rule", rule: "muell", rules: ["a"] } as never),
+    ).toEqual({ type: "", view: "rule", rule: "muell" });
+  });
+});
