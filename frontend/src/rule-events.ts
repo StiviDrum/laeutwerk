@@ -3,6 +3,10 @@ import type { Rule, RuleEvent } from "./types";
 /** Apply a `laeutwerk/rules/subscribe` event to the list of rules. */
 export function applyRuleEvent(rules: Rule[] | undefined, msg: RuleEvent): Rule[] {
   if (msg.event === "init") return msg.rules ?? [];
+  if (msg.event === "reordered") {
+    const order = msg.rule_ids ?? [];
+    return [...(rules ?? [])].sort((a, b) => order.indexOf(a.id ?? "") - order.indexOf(b.id ?? ""));
+  }
   const list = rules ?? [];
   if (msg.event === "removed") return list.filter((r) => r.id !== msg.rule_id);
   if (!msg.rule) return list;

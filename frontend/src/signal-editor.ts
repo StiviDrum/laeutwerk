@@ -48,6 +48,8 @@ export class LaeutwerkSignalEditor extends LitElement {
   @property({ attribute: false }) public sample: Record<string, string> = {};
   /** Saved rule id: testing needs a saved rule. */
   @property({ attribute: false }) public ruleId?: string;
+  /** Colours of the next matches (#rrggbb) – shown for "colour from column". */
+  @property({ attribute: false }) public swatches: string[] = [];
   @state() private _yaml = false;
   @state() private _yamlError?: string;
   @state() private _testState?: string;
@@ -108,12 +110,14 @@ export class LaeutwerkSignalEditor extends LitElement {
   }
 
   private async _test(): Promise<void> {
-    if (!this.hass || !this.ruleId) return;
+    if (!this.hass) return;
     this._testState = "…";
     try {
-      const config = { ...this._sig };
-      delete config.id;
-      await this.hass.callService("laeutwerk", "test_signal", { rule: this.ruleId, config });
+      const signal = { ...this._sig };
+      delete signal.id;
+      // The rule as it is in the editor – saved or not.
+      const rule = { ...this.rule, signals: [] };
+      await this.hass.callWS({ type: "laeutwerk/test_signal", rule, signal });
       this._testState = this._l.t("test_sent");
     } catch (err) {
       this._testState = this._l.t("failed", {
@@ -488,11 +492,21 @@ export class LaeutwerkSignalEditor extends LitElement {
       ${
         fromColumn
           ? html`<select
-              .value=${s.color_from ?? ""}
-              @change=${(e: Event) => this._set({ color_from: (e.target as HTMLSelectElement).value })}
-            >
-              ${columns.map((c) => html`<option value=${c} ?selected=${c === s.color_from}>{${c}}</option>`)}
-            </select>`
+                .value=${s.color_from ?? ""}
+                @change=${(e: Event) => this._set({ color_from: (e.target as HTMLSelectElement).value })}
+              >
+                ${columns.map((c) => html`<option value=${c} ?selected=${c === s.color_from}>{${c}}</option>`)}
+              </select>
+              ${
+                this.swatches.length
+                  ? html`<div class="wrap swatches">
+                      ${this.swatches.map(
+                        (c) =>
+                          html`<span class="swatch" style="background:${c}" title=${c}></span>`,
+                      )}
+                    </div>`
+                  : nothing
+              }`
           : html`<input
               .value=${s.color ?? ""}
               placeholder=${l.t("color_placeholder")}
@@ -716,12 +730,10 @@ export class LaeutwerkSignalEditor extends LitElement {
     const l = this._l;
     return html`
       <div class="row">
-        <button class="chip" ?disabled=${!this.ruleId} @click=${this._test}>
+        <button class="chip" ?disabled=${this._testState === "…"} @click=${this._test}>
           <ha-icon icon="mdi:play-outline"></ha-icon>${l.t("test")}
         </button>
-        <span class="hint grow"
-          >${this.ruleId ? (this._testState ?? "") : l.t("test_needs_save")}</span
-        >
+        <span class="hint grow">${this._testState ?? ""}</span>
         <button class="chip" @click=${this._toggleYaml}>
           <ha-icon icon="mdi:code-braces"></ha-icon>${this._yaml ? l.t("as_form") : l.t("as_yaml")}
         </button>
@@ -755,6 +767,12 @@ export class LaeutwerkSignalEditor extends LitElement {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 8px;
+      }
+      .swatch {
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        box-shadow: 0 0 0 1px var(--lw-border);
       }
       .persons {
         display: flex;

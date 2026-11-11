@@ -325,3 +325,56 @@ describe("tag ids with variables", () => {
     expect(renderTemplate("{nfc}", { nfc: "restmuelltonne" }, false)).toBe("restmuelltonne");
   });
 });
+
+describe("0.7 editor helpers", () => {
+  it("summarises collapsed steps", async () => {
+    const { stepSummary } = await import("../src/format");
+    const r = rule({
+      reminders: [{ at: "-1d 17:00" }],
+      signals: [
+        defaultSignal("notify", rule()),
+        { ...defaultSignal("light_signal", rule()), enabled: false },
+      ],
+      acknowledge: [{ type: "tag", tag_id: "{nfc}" }],
+      expire: "event_day 12:00",
+    });
+    expect(stepSummary(r, 1, de, () => "Abfallkalender")).toBe("Abfallkalender");
+    expect(stepSummary(r, 2, de)).toBe("1 Stichwörter · nur Ganztags");
+    expect(stepSummary(r, 3, de)).toBe("Vortag 17:00");
+    expect(stepSummary(r, 4, de)).toBe("Push");
+    expect(stepSummary(r, 5, de)).toBe("Push-Knopf, 1 NFC-Tag(s)");
+    expect(stepSummary(r, 6, de)).toBe("gebündelt · Verfällt: Termintag 12:00");
+    expect(stepSummary(r, 7, de)).toBe("–");
+    expect(stepSummary({ ...r, sources: [], interval: { every: 90 } }, 1, de)).toBe(
+      "alle 90 Tage nach Erledigen",
+    );
+  });
+
+  it("finds what is missing before saving", async () => {
+    const { ruleProblems } = await import("../src/format");
+    expect(ruleProblems(rule(), de)).toEqual([]);
+    const broken = rule({
+      name: " ",
+      sources: [],
+      reminders: [],
+      signals: [{ type: "notify", enabled: true, when: "now", message: "" }],
+      acknowledge: [{ type: "tag", tag_id: "" }],
+      activation: { conditions: [], season: { from: "04-01", to: "" } },
+    });
+    expect(ruleProblems(broken, de).map((p) => p.step)).toEqual([1, 1, 3, 4, 4, 5, 7]);
+    expect(ruleProblems(broken, de)[3].text).toBe("Push: wähle mindestens einen Empfänger.");
+  });
+
+  it("maps server messages to steps and plain words", async () => {
+    const { errorStep, translateError } = await import("../src/format");
+    expect(errorStep("length of value must be at least 1 at 'assignee.persons'")).toBe(7);
+    expect(errorStep("invalid time 'x' at 'reminders[0].at'")).toBe(3);
+    expect(errorStep("signal 'push': unknown")).toBe(4);
+    expect(errorStep("acknowledge 1: unknown variable(s) {x} in tag_id")).toBe(5);
+    expect(errorStep("something else")).toBeUndefined();
+    expect(translateError("length of value must be at least 1 at 'x'", de)).toBe(
+      "Eine Liste braucht mindestens einen Eintrag.",
+    );
+    expect(translateError("totally new", de)).toBe("totally new");
+  });
+});

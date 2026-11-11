@@ -1,5 +1,5 @@
 /** Pure display logic of the card (tested with vitest). */
-import type { Localizer } from "./localize";
+import type { Localizer, StringKey } from "./localize";
 import type { ColumnSpec, Reminder, Rule, Signal } from "./types";
 
 const DAY_MS = 86_400_000;
@@ -396,4 +396,178 @@ export function renameColumn(rule: Rule, index: number, name: string): Rule {
   });
   const signals = rule.signals.map((s) => (s.color_from === old ? { ...s, color_from: clean } : s));
   return { ...rule, signals, filter: { ...rule.filter, keywords: { columns, rows } } };
+}
+
+// --- 0.7: step summaries, checks before saving, readable server errors ------
+
+/** Short summary of an editor step for its collapsed header. */
+export function stepSummary(
+  rule: Rule,
+  step: number,
+  l: Localizer,
+  names: (entityId: string) => string = (id) => id,
+): string {
+  switch (step) {
+    case 1: {
+      const parts = rule.sources.map(names);
+      if (rule.interval) parts.push(l.t("sum_interval", { n: String(rule.interval.every) }));
+      return parts.join(", ") || "–";
+    }
+    case 2: {
+      const rows = rule.filter.keywords.rows.filter((r) => r.match.trim());
+      const parts = [rows.length ? l.t("sum_keywords", { n: rows.length }) : l.t("sum_all_events")];
+      if (rule.filter.all_day) parts.push(l.t("sum_all_day"));
+      return parts.join(" · ");
+    }
+    case 3: {
+      const parts = rule.reminders.map((r) => describeTimespec(r.at, l));
+      if (rule.repeat !== "none") parts.push(l.t("sum_repeat"));
+      return parts.join(" · ") || "–";
+    }
+    case 4: {
+      const active = rule.signals.filter((s) => s.enabled);
+      if (!active.length) return l.t("sum_no_signals");
+      const types = [...new Set(active.map((s) => l.t(`type_${s.type}` as StringKey)))];
+      return types.join(", ");
+    }
+    case 5: {
+      const ways: string[] = [];
+      const pushDone = rule.signals.some(
+        (s) => s.type === "notify" && (s.actions ?? []).some((a) => (a as { ack?: boolean }).ack),
+      );
+      if (pushDone) ways.push(l.t("sum_push_button"));
+      const tags = rule.acknowledge.filter((a) => a.type === "tag").length;
+      if (tags) ways.push(l.t("sum_tags", { n: tags }));
+      const triggers = rule.acknowledge.filter((a) => a.type === "trigger").length;
+      if (triggers) ways.push(l.t("sum_triggers", { n: triggers }));
+      return ways.join(", ") || l.t("sum_card_only");
+    }
+    case 6: {
+      const expire = rule.expire.trim();
+      const day = /^event_day (\d{1,2}:\d{2})$/.exec(expire);
+      const exp =
+        expire === "event_end"
+          ? l.t("expire_event_end")
+          : day
+            ? `${l.t("expire_event_day")} ${day[1]}`
+            : expire;
+      return [rule.bundle ? l.t("sum_bundled") : "", `${l.t("expire")}: ${exp}`]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    default: {
+      const parts: string[] = [];
+      if (rule.assignee?.persons.length) parts.push(l.t("assignee"));
+      if (rule.activation) parts.push(l.t("activation"));
+      if (rule.escalation?.length) {
+        parts.push(l.t("sum_stages", { n: rule.escalation.length }));
+      }
+      if (rule.on_done?.length) parts.push(l.t("on_done"));
+      return parts.join(" · ") || "–";
+    }
+  }
+}
+
+export interface Problem {
+  step: number;
+  text: string;
+}
+
+/** What is still missing before a rule can be saved (checked in the card). */
+export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
+  const problems: Problem[] = [];
+  if (!rule.name.trim()) problems.push({ step: 1, text: l.t("err_name") });
+  if (!rule.sources.length && !rule.interval) problems.push({ step: 1, text: l.t("err_source") });
+  if (rule.filter.keywords.rows.some((r) => !r.match.trim())) {
+    problems.push({ step: 2, text: l.t("err_keyword_empty") });
+  }
+  const names = columnNames(rule);
+  if (names.some((n) => !n) || new Set(names).size !== names.length) {
+    problems.push({ step: 2, text: l.t("err_columns") });
+  }
+  if (!rule.reminders.length) problems.push({ step: 3, text: l.t("err_time") });
+  rule.signals.forEach((s) => {
+    const label = l.t(`type_${s.type}` as StringKey);
+    if (s.type === "notify" && !s.targets?.length && !s.audience) {
+      problems.push({ step: 4, text: l.t("err_push_recipients", { signal: label }) });
+    }
+    if (s.type === "notify" && s.audience === "persons" && !s.persons?.length) {
+      problems.push({ step: 4, text: l.t("err_push_recipients", { signal: label }) });
+    }
+    if (s.type === "light_signal" && !s.entities?.length) {
+      problems.push({ step: 4, text: l.t("err_light", { signal: label }) });
+    }
+    if (s.type === "announce" && (!s.players?.length || !s.text?.trim())) {
+      problems.push({ step: 4, text: l.t("err_announce", { signal: label }) });
+    }
+    if (s.type === "notify" && !s.message?.trim()) {
+      problems.push({ step: 4, text: l.t("err_message", { signal: label }) });
+    }
+  });
+  if (rule.acknowledge.some((a) => a.type === "tag" && !a.tag_id?.trim())) {
+    problems.push({ step: 5, text: l.t("err_tag_empty") });
+  }
+  const season = rule.activation?.season;
+  if (season && (!season.from || !season.to)) {
+    problems.push({ step: 7, text: l.t("err_season") });
+  }
+  if ((rule.escalation ?? []).some((e) => !e.after.trim())) {
+    problems.push({ step: 7, text: l.t("err_stage") });
+  }
+  return problems;
+}
+
+/** Which editor step a server validation message belongs to. */
+export function errorStep(message: string): number | undefined {
+  const path = /at '([^']+)'/.exec(message)?.[1] ?? "";
+  const key = path.split(/[.[]/)[0];
+  const byKey: Record<string, number> = {
+    name: 1,
+    icon: 1,
+    color: 1,
+    sources: 1,
+    interval: 1,
+    filter: 2,
+    reminders: 3,
+    repeat: 3,
+    signals: 4,
+    acknowledge: 5,
+    ack_label: 5,
+    bundle: 6,
+    expire: 6,
+    activation: 7,
+    assignee: 7,
+    escalation: 7,
+    on_done: 7,
+  };
+  if (key in byKey) return byKey[key];
+  if (/^signal '/.test(message)) return 4;
+  if (/^acknowledge \d/.test(message)) return 5;
+  if (/^(activation|on_done):/.test(message)) return 7;
+  if (/column|keyword row/.test(message)) return 2;
+  if (/source or an 'interval'|cannot be a source/.test(message)) return 1;
+  if (/reminder times|invalid time/.test(message)) return 3;
+  if (/stage|escalation/.test(message)) return 7;
+  return undefined;
+}
+
+/** Common server messages in plain words (the original stays as detail). */
+export function translateError(message: string, l: Localizer): string {
+  const known: [RegExp, StringKey][] = [
+    [/must not be empty/, "srv_empty"],
+    [/length of value must be at least 1/, "srv_empty_list"],
+    [/required key not provided/, "srv_required"],
+    [/not a valid value|expected .* for dictionary value/, "srv_invalid"],
+    [/cannot be a source/, "srv_source"],
+    [/at least one source or an 'interval'/, "err_source"],
+    [/invalid time/, "srv_time"],
+    [/is not a .* entity/, "srv_entity"],
+    [/unknown variable/, "srv_variable"],
+    [/clashes with another variable/, "srv_plural_clash"],
+    [/already exists/, "srv_exists"],
+    [/stage \d+ does not exist/, "srv_stage"],
+    [/Entity .* is neither a valid entity ID|not a valid entity id/i, "srv_entity"],
+  ];
+  const hit = known.find(([pattern]) => pattern.test(message));
+  return hit ? l.t(hit[1]) : message;
 }

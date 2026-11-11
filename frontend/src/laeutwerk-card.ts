@@ -15,7 +15,7 @@ import {
 } from "./format";
 import { LaeutwerkCardEditor } from "./card-editor";
 import { LaeutwerkField } from "./ha-field";
-import { localizer, type Localizer } from "./localize";
+import { localizer, type Localizer, type StringKey } from "./localize";
 import { defineElements } from "./register";
 import { applyRuleEvent } from "./rule-events";
 import { LaeutwerkRuleEditor } from "./rule-editor";
@@ -46,6 +46,14 @@ export class LaeutwerkCard extends LitElement {
   @state() private _error?: string;
   @state() private _busy?: string;
   @state() private _actionError?: string;
+  /** Short feedback ("Erledigt · Rückgängig", "Gespeichert"). */
+  @state() private _toast?: { text: string; undo?: string };
+  /** Reminder whose "later" choices are shown / whose details are open. */
+  @state() private _laterFor?: string;
+  @state() private _details?: string;
+  @state() private _sorting = false;
+  @state() private _search = "";
+  private _toastTimer?: number;
   /** Rule open in the editor (new rule: without id). */
   @state() private _editing?: Rule;
   /** Template picker for a new rule is open. */
@@ -191,33 +199,70 @@ export class LaeutwerkCard extends LitElement {
     return !!this.hass?.user?.is_admin;
   }
 
-  private async _call(key: string, service: string, data: Record<string, unknown>): Promise<void> {
-    if (!this.hass) return;
+  private async _call(
+    key: string,
+    service: string,
+    data: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (!this.hass) return false;
     this._busy = key;
     this._actionError = undefined;
     try {
       await this.hass.callService("laeutwerk", service, data);
+      return true;
     } catch (err) {
       this._actionError = this._l.t("failed", { error: errorMessage(err) });
+      return false;
     } finally {
       this._busy = undefined;
     }
   }
 
-  private _done(reminder: Reminder): Promise<void> {
-    return this._call(reminder.id, "acknowledge", {
-      rule: reminder.rule_id,
-      reminder_id: reminder.id,
-      // Who it was is resolved by Läutwerk from the user (person, else name).
-    });
+  private _showToast(text: string, undo?: string): void {
+    window.clearTimeout(this._toastTimer);
+    this._toast = { text, undo };
+    this._toastTimer = window.setTimeout(() => (this._toast = undefined), undo ? 8000 : 3000);
   }
 
-  private _later(reminder: Reminder): Promise<void> {
-    return this._call(`${reminder.id}-later`, "snooze", {
+  private async _done(reminder: Reminder): Promise<void> {
+    // Who it was is resolved by Läutwerk from the user (person, else name).
+    const ok = await this._call(reminder.id, "acknowledge", {
       rule: reminder.rule_id,
       reminder_id: reminder.id,
-      duration: "3h",
     });
+    if (ok)
+      this._showToast(this._l.t("done_toast", { title: reminderTitle(reminder) }), reminder.id);
+  }
+
+  private async _undo(reminderId: string): Promise<void> {
+    window.clearTimeout(this._toastTimer);
+    this._toast = undefined;
+    await this._call(`${reminderId}-undo`, "reopen", { reminder_id: reminderId });
+  }
+
+  private async _later(reminder: Reminder, choice: "1h" | "3h" | "morning"): Promise<void> {
+    this._laterFor = undefined;
+    const when = choice === "morning" ? { until: "07:00" } : { duration: choice };
+    const ok = await this._call(`${reminder.id}-later`, "snooze", {
+      rule: reminder.rule_id,
+      reminder_id: reminder.id,
+      ...when,
+    });
+    if (ok) this._showToast(this._l.t("later_toast", { title: reminderTitle(reminder) }));
+  }
+
+  private async _move(rule: Rule, delta: number): Promise<void> {
+    if (!this.hass || !this._rules) return;
+    const ids = this._rules.map((r) => r.id ?? "");
+    const from = ids.indexOf(rule.id ?? "");
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    try {
+      await this.hass.callWS({ type: "laeutwerk/rules/reorder", rule_ids: ids });
+    } catch (err) {
+      this._actionError = this._l.t("failed", { error: errorMessage(err) });
+    }
   }
 
   private async _toggleRule(rule: Rule): Promise<void> {
@@ -258,7 +303,10 @@ export class LaeutwerkCard extends LitElement {
           .hass=${this.hass}
           .localize=${l}
           .rule=${this._editing}
-          @saved=${() => (this._editing = undefined)}
+          @saved=${() => {
+            this._editing = undefined;
+            this._showToast(l.t("saved"));
+          }}
           @deleted=${() => (this._editing = undefined)}
           @cancel=${() => (this._editing = undefined)}
         ></laeutwerk-rule-editor>
@@ -313,6 +361,7 @@ export class LaeutwerkCard extends LitElement {
         }
       </div>
       ${this._actionError ? html`<div class="error">${this._actionError}</div>` : nothing}
+      ${this._renderToast()}
       ${
         !this._rules!.length
           ? html`<div class="empty">
@@ -350,6 +399,72 @@ export class LaeutwerkCard extends LitElement {
     </ha-card>`;
   }
 
+  private _renderToast(): TemplateResult | typeof nothing {
+    const toast = this._toast;
+    if (!toast) return nothing;
+    return html`<div class="toast" role="status">
+      <span class="grow">${toast.text}</span>
+      ${
+        toast.undo
+          ? html`<button class="chip accent" @click=${() => this._undo(toast.undo!)}>
+              <ha-icon icon="mdi:undo"></ha-icon>${this._l.t("undo")}
+            </button>`
+          : nothing
+      }
+    </div>`;
+  }
+
+  /** What happened with a reminder so far and what comes next. */
+  private _detailsOf(rule: Rule, reminder: Reminder): TemplateResult {
+    const l = this._l;
+    const tz = this._tz;
+    const at = (iso?: string | null) => (iso ? relativeDayTime(iso, this._now, l, tz) : "–");
+    const signalName = (id: string) => {
+      const signal = rule.signals.find((x) => x.id === id);
+      if (!signal) return id;
+      const type = l.t(`type_${signal.type}` as StringKey);
+      // The id only helps when a rule has several signals of one type.
+      return id === signal.type ? type : `${type} (${id})`;
+    };
+    const sent = Object.entries(reminder.signals_sent ?? {});
+    const deferred = Object.entries(reminder.deferred ?? {});
+    const rows: [string, string][] = [
+      [l.t("d_event"), `${reminder.titles.join(" + ")} · ${formatDate(reminder.start, l, tz)}`],
+    ];
+    if (reminder.reminded_at) rows.push([l.t("d_reminded"), at(reminder.reminded_at)]);
+    if (reminder.next_reminder_at) rows.push([l.t("d_next"), at(reminder.next_reminder_at)]);
+    if (reminder.snoozed_until) rows.push([l.t("later"), at(reminder.snoozed_until)]);
+    if (reminder.expires_at) rows.push([l.t("d_expires"), at(reminder.expires_at)]);
+    if (reminder.assignee_name) rows.push([l.t("d_assignee"), reminder.assignee_name]);
+    if (reminder.stage) rows.push([l.t("d_stage"), String(reminder.stage)]);
+    rows.push([
+      l.t("d_signals"),
+      sent.length
+        ? sent
+            .map(([id, n]) => `${signalName(id)}: ${n}× (${at(reminder.signal_last?.[id])})`)
+            .join(", ")
+        : l.t("d_none"),
+    ]);
+    if (deferred.length) {
+      rows.push([
+        l.t("d_deferred"),
+        deferred.map(([id, when]) => `${signalName(id)}: ${at(when)}`).join(", "),
+      ]);
+    }
+    if (reminder.tags?.length) rows.push([l.t("d_tags"), reminder.tags.join(", ")]);
+    return html`<dl class="details">
+      ${rows.map(
+        ([key, value]) =>
+          html`<dt>${key}</dt>
+            <dd>${value}</dd>`,
+      )}
+    </dl>`;
+  }
+
+  private _toggleDetails(reminder: Reminder): void {
+    this._details = this._details === reminder.id ? undefined : reminder.id;
+  }
+
   private _icon(rule: Rule, small = false): TemplateResult {
     const color = rule.color ?? "var(--lw-text-2)";
     return html`<span
@@ -370,8 +485,13 @@ export class LaeutwerkCard extends LitElement {
   private _openCard(rule: Rule, reminder: Reminder): TemplateResult {
     const l = this._l;
     const tz = this._tz;
+    const choosing = this._laterFor === reminder.id;
     return html`<div class="rcard active">
-      <div class="row">
+      <button
+        class="row tap"
+        aria-expanded=${this._details === reminder.id}
+        @click=${() => this._toggleDetails(reminder)}
+      >
         ${this._icon(rule)}
         <div class="grow text">
           <div class="name">${reminderTitle(reminder)}</div>
@@ -384,23 +504,60 @@ export class LaeutwerkCard extends LitElement {
             }
           </div>
         </div>
-      </div>
+      </button>
       <div class="row meta">
         <span class="chip">${openStatus(reminder, this._now, l, tz)}</span>
         ${this._dots(reminder.colors)}
       </div>
-      <div class="actions">
-        <button
-          class="pill outline"
-          ?disabled=${!!this._busy}
-          @click=${() => this._later(reminder)}
-        >
-          ${l.t("later")}
-        </button>
-        <button class="pill primary" ?disabled=${!!this._busy} @click=${() => this._done(reminder)}>
-          <ha-icon icon="mdi:check"></ha-icon>${rule.ack_label || l.t("done")}
-        </button>
-      </div>
+      ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
+      ${
+        choosing
+          ? html`<div class="later">
+              ${(
+                [
+                  ["1h", "later_1h"],
+                  ["3h", "later_3h"],
+                  ["morning", "later_morning"],
+                ] as const
+              ).map(
+                ([choice, key]) =>
+                  html`<button
+                    class="pill outline"
+                    ?disabled=${!!this._busy}
+                    @click=${() => this._later(reminder, choice)}
+                  >
+                    ${l.t(key)}
+                  </button>`,
+              )}
+              <button
+                class="mini"
+                aria-label=${l.t("cancel")}
+                @click=${() => (this._laterFor = undefined)}
+              >
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>`
+          : html`<div class="actions">
+              <button
+                class="pill outline"
+                ?disabled=${!!this._busy}
+                @click=${() => (this._laterFor = reminder.id)}
+              >
+                ${l.t("later")}
+              </button>
+              <button
+                class="pill primary"
+                ?disabled=${!!this._busy}
+                @click=${() => this._done(reminder)}
+              >
+                ${
+                  this._busy === reminder.id
+                    ? "…"
+                    : html`<ha-icon icon="mdi:check"></ha-icon>${rule.ack_label || l.t("done")}`
+                }
+              </button>
+            </div>`
+      }
     </div>`;
   }
 
@@ -412,34 +569,87 @@ export class LaeutwerkCard extends LitElement {
       : reminder.next_reminder_at
         ? l.t("reminder_at", { when: relativeDayTime(reminder.next_reminder_at, this._now, l, tz) })
         : "";
-    return html`<div class="row item">
-      ${this._icon(rule, true)}
-      <div class="grow text">
-        <div class="name">${reminder.titles.join(" + ")}</div>
-        <div class="sub">${next}</div>
-      </div>
-      ${this._dots(reminder.colors)}
-      <span class="when">${relativeDay(reminder.start, this._now, l, tz)}</span>
+    return html`<div class="entry">
+      <button class="row item tap" @click=${() => this._toggleDetails(reminder)}>
+        ${this._icon(rule, true)}
+        <div class="grow text">
+          <div class="name">${reminder.titles.join(" + ")}</div>
+          <div class="sub">${next}</div>
+        </div>
+        ${this._dots(reminder.colors)}
+        <span class="when">${relativeDay(reminder.start, this._now, l, tz)}</span>
+      </button>
+      ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
     </div>`;
   }
 
   private _doneRow(rule: Rule, reminder: Reminder): TemplateResult {
-    return html`<div class="row item finished">
-      ${this._icon(rule, true)}
-      <div class="grow text">
-        <div class="name ${reminder.state === "done" ? "struck" : ""}">
-          ${reminder.titles.join(" + ")}
+    return html`<div class="entry">
+      <button class="row item finished tap" @click=${() => this._toggleDetails(reminder)}>
+        ${this._icon(rule, true)}
+        <div class="grow text">
+          <div class="name ${reminder.state === "done" ? "struck" : ""}">
+            ${reminder.titles.join(" + ")}
+          </div>
+          <div class="sub">${finishedLine(reminder, this._now, this._l, this._tz)}</div>
         </div>
-        <div class="sub">${finishedLine(reminder, this._now, this._l, this._tz)}</div>
-      </div>
+      </button>
+      ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
     </div>`;
   }
 
-  private _rulesList(rules: Rule[]): TemplateResult {
+  private _rulesList(all: Rule[]): TemplateResult {
     const l = this._l;
-    return html`<div class="separator">${l.t("section_rules")}<span class="line"></span></div>
+    const query = this._search.trim().toLowerCase();
+    const rules = query ? all.filter((r) => r.name.toLowerCase().includes(query)) : all;
+    const canSort = !this._config?.rules?.length && all.length > 1;
+    return html`<div class="separator">
+        ${l.t("section_rules")}<span class="line"></span>
+        ${
+          canSort
+            ? html`<button class="chip" @click=${() => (this._sorting = !this._sorting)}>
+                <ha-icon .icon=${this._sorting ? "mdi:check" : "mdi:sort"}></ha-icon>
+                ${this._sorting ? l.t("sort_done") : l.t("sort")}
+              </button>`
+            : nothing
+        }
+      </div>
+      ${
+        all.length > 5 && !this._sorting
+          ? html`<input
+              class="search"
+              type="search"
+              placeholder=${l.t("search")}
+              aria-label=${l.t("search")}
+              .value=${this._search}
+              @input=${(e: Event) => (this._search = (e.target as HTMLInputElement).value)}
+            />`
+          : nothing
+      }
       <div class="list">
-        ${rules.map((rule) => {
+        ${rules.map((rule, index) => {
+          if (this._sorting) {
+            return html`<div class="row item">
+              ${this._icon(rule, true)}
+              <span class="grow name">${rule.name}</span>
+              <button
+                class="mini"
+                aria-label=${l.t("move_up")}
+                ?disabled=${index === 0}
+                @click=${() => this._move(rule, -1)}
+              >
+                <ha-icon icon="mdi:arrow-up"></ha-icon>
+              </button>
+              <button
+                class="mini"
+                aria-label=${l.t("move_down")}
+                ?disabled=${index === rules.length - 1}
+                @click=${() => this._move(rule, 1)}
+              >
+                <ha-icon icon="mdi:arrow-down"></ha-icon>
+              </button>
+            </div>`;
+          }
           const errors = Object.keys(rule.status?.errors ?? {}).length;
           return html`<div class="row item">
             <button class="rulebtn grow" @click=${() => (this._editing = rule)}>
@@ -714,6 +924,59 @@ export class LaeutwerkCard extends LitElement {
       }
       .hist.missed {
         color: var(--lw-danger);
+      }
+      .toast {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 4px 6px 4px 14px;
+        border-radius: 22px;
+        background: var(--lw-surface-2);
+        font-size: 14px;
+      }
+      .tap {
+        width: 100%;
+        text-align: left;
+      }
+      .entry {
+        display: flex;
+        flex-direction: column;
+      }
+      .details {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 12px;
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: var(--lw-surface);
+        font-size: 13px;
+      }
+      .details dt {
+        color: var(--lw-text-2);
+      }
+      .details dd {
+        margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .later {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .later .pill {
+        flex: 1;
+        min-width: 0;
+        padding: 0 8px;
+        font-size: 13px;
+      }
+      .search {
+        min-height: 40px;
+      }
+      .separator .chip {
+        min-height: 32px;
       }
       .pill.small {
         min-height: 44px;

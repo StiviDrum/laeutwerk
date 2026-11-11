@@ -88,6 +88,11 @@ export interface Reminder {
   assignee?: string | null;
   assignee_name?: string | null;
   stage?: number;
+  signals_sent?: Record<string, number>;
+  signal_last?: Record<string, string>;
+  deferred?: Record<string, string>;
+  /** Resolved NFC tag ids that acknowledge this reminder. */
+  tags?: string[];
   expires_at?: string;
 }
 
@@ -181,13 +186,21 @@ export interface RuleTemplate {
 }
 
 export interface RuleEvent {
-  event: "init" | "added" | "updated" | "removed";
+  event: "init" | "added" | "updated" | "removed" | "reordered";
+  rule_ids?: string[];
   rules?: Rule[];
   rule_id?: string;
   rule?: Rule | null;
 }
 
+export interface TitleSuggestion {
+  title: string;
+  count: number;
+  matched: boolean;
+}
+
 export interface PreviewResult {
+  titles?: TitleSuggestion[];
   events: UpcomingEvent[];
   total_events: number;
   errors: Record<string, string>;

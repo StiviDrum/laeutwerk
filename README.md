@@ -268,7 +268,8 @@ the editor) and *Import YAML*. `laeutwerk.export_rules` /
 
 ### Actions and events
 
-`laeutwerk.acknowledge`, `snooze`, `trigger`, `test_signal`, `get_rules`,
+`laeutwerk.acknowledge`, `snooze` (`duration` or `until`), `reopen`, `trigger`,
+`test_signal`, `get_rules`,
 `export_rules`, `import_rules`, `create_rule`, `update_rule`,
 `delete_rule`, `duplicate_rule`, `enable`, `disable`. Editing actions need an
 admin (calls from automations are allowed).
@@ -298,6 +299,17 @@ compact: false        # one line for the top of a dashboard
 - **Rule editor** (administrators, *+* or tap a rule): calendar, keyword table
   with free columns (scrolls sideways), live preview of the next matches,
   reminder times, repeat, signals, ways to acknowledge, bundling and expiry.
+- **Everyday use:** *Later* offers 1 hour, 3 hours or tomorrow morning;
+  after *Done* a short message offers **Undo** (also `laeutwerk.reopen`).
+  Tap a reminder for its details: when it reminded, what was sent, what comes
+  next, who is responsible, which tags count. Rules can be sorted and, with
+  many rules, searched.
+- **Editor:** steps are collapsed with a one-line summary (new rules are
+  filled in step by step); missing things are checked before saving and
+  shown at their step in plain words; unsaved changes need a confirmation and
+  are kept as a draft in the browser. Keywords are suggested from the event
+  titles of the calendar, NFC tags can be picked from the tags Home Assistant
+  knows, signals can be tested before saving.
 - **One rule** (`view: rule`): the rule's reminders plus its history (last
   10 finished reminders: done by whom and how, or missed).
 - **Visual editor:** all options can be set in the dashboard's card editor.
@@ -306,7 +318,7 @@ compact: false        # one line for the top of a dashboard
   of the type with variable chips and a text preview, limits and quiet times,
   *Test* and *Edit as YAML*.
 
-The card bundle is 31 KB gzipped (measured with `gzip -9` on 0.6.0).
+The card bundle is 39 KB gzipped (measured with `gzip -9` on 0.7.0).
 
 ## Troubleshooting
 
@@ -382,6 +394,21 @@ nur der Tag der Tonne, die gerade fällig ist – im Editor unter „Erledigt
 durch“ per Variablen-Chip. Bei einem Bündel (Rest + Bio am selben Tag)
 quittiert jeder der beiden Tags die ganze Erinnerung, andere Tags nichts.
 Feste und variable Tags lassen sich mischen.
+
+## Bedienung (seit 0.7)
+
+- **Später** bietet 1 Stunde, 3 Stunden oder „Morgen früh“ (07:00); nach
+  **Erledigt** erscheint kurz **Rückgängig** (auch als Aktion `laeutwerk.reopen`).
+- Eine Erinnerung **antippen** zeigt Details: wann erinnert, was gesendet
+  wurde, was als Nächstes kommt, wer zuständig ist, welche Tags zählen.
+- Im **Regel-Editor** sind die Schritte eingeklappt mit Zusammenfassung; neue
+  Regeln füllst du Schritt für Schritt („Weiter“). Fehlendes wird vor dem
+  Speichern am jeweiligen Schritt angezeigt, ungespeicherte Änderungen
+  brauchen eine Bestätigung und bleiben als Entwurf im Browser.
+- **Stichwörter** werden aus den Termintiteln des Kalenders vorgeschlagen,
+  **NFC-Tags** aus den in Home Assistant angelernten Tags ausgewählt, und
+  Signale lassen sich schon vor dem Speichern **testen**.
+- **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
 
 ## Installation (HACS, benutzerdefiniertes Repository)
 

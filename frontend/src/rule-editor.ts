@@ -13,6 +13,12 @@ import {
   relativeDayTime,
   colName,
   colPlural,
+  columnNames,
+  errorStep,
+  ruleProblems,
+  stepSummary,
+  translateError,
+  type Problem,
   renameColumn,
   ruleComplete,
   setColumnPlural,
@@ -33,6 +39,7 @@ import type {
   Rotation,
   Rule,
   Signal,
+  TitleSuggestion,
 } from "./types";
 
 /** Shared empty list: a new [] on every render would look like a new value. */
@@ -68,20 +75,114 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _confirmDelete = false;
   @state() private _exportYaml?: string;
   @state() private _notice?: string;
+  /** Steps that are open; new rules are filled in step by step (guided). */
+  @state() private _open = new Set<number>();
+  @state() private _guided = false;
+  @state() private _problems: Problem[] = [];
+  @state() private _serverError?: { step?: number; text: string; detail: string };
+  @state() private _confirmCancel = false;
+  @state() private _draft?: { rule: Rule; saved_at: string };
+  @state() private _knownTags?: { id: string; name?: string | null }[];
+  @state() private _titles?: TitleSuggestion[];
+  private _initial = "";
   private _previewTimer?: number;
+  private _draftTimer?: number;
 
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("rule") && this.rule) {
       const copy = clone(this.rule);
       delete copy.status;
       this._rule = copy;
+      this._initial = JSON.stringify(copy);
+      this._guided = !copy.id;
+      this._open = new Set(copy.id ? [] : [1]);
+      this._draft = this._readDraft();
       this._schedulePreview(0);
+    }
+  }
+
+  public connectedCallback(): void {
+    super.connectedCallback();
+    if (this._knownTags === undefined && this.hass) {
+      this.hass
+        .callWS<{ id: string; name?: string | null }[]>({ type: "tag/list" })
+        .then((tags) => (this._knownTags = tags))
+        .catch(() => (this._knownTags = []));
     }
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearTimeout(this._previewTimer);
+    window.clearTimeout(this._draftTimer);
+  }
+
+  // --- draft in the browser (per viewer, best effort) -------------------------
+
+  private get _draftKey(): string {
+    return `laeutwerk-draft-${this.rule?.id ?? "new"}`;
+  }
+
+  private _readDraft(): { rule: Rule; saved_at: string } | undefined {
+    try {
+      const raw = window.localStorage.getItem(this._draftKey);
+      if (!raw) return undefined;
+      const draft = JSON.parse(raw) as { rule: Rule; saved_at: string };
+      return JSON.stringify(draft.rule) === this._initial ? undefined : draft;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private _storeDraft(): void {
+    window.clearTimeout(this._draftTimer);
+    this._draftTimer = window.setTimeout(() => {
+      try {
+        if (this._dirty) {
+          window.localStorage.setItem(
+            this._draftKey,
+            JSON.stringify({ rule: this._rule, saved_at: new Date().toISOString() }),
+          );
+        } else {
+          window.localStorage.removeItem(this._draftKey);
+        }
+      } catch {
+        // storage blocked (private window): no draft
+      }
+    }, 800);
+  }
+
+  private _clearDraft(): void {
+    window.clearTimeout(this._draftTimer);
+    try {
+      window.localStorage.removeItem(this._draftKey);
+    } catch {
+      // ignore
+    }
+  }
+
+  private get _dirty(): boolean {
+    return JSON.stringify(this._rule) !== this._initial;
+  }
+
+  private _toggleStep(num: number): void {
+    const open = new Set(this._open);
+    if (open.has(num)) open.delete(num);
+    else open.add(num);
+    this._open = open;
+  }
+
+  private _nextStep(num: number): void {
+    const open = new Set(this._open);
+    open.delete(num);
+    open.add(num + 1);
+    this._open = open;
+    void this.updateComplete.then(() =>
+      this.renderRoot.querySelector(`section[data-step="${num + 1}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+    );
   }
 
   private get _l(): Localizer {
@@ -90,6 +191,9 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   private _update(changes: Partial<Rule>, preview = false): void {
     this._rule = { ...this._rule, ...changes };
+    this._confirmCancel = false;
+    if (this._problems.length) this._problems = ruleProblems(this._rule, this._l);
+    this._storeDraft();
     if (preview) this._schedulePreview(500);
   }
 
@@ -128,7 +232,9 @@ export class LaeutwerkRuleEditor extends LitElement {
         type: "laeutwerk/preview",
         rule: preview,
         limit: 5,
+        titles: true,
       });
+      this._titles = this._preview.titles;
       this._previewError = undefined;
     } catch (err) {
       this._previewError = errorText(err);
@@ -141,20 +247,39 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   private async _save(): Promise<void> {
     if (!this.hass) return;
-    this._saving = true;
     this._error = undefined;
+    this._serverError = undefined;
+    // Check in the card first: clear messages at the step concerned.
+    this._problems = ruleProblems(this._rule, this._l);
+    if (this._problems.length) {
+      this._open = new Set([...this._open, ...this._problems.map((p) => p.step)]);
+      return;
+    }
+    this._saving = true;
     const rule = clone(this._rule);
-    rule.filter.keywords.rows = rule.filter.keywords.rows.filter((r) => r.match.trim());
     try {
       const saved = rule.id
         ? await this.hass.callWS<Rule>({ type: "laeutwerk/rules/update", rule_id: rule.id, rule })
         : await this.hass.callWS<Rule>({ type: "laeutwerk/rules/create", rule });
+      this._clearDraft();
       this._emit("saved", saved);
     } catch (err) {
-      this._error = this._l.t("failed", { error: errorText(err) });
+      const detail = errorText(err);
+      const step = errorStep(detail);
+      this._serverError = { step, text: translateError(detail, this._l), detail };
+      if (step) this._open = new Set([...this._open, step]);
     } finally {
       this._saving = false;
     }
+  }
+
+  private _cancel(): void {
+    if (this._dirty && !this._confirmCancel) {
+      this._confirmCancel = true;
+      return;
+    }
+    this._clearDraft();
+    this._emit("cancel");
   }
 
   private async _saveTemplate(): Promise<void> {
@@ -309,6 +434,7 @@ export class LaeutwerkRuleEditor extends LitElement {
         .signal=${this._signal.signal}
         .sample=${this._preview?.events[0]?.variables ?? {}}
         .ruleId=${this.rule.id}
+        .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => e.colors))]}
         @apply=${this._applySignal}
         @cancel=${() => (this._signal = undefined)}
         @delete=${this._deleteSignal}
@@ -317,12 +443,67 @@ export class LaeutwerkRuleEditor extends LitElement {
     const l = this._l;
     const valid = ruleComplete(this._rule);
     return html`<div class="page">
+      <datalist id="lw-known-tags">
+        ${(this._knownTags ?? []).map(
+          (tag) => html`<option value=${tag.id}>${tag.name ?? ""}</option>`,
+        )}
+      </datalist>
       <div class="separator">
         ${this._rule.id ? l.t("edit_rule") : l.t("new_rule")}<span class="line"></span>
       </div>
+      ${
+        this._draft
+          ? html`<div class="panel draft">
+              <div class="hint">
+                ${l.t("draft_found", {
+                  when: relativeDayTime(
+                    this._draft.saved_at,
+                    new Date(),
+                    l,
+                    this.hass?.config?.time_zone,
+                  ),
+                })}
+              </div>
+              <div class="wrap">
+                <button
+                  class="chip accent"
+                  @click=${() => {
+                    this._rule = this._draft!.rule;
+                    this._draft = undefined;
+                    this._open = new Set([1, 2, 3, 4, 5, 6, 7]);
+                    this._schedulePreview(0);
+                  }}
+                >
+                  ${l.t("draft_restore")}
+                </button>
+                <button
+                  class="chip"
+                  @click=${() => {
+                    this._draft = undefined;
+                    this._clearDraft();
+                  }}
+                >
+                  ${l.t("draft_discard")}
+                </button>
+              </div>
+            </div>`
+          : nothing
+      }
       ${this._stepCalendar()} ${this._stepEvents()} ${this._stepWhen()} ${this._stepSignals()}
       ${this._stepAck()} ${this._stepDetails()} ${this._stepAdvanced()}
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+      ${
+        this._serverError && !this._serverError.step
+          ? this._errorBox(this._serverError.text, this._serverError.detail)
+          : nothing
+      }
+      ${
+        this._problems.length
+          ? html`<div class="error">
+              ${l.t("problems_title")} ${this._problems.map((p) => p.text).join(" ")}
+            </div>`
+          : nothing
+      }
       ${
         this._exportYaml !== undefined
           ? html`<div class="panel">
@@ -353,18 +534,65 @@ export class LaeutwerkRuleEditor extends LitElement {
           : nothing
       }
       <div class="actions">
-        <button class="pill outline" @click=${() => this._emit("cancel")}>${l.t("cancel")}</button>
-        <button class="pill primary" ?disabled=${!valid || this._saving} @click=${this._save}>
-          ${l.t("save")}
+        <button class="pill outline ${this._confirmCancel ? "danger" : ""}" @click=${this._cancel}>
+          ${this._confirmCancel ? l.t("discard_changes") : l.t("cancel")}
+        </button>
+        <button class="pill primary" ?disabled=${this._saving} @click=${this._save}>
+          ${this._saving ? "…" : l.t("save")}
         </button>
       </div>
     </div>`;
   }
 
+  private _errorBox(text: string, detail: string): TemplateResult {
+    return html`<div class="error">
+      ${text}
+      ${
+        detail !== text
+          ? html`<details>
+              <summary>${this._l.t("error_detail")}</summary>
+              <code>${detail}</code>
+            </details>`
+          : nothing
+      }
+    </div>`;
+  }
+
   private _step(num: number, title: StringKey, body: TemplateResult): TemplateResult {
-    return html`<section class="panel">
-      <div class="step"><span class="num">${num}</span>${this._l.t(title)}</div>
-      ${body}
+    const l = this._l;
+    const open = this._open.has(num);
+    const problems = this._problems.filter((p) => p.step === num);
+    const server = this._serverError?.step === num ? this._serverError : undefined;
+    const issues = problems.length + (server ? 1 : 0);
+    const names = (id: string) =>
+      (this.hass?.states[id]?.attributes.friendly_name as string | undefined) ?? id;
+    return html`<section class="panel ${issues ? "has-error" : ""}" data-step=${num}>
+      <button class="step head" aria-expanded=${open} @click=${() => this._toggleStep(num)}>
+        <span class="num">${num}</span>
+        <span class="grow text">
+          <span>${l.t(title)}</span>
+          ${
+            open
+              ? nothing
+              : html`<span class="summary">${stepSummary(this._rule, num, l, names)}</span>`
+          }
+        </span>
+        ${issues ? html`<span class="badge">${issues}</span>` : nothing}
+        <ha-icon .icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+      </button>
+      ${
+        open
+          ? html`${problems.map((p) => html`<div class="error">${p.text}</div>`)}
+            ${server ? this._errorBox(server.text, server.detail) : nothing} ${body}
+            ${
+              this._guided && num < 7
+                ? html`<button class="pill outline next" @click=${() => this._nextStep(num)}>
+                    ${l.t("next_step")}<ha-icon icon="mdi:chevron-down"></ha-icon>
+                  </button>`
+                : nothing
+            }`
+          : nothing
+      }
     </section>`;
   }
 
@@ -539,6 +767,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                   (c) =>
                     html`<div class="td col" role="cell">
                       <input
+                        list=${/nfc|tag/i.test(c) ? "lw-known-tags" : nothing}
                         .value=${row[c] ?? ""}
                         @input=${(e: Event) => this._setRow(i, { [c]: (e.target as HTMLInputElement).value })}
                       />
@@ -583,9 +812,58 @@ export class LaeutwerkRuleEditor extends LitElement {
                 : l.t("plural_hint_off")
           }
         </div>
-        ${this._previewList()}
+        ${this._suggestions()} ${this._previewList()}
       `,
     );
+  }
+
+  private _suggestions(): TemplateResult | typeof nothing {
+    const open = (this._titles ?? []).filter((t) => !t.matched);
+    if (!open.length) return nothing;
+    const l = this._l;
+    const columns = columnNames(this._rule);
+    const add = (titles: string[]) =>
+      this._setRows([
+        ...this._rule.filter.keywords.rows,
+        ...titles.map((title) => ({
+          match: title,
+          ...Object.fromEntries(columns.map((c) => [c, ""])),
+        })),
+      ]);
+    return html`<div class="sublabel">${l.t("suggestions")}</div>
+      <div class="wrap">
+        ${open.map(
+          (t) =>
+            html`<button class="chip dashed" @click=${() => add([t.title])}>
+              <ha-icon icon="mdi:plus"></ha-icon>${t.title}${t.count > 1 ? ` · ${t.count}×` : ""}
+            </button>`,
+        )}
+        ${
+          open.length > 1
+            ? html`<button class="chip accent" @click=${() => add(open.map((t) => t.title))}>
+                ${l.t("suggestions_all")}
+              </button>`
+            : nothing
+        }
+      </div>`;
+  }
+
+  /** Tags that were scanned in Home Assistant before (tag/list). */
+  private _knownTagChips(pick: (id: string) => void): TemplateResult {
+    const l = this._l;
+    const tags = this._knownTags ?? [];
+    if (!tags.length) {
+      return html`<div class="hint">${this._knownTags ? l.t("no_known_tags") : ""}</div>`;
+    }
+    return html`<div class="sublabel">${l.t("known_tags")}</div>
+      <div class="wrap">
+        ${tags.map(
+          (tag) =>
+            html`<button class="chip" title=${tag.id} @click=${() => pick(tag.id)}>
+              <ha-icon icon="mdi:nfc-variant"></ha-icon>${tag.name || tag.id}
+            </button>`,
+        )}
+      </div>`;
   }
 
   private _previewList(): TemplateResult {
@@ -852,7 +1130,12 @@ export class LaeutwerkRuleEditor extends LitElement {
                   placeholder=${l.t("ack_tag_placeholder")}
                   @input=${(e: Event) => setAt(i, { tag_id: (e.target as HTMLInputElement).value })}
                   @change=${() => this._schedulePreview(300)}
+                  list="lw-known-tags"
                 />
+                ${this._knownTagChips((id) => {
+                  setAt(i, { tag_id: id });
+                  this._schedulePreview(300);
+                })}
                 ${
                   this._rule.filter.keywords.columns.length
                     ? html`<div class="wrap vars">
@@ -1097,33 +1380,19 @@ export class LaeutwerkRuleEditor extends LitElement {
             else setActivation({ conditions });
           }}
         ></laeutwerk-field>
-        <div class="row">
-          <label class="field grow"
-            >${l.t("season")} – ${l.t("season_from")}
-            <input
-              placeholder="04-01"
-              .value=${activation?.season?.from ?? ""}
-              @change=${(e: Event) => {
-                const from = (e.target as HTMLInputElement).value.trim();
-                const to = activation?.season?.to ?? "";
-                if (!from && !to && !activation?.conditions.length) setActivation(null);
-                else setActivation({ season: from || to ? { from, to } : undefined });
-              }}
-            />
-          </label>
-          <label class="field grow"
-            >${l.t("season_to")}
-            <input
-              placeholder="11-30"
-              .value=${activation?.season?.to ?? ""}
-              @change=${(e: Event) => {
-                const to = (e.target as HTMLInputElement).value.trim();
-                const from = activation?.season?.from ?? "";
-                if (!from && !to && !activation?.conditions.length) setActivation(null);
-                else setActivation({ season: from || to ? { from, to } : undefined });
-              }}
-            />
-          </label>
+        <div class="sublabel">${l.t("season")}</div>
+        <div class="row season">
+          ${this._monthDay(activation?.season?.from ?? "", l.t("season_from"), (from) => {
+            const to = activation?.season?.to ?? "";
+            if (!from && !to && !activation?.conditions.length) setActivation(null);
+            else setActivation({ season: from || to ? { from, to } : undefined });
+          })}
+          <span>–</span>
+          ${this._monthDay(activation?.season?.to ?? "", l.t("season_to"), (to) => {
+            const from = activation?.season?.from ?? "";
+            if (!from && !to && !activation?.conditions.length) setActivation(null);
+            else setActivation({ season: from || to ? { from, to } : undefined });
+          })}
         </div>
 
         <div class="sublabel">${l.t("escalation")}</div>
@@ -1132,18 +1401,11 @@ export class LaeutwerkRuleEditor extends LitElement {
           (stage, i) =>
             html`<div class="row">
               <span class="chip accent">${l.t("stage_n", { n: i + 1 })}</span>
-              <input
-                class="grow"
-                aria-label=${l.t("stage_after")}
-                placeholder=${l.t("stage_after")}
-                .value=${stage.after}
-                @change=${(e: Event) =>
-                  this._update({
-                    escalation: stages.map((x, j) =>
-                      j === i ? { after: (e.target as HTMLInputElement).value.trim() } : x,
-                    ),
-                  })}
-              />
+              ${this._stageInput(stage.after, (after) =>
+                this._update({
+                  escalation: stages.map((x, j) => (j === i ? { after } : x)),
+                }),
+              )}
               <button
                 class="mini"
                 aria-label=${l.t("remove")}
@@ -1184,6 +1446,81 @@ export class LaeutwerkRuleEditor extends LitElement {
         ></laeutwerk-field>
       `,
     );
+  }
+
+  /** Day and month pickers for a season border ("MM-DD"). */
+  private _monthDay(
+    value: string,
+    label: string,
+    onChange: (value: string) => void,
+  ): TemplateResult {
+    const l = this._l;
+    const [month, day] = value ? value.split("-").map(Number) : [0, 0];
+    const emit = (m: number, d: number) =>
+      onChange(m && d ? `${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` : "");
+    return html`<span class="monthday" role="group" aria-label=${label}>
+      <select
+        aria-label=${`${label} ${l.t("season_day")}`}
+        @change=${(e: Event) => emit(month || 1, Number((e.target as HTMLSelectElement).value))}
+      >
+        <option value="0" ?selected=${!day}>–</option>
+        ${Array.from({ length: 31 }, (_, n) => n + 1).map(
+          (d) => html`<option value=${d} ?selected=${d === day}>${d}.</option>`,
+        )}
+      </select>
+      <select
+        aria-label=${`${label} ${l.t("season_month")}`}
+        @change=${(e: Event) => emit(Number((e.target as HTMLSelectElement).value), day || 1)}
+      >
+        <option value="0" ?selected=${!month}>–</option>
+        ${Array.from({ length: 12 }, (_, n) => n + 1).map(
+          (m) => html`<option value=${m} ?selected=${m === month}>${l.monthShort(m - 1)}</option>`,
+        )}
+      </select>
+    </span>`;
+  }
+
+  /** Escalation stage: after a number of minutes / hours, or at a time of day. */
+  private _stageInput(after: string, onChange: (after: string) => void): TemplateResult {
+    const l = this._l;
+    const atTime = /^\d{1,2}:\d{2}$/.test(after);
+    const match = /^(\d+)\s*([mh]?)$/.exec(after);
+    const amount = match ? Number(match[1]) : 2;
+    const unit = match?.[2] === "m" ? "m" : "h";
+    return html`<div class="stage grow">
+      <div class="segmented small">
+        <button aria-pressed=${!atTime} @click=${() => atTime && onChange("2h")}>
+          ${l.t("stage_after_mode")}
+        </button>
+        <button aria-pressed=${atTime} @click=${() => !atTime && onChange("21:30")}>
+          ${l.t("stage_at_mode")}
+        </button>
+      </div>
+      ${
+        atTime
+          ? html`<input
+              type="time"
+              .value=${after.padStart(5, "0")}
+              @change=${(e: Event) => onChange((e.target as HTMLInputElement).value)}
+            />`
+          : html`<div class="row">
+              <input
+                type="number"
+                min="1"
+                .value=${String(amount)}
+                @change=${(e: Event) =>
+                  onChange(`${Math.max(1, Number((e.target as HTMLInputElement).value))}${unit}`)}
+              />
+              <select
+                @change=${(e: Event) =>
+                  onChange(`${amount}${(e.target as HTMLSelectElement).value}`)}
+              >
+                <option value="m" ?selected=${unit === "m"}>${l.t("minutes_short")}</option>
+                <option value="h" ?selected=${unit === "h"}>${l.t("hours_short")}</option>
+              </select>
+            </div>`
+      }
+    </div>`;
   }
 
   private _toggle(label: string, value: boolean, onChange: (v: boolean) => void): TemplateResult {
@@ -1373,6 +1710,71 @@ export class LaeutwerkRuleEditor extends LitElement {
       }
       .extra {
         flex-wrap: wrap;
+      }
+      .monthday {
+        display: inline-flex;
+        gap: 4px;
+        flex: 1;
+      }
+      .monthday select {
+        padding: 0 6px;
+      }
+      .season {
+        align-items: center;
+      }
+      .stage {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stage select {
+        width: auto;
+      }
+      .step.head {
+        width: 100%;
+        text-align: left;
+        min-height: 44px;
+      }
+      .step.head .text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .summary {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--lw-text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .badge {
+        min-width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        background: var(--lw-danger);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .panel.has-error {
+        border-color: color-mix(in srgb, var(--lw-danger) 60%, transparent);
+      }
+      .pill.next {
+        align-self: flex-end;
+        min-height: 40px;
+      }
+      .error details {
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      .error code {
+        white-space: pre-wrap;
+        word-break: break-word;
       }
       .yaml {
         min-height: 180px;

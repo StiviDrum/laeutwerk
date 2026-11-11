@@ -261,7 +261,10 @@ async def main() -> None:
                 # Open the editor for the first rule.
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " c._editing = c._rules[0]; await c.updateComplete; return true })()"
+                    " c._editing = c._rules[0]; await c.updateComplete;"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " await e.updateComplete;"
+                    " e._open = new Set([1, 2, 3, 4, 5, 6, 7]); return true })()"
                 )
                 await asyncio.sleep(4)
                 await cdp.shot("editor")
@@ -323,6 +326,8 @@ async def main() -> None:
                     "  escalation: [{after: '2h'}], assignee: {persons: [], rotation: 'fixed'}});"
                     " await c.updateComplete; await new Promise(r => setTimeout(r, 2500));"
                     " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " e._open = new Set([7]); await e.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 1500));"
                     " const sec = e.shadowRoot.querySelectorAll('section')[6];"
                     " sec.scrollIntoView();"
                     " return [...sec.querySelectorAll('laeutwerk-field')].map(f =>"

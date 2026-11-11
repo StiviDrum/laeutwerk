@@ -44,3 +44,12 @@ describe("card editor", () => {
     ).toEqual({ type: "", view: "rule", rule: "muell" });
   });
 });
+
+describe("reordered rules", () => {
+  it("sorts by the new order", () => {
+    const rules = [r("a"), r("b"), r("c")];
+    expect(
+      applyRuleEvent(rules, { event: "reordered", rule_ids: ["c", "a", "b"] }).map((x) => x.id),
+    ).toEqual(["c", "a", "b"]);
+  });
+});
