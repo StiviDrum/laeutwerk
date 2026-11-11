@@ -62,7 +62,7 @@
     },
     "snooze": {
       "name": "Snooze",
-      "description": "Reminds again later: open reminders become planned again and remind once more when the duration is over (unless they expire first). Without 'rule': all open reminders.",
+      "description": "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give either 'duration' or 'until'. Without 'rule': all open reminders.",
       "fields": {
         "rule": {
           "name": "Rule",
@@ -75,6 +75,20 @@
         "duration": {
           "name": "Duration",
           "description": "Minutes, or a duration such as 30m, 3h, 1d."
+        },
+        "until": {
+          "name": "Until",
+          "description": "Time of day, e.g. 07:00 (the next time it is reached)."
+        }
+      }
+    },
+    "reopen": {
+      "name": "Reopen",
+      "description": "Undoes the acknowledgement of a reminder (e.g. a mis-tap) as long as it has not expired: it is open again (reminded or planned). Signals are not sent again; actions run when done are not undone.",
+      "fields": {
+        "reminder_id": {
+          "name": "Reminder",
+          "description": "Id of the acknowledged reminder (get_rules → status.reminders)."
         }
       }
     },
@@ -227,6 +241,12 @@
     },
     "signal_failed": {
       "message": "The signal could not be sent – see the log for details."
+    },
+    "duration_or_until": {
+      "message": "Give either 'duration' or 'until'."
+    },
+    "cannot_reopen": {
+      "message": "Reminder {reminder} cannot be reopened (not acknowledged or already expired)."
     }
   },
   "issues": {

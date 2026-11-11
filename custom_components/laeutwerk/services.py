@@ -27,11 +27,12 @@ from homeassistant.helpers import config_validation as cv
 
 from .compat import vol
 from .const import ACK_VIA_SERVICE, DOMAIN
-from .durations import duration_minutes
+from .durations import duration_minutes, minutes_until
 from .manager import LaeutwerkManager, RuleNotFoundError, async_who, named_person
 
 SERVICE_ACKNOWLEDGE = "acknowledge"
 SERVICE_SNOOZE = "snooze"
+SERVICE_REOPEN = "reopen"
 SERVICE_TRIGGER = "trigger"
 SERVICE_TEST_SIGNAL = "test_signal"
 SERVICE_GET_RULES = "get_rules"
@@ -131,12 +132,30 @@ def async_setup_services(hass: HomeAssistant) -> None:
         rule_id: str | None = call.data.get(ATTR_RULE)
         if rule_id is not None:
             _check_rule(manager, rule_id)
+        if "until" in call.data:
+            minutes = minutes_until(call.data["until"])
+        elif "duration" in call.data:
+            minutes = call.data["duration"]
+        else:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="duration_or_until"
+            )
         snoozed = await manager.async_snooze(
-            call.data["duration"], rule_id, reminder_id=call.data.get("reminder_id")
+            minutes, rule_id, reminder_id=call.data.get("reminder_id")
         )
         if not call.return_response:
             return None
         return {"snoozed": [reminder.id for reminder in snoozed]}
+
+    async def reopen(call: ServiceCall) -> ServiceResponse:
+        reminder = await get_manager(hass).async_reopen(call.data["reminder_id"])
+        if reminder is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_reopen",
+                translation_placeholders={"reminder": call.data["reminder_id"]},
+            )
+        return {"reopened": reminder.id} if call.return_response else None
 
     async def trigger(call: ServiceCall) -> None:
         manager = get_manager(hass)
@@ -269,9 +288,17 @@ def async_setup_services(hass: HomeAssistant) -> None:
             {
                 vol.Optional(ATTR_RULE): cv.string,
                 vol.Optional("reminder_id"): cv.string,
-                vol.Required("duration"): duration_minutes,
+                vol.Exclusive("duration", "when"): duration_minutes,
+                vol.Exclusive("until", "when"): cv.time,
             }
         ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    register(
+        DOMAIN,
+        SERVICE_REOPEN,
+        reopen,
+        vol.Schema({vol.Required("reminder_id"): cv.string}),
         supports_response=SupportsResponse.OPTIONAL,
     )
     register(DOMAIN, SERVICE_TRIGGER, trigger, _RULE_SCHEMA)

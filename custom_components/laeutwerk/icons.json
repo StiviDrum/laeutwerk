@@ -22,6 +22,7 @@
   "services": {
     "acknowledge": { "service": "mdi:check-circle-outline" },
     "snooze": { "service": "mdi:alarm-snooze" },
+    "reopen": { "service": "mdi:undo" },
     "trigger": { "service": "mdi:bell-ring" },
     "test_signal": { "service": "mdi:test-tube" },
     "get_rules": { "service": "mdi:format-list-bulleted" },

@@ -30,12 +30,19 @@ from .const import (
     ACTION_SNOOZE_PREFIX,
     DOMAIN,
     HISTORY_MAX,
+    LOOKAHEAD_DAYS,
     REFRESH_MINUTES,
     SIGNAL_RULE_STATUS,
 )
 from .engine import RuleRunner
 from .issues import async_check_rule, async_clear_rule
-from .matching import Occurrence, hit_colors, sample_occurrence
+from .matching import (
+    Occurrence,
+    build_occurrences,
+    hit_colors,
+    match_event,
+    sample_occurrence,
+)
 from .model import STATE_INACTIVE, Reminder, Rule, Signal
 from .schema import (
     async_validate_rule,
@@ -44,6 +51,7 @@ from .schema import (
     validate_signal,
 )
 from .signals import async_clear_notifications, async_send_signal
+from .sources import async_fetch_events
 from .store import LaeutwerkStore, StoredData
 from .templates import (
     RUNTIME_KEYS,
@@ -52,6 +60,7 @@ from .templates import (
     parse_rules_yaml,
     template_from_rule,
 )
+from .timespec import local_instant
 from .triggers import own_context
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,6 +68,11 @@ _LOGGER = logging.getLogger(__name__)
 EVENT_ADDED = "added"
 EVENT_UPDATED = "updated"
 EVENT_REMOVED = "removed"
+EVENT_REORDERED = "reordered"
+
+# Event titles offered as keyword suggestions: look-ahead and maximum.
+SUGGEST_DAYS = 60
+MAX_SUGGESTIONS = 40
 
 MOBILE_APP_ACTION_EVENT = "mobile_app_notification_action"
 
@@ -247,6 +261,9 @@ class LaeutwerkManager:
                 rule_id, reminder
             ),
             history=lambda rule_id=rule.id: self.history.get(rule_id, []),
+            on_reopened=lambda reminder, rule_id=rule.id: self._drop_history(
+                rule_id, reminder.id
+            ),
         )
         self.runners[rule.id] = runner
         await runner.async_start()
@@ -279,6 +296,62 @@ class LaeutwerkManager:
         )
         self.history[rule_id] = entries[:HISTORY_MAX]
         self.async_schedule_save()
+
+    async def async_title_suggestions(
+        self, rule_data: dict[str, Any], days: int = SUGGEST_DAYS
+    ) -> list[dict[str, Any]]:
+        """Event titles of the rule's sources (for keyword suggestions).
+
+        Each distinct title with how often it occurs in the next ``days`` days
+        and whether the keyword table already matches it.
+        """
+        rule = draft_rule(rule_data)
+        start, _end = lookahead_window()
+        events, _errors = await async_fetch_events(
+            self.hass, rule.sources, start, dt_util.utcnow() + timedelta(days=days)
+        )
+        titles: dict[str, dict[str, Any]] = {}
+        for event in sorted(events, key=lambda e: e.start):
+            title = event.summary.strip()
+            if not title:
+                continue
+            entry = titles.setdefault(
+                title,
+                {
+                    "title": title,
+                    "count": 0,
+                    "matched": bool(rule.filter.rows)
+                    and match_event(rule.filter, event) is not None,
+                },
+            )
+            entry["count"] += 1
+        return list(titles.values())[:MAX_SUGGESTIONS]
+
+    async def async_reorder(self, rule_ids: list[str]) -> None:
+        """Put the rules in this order (rules not listed keep theirs, after)."""
+        for rule_id in rule_ids:
+            self.get_rule(rule_id)
+        order = list(dict.fromkeys(rule_ids)) + [
+            rule_id for rule_id in self.rules if rule_id not in rule_ids
+        ]
+        self.rules = {rule_id: self.rules[rule_id] for rule_id in order}
+        self.async_schedule_save()
+        for listener in list(self._listeners):
+            listener(EVENT_REORDERED, "")
+
+    @callback
+    def _drop_history(self, rule_id: str, reminder_id: str) -> None:
+        """Forget the history entry of a reopened reminder."""
+        entries = self.history.get(rule_id, [])
+        self.history[rule_id] = [e for e in entries if e["reminder_id"] != reminder_id]
+        self.async_schedule_save()
+
+    async def async_reopen(self, reminder_id: str) -> Reminder | None:
+        """Undo the acknowledgement of a reminder (any rule)."""
+        for runner in list(self.runners.values()):
+            if reminder_id in runner.reminders:
+                return await runner.async_reopen(reminder_id)
+        return None
 
     @property
     def invalid_rules(self) -> list[dict[str, Any]]:
@@ -496,15 +569,42 @@ class LaeutwerkManager:
 
     async def async_test_signal(
         self,
-        rule_id: str,
+        rule_id: str | None,
         signal_id: str | None = None,
         config: dict[str, Any] | None = None,
+        rule_data: dict[str, Any] | None = None,
     ) -> bool:
         """Send one signal now (saved one by id, or an unsaved configuration).
 
         Uses the open reminder, else the next matching event, else a sample
         event for tomorrow. Limits, quiet times and conditions are ignored.
+        With ``rule_data`` an unsaved rule (as in the editor) is used.
         """
+        if rule_data is not None:
+            rule = draft_rule(rule_data)
+            runner = RuleRunner(
+                self.hass, rule, {}, on_update=lambda _r: None, on_changed=lambda: None
+            )
+            events, _errors = await async_fetch_events(
+                self.hass, rule.sources, *lookahead_window()
+            )
+            now = dt_util.utcnow()
+            occurrences = sorted(build_occurrences(rule, events), key=lambda o: o.start)
+            item = next((o for o in occurrences if o.end > now), None) or (
+                sample_occurrence(rule)
+            )
+            signal = Signal.from_dict({"id": "test", **validate_signal(config or {})})
+            test_item = Occurrence(
+                id="test",
+                day=item.day,
+                start=item.start,
+                end=item.end,
+                events=tuple(item.events),
+            )
+            return await async_send_signal(
+                runner.signal_run(signal, test_item, own_context())
+            )
+        assert rule_id is not None
         rule = self.get_rule(rule_id)
         if config is not None:
             signal = Signal.from_dict({"id": "test", **validate_signal(config)})
@@ -642,3 +742,27 @@ def _default_interval_start(rule: Rule, old: Rule | None = None) -> None:
         **rule.interval,
         "start": previous or dt_util.now().date().isoformat(),
     }
+
+
+def draft_rule(data: dict[str, Any]) -> Rule:
+    """Rule from editor data that may not be complete yet (preview, tests).
+
+    Missing id, name and reminder times get placeholders; everything else is
+    validated like a saved rule.
+    """
+    data = {key: value for key, value in data.items() if key != "status"}
+    data.setdefault("id", "preview")
+    data["id"] = data["id"] or "preview"
+    data.setdefault("name", "Preview")
+    data["name"] = data["name"] or "Preview"
+    if not data.get("reminders"):
+        data["reminders"] = [{"at": "event_day 00:00"}]
+    return Rule.from_dict(validate_rule(data))
+
+
+def lookahead_window() -> tuple[datetime, datetime]:
+    """Start of today until the calendar look-ahead (UTC)."""
+    now = dt_util.utcnow()
+    tz = dt_util.get_default_time_zone()
+    start = local_instant(now.astimezone(tz).date(), 0, tz)
+    return start, now + timedelta(days=LOOKAHEAD_DAYS)

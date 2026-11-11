@@ -29,8 +29,21 @@ snooze:
       selector:
         text:
     duration:
-      required: true
+      required: false
       example: 3h
+      selector:
+        text:
+    until:
+      required: false
+      example: "07:00"
+      selector:
+        time:
+
+reopen:
+  fields:
+    reminder_id:
+      required: true
+      example: muell__20261117
       selector:
         text:
 

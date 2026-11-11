@@ -62,7 +62,7 @@
     },
     "snooze": {
       "name": "Später erinnern",
-      "description": "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist (sofern sie nicht vorher verfallen). Ohne 'rule': alle offenen Erinnerungen.",
+      "description": "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Entweder 'duration' oder 'until' angeben. Ohne 'rule': alle offenen Erinnerungen.",
       "fields": {
         "rule": {
           "name": "Regel",
@@ -75,6 +75,20 @@
         "duration": {
           "name": "Dauer",
           "description": "Minuten oder eine Dauer wie 30m, 3h, 1d."
+        },
+        "until": {
+          "name": "Bis",
+          "description": "Uhrzeit, z. B. 07:00 (das nächste Mal, dass sie erreicht wird)."
+        }
+      }
+    },
+    "reopen": {
+      "name": "Wieder öffnen",
+      "description": "Nimmt das Quittieren einer Erinnerung zurück (z. B. nach einem Fehltipp), solange sie nicht verfallen ist: sie ist wieder offen (erinnert oder geplant). Signale werden nicht erneut gesendet, Aktionen beim Erledigen nicht rückgängig gemacht.",
+      "fields": {
+        "reminder_id": {
+          "name": "Erinnerung",
+          "description": "ID der quittierten Erinnerung (get_rules → status.reminders)."
         }
       }
     },
@@ -227,6 +241,12 @@
     },
     "signal_failed": {
       "message": "Das Signal konnte nicht gesendet werden – Details stehen im Protokoll."
+    },
+    "duration_or_until": {
+      "message": "Entweder 'duration' oder 'until' angeben."
+    },
+    "cannot_reopen": {
+      "message": "Die Erinnerung {reminder} lässt sich nicht wieder öffnen (nicht quittiert oder schon verfallen)."
     }
   },
   "issues": {

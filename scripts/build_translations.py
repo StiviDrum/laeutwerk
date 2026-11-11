@@ -97,10 +97,19 @@ en = {
         ),
         "snooze": svc(
             "Snooze",
-            "Reminds again later: open reminders become planned again and remind once more when the duration is over (unless they expire first). Without 'rule': all open reminders.",
+            "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give either 'duration' or 'until'. Without 'rule': all open reminders.",
             rule=("Rule", "Rule id. Empty: all open reminders."),
             reminder_id=("Reminder", "Snooze exactly this reminder."),
             duration=("Duration", "Minutes, or a duration such as 30m, 3h, 1d."),
+            until=("Until", "Time of day, e.g. 07:00 (the next time it is reached)."),
+        ),
+        "reopen": svc(
+            "Reopen",
+            "Undoes the acknowledgement of a reminder (e.g. a mis-tap) as long as it has not expired: it is open again (reminded or planned). Signals are not sent again; actions run when done are not undone.",
+            reminder_id=(
+                "Reminder",
+                "Id of the acknowledged reminder (get_rules → status.reminders).",
+            ),
         ),
         "trigger": svc(
             "Trigger",
@@ -180,6 +189,10 @@ en = {
         "signal_failed": {
             "message": "The signal could not be sent – see the log for details."
         },
+        "duration_or_until": {"message": "Give either 'duration' or 'until'."},
+        "cannot_reopen": {
+            "message": "Reminder {reminder} cannot be reopened (not acknowledged or already expired)."
+        },
     },
     "issues": {
         "missing_entities": {
@@ -234,10 +247,22 @@ de = {
         ),
         "snooze": svc(
             "Später erinnern",
-            "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist (sofern sie nicht vorher verfallen). Ohne 'rule': alle offenen Erinnerungen.",
+            "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Entweder 'duration' oder 'until' angeben. Ohne 'rule': alle offenen Erinnerungen.",
             rule=("Regel", "Regel-ID. Leer: alle offenen Erinnerungen."),
             reminder_id=("Erinnerung", "Genau diese Erinnerung zurückstellen."),
             duration=("Dauer", "Minuten oder eine Dauer wie 30m, 3h, 1d."),
+            until=(
+                "Bis",
+                "Uhrzeit, z. B. 07:00 (das nächste Mal, dass sie erreicht wird).",
+            ),
+        ),
+        "reopen": svc(
+            "Wieder öffnen",
+            "Nimmt das Quittieren einer Erinnerung zurück (z. B. nach einem Fehltipp), solange sie nicht verfallen ist: sie ist wieder offen (erinnert oder geplant). Signale werden nicht erneut gesendet, Aktionen beim Erledigen nicht rückgängig gemacht.",
+            reminder_id=(
+                "Erinnerung",
+                "ID der quittierten Erinnerung (get_rules → status.reminders).",
+            ),
         ),
         "trigger": svc(
             "Auslösen",
@@ -317,6 +342,10 @@ de = {
         "signal_or_config": {"message": "Entweder 'signal' oder 'config' angeben."},
         "signal_failed": {
             "message": "Das Signal konnte nicht gesendet werden – Details stehen im Protokoll."
+        },
+        "duration_or_until": {"message": "Entweder 'duration' oder 'until' angeben."},
+        "cannot_reopen": {
+            "message": "Die Erinnerung {reminder} lässt sich nicht wieder öffnen (nicht quittiert oder schon verfallen)."
         },
     },
     "issues": {

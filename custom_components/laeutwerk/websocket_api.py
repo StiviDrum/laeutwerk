@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
-from datetime import timedelta
 import functools
 from typing import Any
 
@@ -14,20 +13,21 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from .compat import vol
-from .const import DOMAIN, HISTORY_MAX, LOOKAHEAD_DAYS
+from .const import DOMAIN, HISTORY_MAX
 from .engine import RuleRunner
 from .manager import (
     EVENT_REMOVED,
+    EVENT_REORDERED,
     LaeutwerkManager,
     RuleNotFoundError,
+    draft_rule,
+    lookahead_window,
     occurrence_payload,
 )
 from .matching import build_occurrences
 from .model import Rule
-from .schema import validate_rule
 from .signals import person_notify_targets
 from .sources import async_fetch_events
-from .timespec import local_instant
 
 MAX_PREVIEW = 10
 
@@ -195,6 +195,13 @@ async def ws_subscribe(
 
     @callback
     def forward(event: str, rule_id: str) -> None:
+        if event == EVENT_REORDERED:
+            connection.send_message(
+                websocket_api.event_message(
+                    msg["id"], {"event": event, "rule_ids": list(manager.rules)}
+                )
+            )
+            return
         if only is not None and rule_id != only:
             return
         rule = manager.rules.get(rule_id)
@@ -231,6 +238,8 @@ async def ws_subscribe(
         vol.Optional("limit", default=5): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=MAX_PREVIEW)
         ),
+        # Also return the distinct event titles (keyword suggestions).
+        vol.Optional("titles", default=False): cv.boolean,
     }
 )
 @websocket_api.async_response
@@ -243,24 +252,14 @@ async def ws_preview(
 ) -> None:
     """Next matching events of a saved or an unsaved rule, with variables."""
     if "rule" in msg:
-        data = {key: value for key, value in msg["rule"].items() if key != "status"}
-        data.setdefault("id", "preview")
-        data.setdefault("name", "Preview")
-        data.setdefault("reminders", [{"at": "event_day 00:00"}])
-        rule = Rule.from_dict(validate_rule(data))
+        rule = draft_rule(msg["rule"])
     elif "rule_id" in msg:
         rule = manager.get_rule(msg["rule_id"])
     else:
         raise vol.Invalid("rule_id or rule is required")
 
     now = dt_util.utcnow()
-    tz = dt_util.get_default_time_zone()
-    events, errors = await async_fetch_events(
-        hass,
-        rule.sources,
-        local_instant(now.astimezone(tz).date(), 0, tz),
-        now + timedelta(days=LOOKAHEAD_DAYS),
-    )
+    events, errors = await async_fetch_events(hass, rule.sources, *lookahead_window())
     runner = RuleRunner(
         hass, rule, {}, on_update=lambda _runner: None, on_changed=lambda: None
     )
@@ -282,8 +281,65 @@ async def ws_preview(
             "variables": sorted(runner.variables(occurrences[0]))
             if occurrences
             else [],
+            **(
+                {"titles": await manager.async_title_suggestions(rule.to_dict())}
+                if msg["titles"]
+                else {}
+            ),
         },
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/test_signal",
+        vol.Required("signal"): dict,
+        vol.Exclusive("rule_id", "rule"): cv.string,
+        vol.Exclusive("rule", "rule"): dict,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_test_signal(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Send a signal now – also for a rule that is not saved yet (admin)."""
+    signal = {key: value for key, value in msg["signal"].items() if key != "id"}
+    if "rule" in msg:
+        sent = await manager.async_test_signal(
+            None, config=signal, rule_data=msg["rule"]
+        )
+    elif "rule_id" in msg:
+        sent = await manager.async_test_signal(msg["rule_id"], config=signal)
+    else:
+        raise vol.Invalid("rule_id or rule is required")
+    if not sent:
+        raise HomeAssistantError("The signal could not be sent – see the log")
+    connection.send_result(msg["id"], {"sent": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/rules/reorder",
+        vol.Required("rule_ids"): [cv.string],
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_reorder(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Change the order of the rules (admin)."""
+    await manager.async_reorder(msg["rule_ids"])
+    connection.send_result(msg["id"], {"rule_ids": list(manager.rules)})
 
 
 @websocket_api.websocket_command(
@@ -446,5 +502,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_export,
         ws_import,
         ws_persons,
+        ws_test_signal,
+        ws_reorder,
     ):
         websocket_api.async_register_command(hass, command)

@@ -114,6 +114,7 @@ class RuleRunner:
         on_changed: Callable[[], None],
         on_finished: Callable[[Reminder], None] | None = None,
         history: Callable[[], list[dict[str, Any]]] | None = None,
+        on_reopened: Callable[[Reminder], None] | None = None,
     ) -> None:
         """Initialise; ``reminders`` is the persisted dict owned by the manager."""
         self.hass = hass
@@ -125,6 +126,7 @@ class RuleRunner:
         self._on_changed = on_changed
         self._on_finished = on_finished
         self._history = history or list
+        self._on_reopened = on_reopened
         # Activation (0.6): False while the rule's conditions are not met.
         self.active = True
         self._activation: list[Callable[[HomeAssistant], bool | None]] = []
@@ -989,6 +991,35 @@ class RuleRunner:
                 self._process(now)
         self._finish(bool(targets))
         return targets
+
+    async def async_reopen(self, reminder_id: str) -> Reminder | None:
+        """Undo an acknowledgement (e.g. a mis-tap) while the reminder is not over.
+
+        The reminder returns to "reminded" (or "planned" if it had not
+        reminded yet); signals are not sent again and actions run on done are
+        not undone.
+        """
+        async with self._lock:
+            now = dt_util.utcnow()
+            reminder = self.reminders.get(reminder_id)
+            if (
+                reminder is None
+                or reminder.state != STATE_DONE
+                or self.expire_at(reminder) <= now
+            ):
+                return None
+            reminder.state = STATE_REMINDED if reminder.reminded_at else STATE_PLANNED
+            reminder.finished_at = None
+            reminder.acknowledged_by = None
+            reminder.acknowledged_via = None
+            reminder.acknowledged_person = None
+            if self._on_reopened:
+                self._on_reopened(reminder)
+            self._process(now)
+        self._finish(True)
+        if self.rule.interval:
+            self.hass.async_create_task(self.async_refresh())
+        return reminder
 
     async def async_trigger(self) -> Reminder | None:
         """Remind now for the open or the next planned reminder."""
