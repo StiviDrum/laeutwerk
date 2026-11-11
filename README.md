@@ -3,8 +3,9 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.5 contains the engine, the card with the
-> rule editor, history, repairs and diagnostics; rules can also be created with the
+> **Status:** early development. 0.6 contains all planned features (engine,
+> card with rule editor, templates, escalation, responsibility …); 1.0 follows
+> after real-world testing; rules can also be created with the
 > `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
@@ -197,6 +198,48 @@ signals:
 `laeutwerk.snooze` (or the push button) sets a reminder back to *planned*; it
 reminds again when the time is over, unless it expires first.
 
+### Extensions (0.6)
+
+```yaml
+# Sources besides calendars: to-do lists (open items with a due date),
+# date / datetime entities, date helpers and timestamp or date sensors.
+sources: [calendar.abfallkalender, todo.aufgaben, input_datetime.tuev]
+
+# Due again n days after it was last acknowledged (no calendar needed).
+# Overdue reminders (also overdue to-dos) remind daily until done.
+interval: {every: 90}            # or "12w"; optional start: 2026-12-01
+
+# Only active under conditions and / or in a season (event day, MM-DD).
+activation:
+  match: all                     # all | any
+  conditions:
+    - {condition: state, entity_id: input_boolean.urlaub, state: "off"}
+  season: {from: "04-01", to: "11-30"}
+
+# Responsible person: {zustaendig} in texts, push audience "assignee",
+# statistics in get_rules (status.assignee_stats).
+assignee:
+  persons: [person.steven, person.anna]
+  rotation: per_event            # fixed | weekly | per_event | after_last
+
+# Escalation while open: stages start after a duration or at a time of day;
+# a signal with "stage: n" is active from that stage on.
+escalation:
+  - {after: 2h}
+  - {after: "21:30"}
+
+# Home Assistant actions when a reminder is acknowledged
+# (variables: person, via, titel, tonne … as in texts).
+on_done:
+  - action: counter.increment
+    target: {entity_id: counter.tonnen_rausgestellt}
+```
+
+**Templates:** *+* in the card offers built-in templates (bins, birthdays,
+maintenance, medication supply), your own templates (*Save as template* in
+the editor) and *Import YAML*. `laeutwerk.export_rules` /
+`laeutwerk.import_rules` (and *Export* in the editor) move rules as YAML.
+
 ### Entities (one device per rule)
 
 | Entity | State |
@@ -209,7 +252,8 @@ reminds again when the time is over, unless it expires first.
 
 ### Actions and events
 
-`laeutwerk.acknowledge`, `snooze`, `trigger`, `test_signal`, `get_rules`, `create_rule`, `update_rule`,
+`laeutwerk.acknowledge`, `snooze`, `trigger`, `test_signal`, `get_rules`,
+`export_rules`, `import_rules`, `create_rule`, `update_rule`,
 `delete_rule`, `duplicate_rule`, `enable`, `disable`. Editing actions need an
 admin (calls from automations are allowed).
 
@@ -246,7 +290,7 @@ compact: false        # one line for the top of a dashboard
   of the type with variable chips and a text preview, limits and quiet times,
   *Test* and *Edit as YAML*.
 
-The card bundle is 27 KB gzipped (measured with `gzip -9` on 0.5.0).
+The card bundle is 31 KB gzipped (measured with `gzip -9` on 0.6.0).
 
 ## Troubleshooting
 
@@ -289,8 +333,9 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.5 enthält die komplette Logik, die Karte mit
-> Regel-Editor, Verlauf, Reparaturen und Diagnose; Regeln legst du in der Karte an (*+*) oder
+> **Status:** frühe Entwicklung. 0.6 enthält alle geplanten Funktionen (Logik,
+> Karte mit Regel-Editor, Vorlagen, Eskalation, Zuständigkeit …); 1.0 folgt nach
+> dem Praxistest; Regeln legst du in der Karte an (*+*) oder
 > mit der Aktion `laeutwerk.create_rule` (Beispiel oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 
 Eine *Regel* beschreibt einen Anlass: welcher Kalender, welche Termine

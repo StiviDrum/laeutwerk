@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-11
+
+### Added
+- More sources: to-do lists (open items with a due date), date, datetime and
+  date helper entities, timestamp / date sensors. Overdue to-dos remind daily.
+- Interval since done (`interval`): due again n days after the last
+  acknowledgement, daily until done when overdue.
+- Activation (`activation`): rule only active under conditions (all / any)
+  and in a season.
+- Actions when done (`on_done`).
+- Responsibility (`assignee`) with rotation (fixed, weekly, per event, after
+  the one who did it last), `{zustaendig}`, push audience `assignee`,
+  statistics.
+- Escalation stages (`escalation`, signal `stage`).
+- Templates: built-in ones, own templates, YAML export / import (card,
+  websocket, actions `export_rules` / `import_rules`).
+- Card: template picker, "Advanced" step, sources and interval in step 1,
+  export and "save as template", signal stage, responsible person on open
+  reminders, "inactive" rules.
+
+### Changed
+- Storage version 1.3 (own templates; older data is migrated).
+- `sources` may be empty when the rule has an `interval`.
+
+### Fixed
+- The editor's match preview no longer fails because of half-filled
+  fields in other steps.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added
