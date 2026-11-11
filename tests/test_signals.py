@@ -290,8 +290,9 @@ async def test_announcement(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     play = async_mock_service(hass, "media_player", "play_media")
-    with patch(
-        "homeassistant.components.tts.generate_media_source_id",
+    with patch.object(
+        signals,
+        "_media_source_id",
         side_effect=lambda hass, message, **kw: f"tts:{kw['engine']}:{message}",
     ):
         await start(hass, freezer, ANNOUNCE, titles=("Papier", "Bio"))

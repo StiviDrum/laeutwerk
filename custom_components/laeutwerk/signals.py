@@ -364,24 +364,29 @@ async def _async_light(run: SignalRun) -> bool:
 # --------------------------------------------------------------- announcement
 
 
-async def _async_announce(run: SignalRun) -> bool:
+def _media_source_id(hass: HomeAssistant, message: str, **kwargs: Any) -> str:
+    """TTS media source id (imported lazily: tts is an optional dependency)."""
     from homeassistant.components.tts import (  # noqa: PLC0415
         generate_media_source_id,
     )
 
+    return generate_media_source_id(hass, message, **kwargs)
+
+
+async def _async_announce(run: SignalRun) -> bool:
     hass, config = run.hass, run.signal.config
     message = run.text("text")
     engine = config.get("tts") or next(iter(hass.states.async_entity_ids("tts")), None)
     options = {"voice": config["voice"]} if config.get("voice") else None
     try:
-        media_id = generate_media_source_id(
+        media_id = _media_source_id(
             hass,
             message,
             engine=engine,
             language=config.get("language"),
             options=options,
         )
-    except (HomeAssistantError, KeyError) as err:
+    except (HomeAssistantError, KeyError, ImportError) as err:
         _LOGGER.warning("Announcement of signal %s failed: %s", run.signal.id, err)
         return False
     data: dict[str, Any] = {
