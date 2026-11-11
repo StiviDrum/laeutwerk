@@ -25,10 +25,15 @@ from .const import (
     SIGNAL_RULE_STATUS,
 )
 from .engine import RuleRunner
-from .matching import Occurrence
-from .model import STATE_INACTIVE, Reminder, Rule
-from .schema import make_rule_id, validate_rule
-from .signals import async_clear_notifications
+from .matching import Occurrence, sample_occurrence
+from .model import STATE_INACTIVE, Reminder, Rule, Signal
+from .schema import (
+    async_validate_rule,
+    make_rule_id,
+    validate_rule,
+    validate_signal,
+)
+from .signals import async_clear_notifications, async_send_signal
 from .store import LaeutwerkStore, StoredData
 
 _LOGGER = logging.getLogger(__name__)
@@ -213,7 +218,7 @@ class LaeutwerkManager:
             data["id"] = make_rule_id(str(data.get("name", "")), set(self.rules))
         elif data["id"] in self.rules:
             raise vol.Invalid(f"a rule with id '{data['id']}' already exists")
-        rule = Rule.from_dict(validate_rule(data))
+        rule = Rule.from_dict(await async_validate_rule(self.hass, data))
         self.rules[rule.id] = rule
         self.reminders[rule.id] = {}
         self.async_schedule_save()
@@ -236,7 +241,9 @@ class LaeutwerkManager:
     async def async_update_rule(self, rule_id: str, data: dict[str, Any]) -> Rule:
         """Replace a rule (full update); reminder state is kept."""
         self.get_rule(rule_id)
-        rule = Rule.from_dict(validate_rule({**data, "id": rule_id}))
+        rule = Rule.from_dict(
+            await async_validate_rule(self.hass, {**data, "id": rule_id})
+        )
         await self._async_stop_runner(rule_id, drop_open=not rule.enabled)
         self.rules[rule_id] = rule
         self.async_schedule_save()
@@ -299,6 +306,48 @@ class LaeutwerkManager:
                 reminder_id=reminder_id, by=by, via=via, early=False
             )
         return done
+
+    async def async_test_signal(
+        self,
+        rule_id: str,
+        signal_id: str | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> bool:
+        """Send one signal now (saved one by id, or an unsaved configuration).
+
+        Uses the open reminder, else the next matching event, else a sample
+        event for tomorrow. Limits, quiet times and conditions are ignored.
+        """
+        rule = self.get_rule(rule_id)
+        if config is not None:
+            signal = Signal.from_dict({"id": "test", **validate_signal(config)})
+        else:
+            found = next((s for s in rule.signals if s.id == signal_id), None)
+            if found is None:
+                raise HomeAssistantError(
+                    f"Rule '{rule_id}' has no signal '{signal_id}'"
+                )
+            signal = found
+        runner = self.runners.get(rule_id) or RuleRunner(
+            self.hass,
+            rule,
+            {},
+            on_update=lambda _runner: None,
+            on_changed=lambda: None,
+        )
+        item: Reminder | Occurrence | None = (
+            next(iter(runner.open_reminders), None) or runner.next_occurrence()
+        )
+        if item is None:
+            item = sample_occurrence(rule)
+        test_item = Occurrence(
+            id="test",
+            day=item.day,
+            start=item.start,
+            end=item.end,
+            events=tuple(item.events),
+        )
+        return await async_send_signal(runner.signal_run(signal, test_item, Context()))
 
     async def _async_notification_action(self, event: Event[Any]) -> None:
         """Handle a pressed button of a push notification."""

@@ -38,9 +38,18 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - CI: the HACS job fails while the GitHub repo has no description (topics are set) – repo settings, Steven.
 
 ## 0.2 – Signale
-- [ ] Licht-Signal (Muster, Farbe aus Spalte, Zustand wiederherstellen), Ansage (TTS announce, Lautstärke, Einzahl/Mehrzahl-Text), eigene Aktion
-- [ ] Ruhezeiten (auslassen/nachholen), Zielgruppe, Häufigkeit
-- [ ] `test_signal`; Release v0.2.0
+- [x] Licht-Signal (Muster, Farbe aus Spalte, Zustand wiederherstellen), Ansage (TTS announce, Lautstärke, Einzahl/Mehrzahl-Text), eigene Aktion
+  - `signals.py` (one sender per type), `colors.py` (German/English names, hex, r,g,b; grey/black -> white).
+  - Light: `entity` (short form) is stored as `entities`. One signal per lamp at a time. A lamp that was off is switched off again – its "last colour" may then be the signal colour on bulbs that remember it (cannot be restored without switching on).
+  - Announcement: `media_player.play_media` with a TTS media source id and `announce: true` (what `tts.speak` does) so that `extra.volume` can be passed; only players that support announcement volume (Sonos) use it.
+  - Custom action: `Script` with the text variables as run variables.
+- [x] Ruhezeiten (auslassen/nachholen), Zielgruppe, Häufigkeit
+  - Quiet `mode: skip | defer`; deferred signals are stored per reminder and sent when the quiet time ends, if the reminder is still open (also after a restart).
+  - `limit: {per_reminder, min_interval (minutes)}`; "only if" conditions (`conditions`, `conditions_match`) are part of every signal already. Conditions and action sequences are fully validated when a rule is saved (HA's condition validation is asynchronous).
+  - Audience `all | present | persons`: person -> `device_trackers` of the mobile app -> legacy action `notify.mobile_app_<device>` (the notify entity cannot carry action buttons).
+- [x] `test_signal`; Release v0.2.0
+  - `rule` + `signal` (saved) or `config` (unsaved, admin). Uses the open reminder, else the next event, else a sample event for tomorrow.
+  - Dev instance: light signal can be watched on `light.stehleuchte`. No media player / TTS stand-in yet (the demo integration would add dozens of entities) – announcements are covered by tests only so far.
 
 ## 0.3 – Gelegenheiten und Quittierung
 - [ ] „Bei Gelegenheit“ mit beliebigem HA-Trigger, Zeitfenster, `manual_only` über `context`, `{person}`

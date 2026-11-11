@@ -70,6 +70,24 @@
         }
       }
     },
+    "test_signal": {
+      "name": "Test signal",
+      "description": "Sends one signal of a rule right now, ignoring its conditions, quiet times and limits. Uses the open reminder, else the next matching event, else a sample event for tomorrow. Give either 'signal' (id of a saved signal) or 'config' (a signal object that is not saved, requires admin).",
+      "fields": {
+        "rule": {
+          "name": "Rule",
+          "description": "Rule id."
+        },
+        "signal": {
+          "name": "Signal",
+          "description": "Id of a signal of the rule."
+        },
+        "config": {
+          "name": "Signal object",
+          "description": "Unsaved signal to try out (same fields as a signal in create_rule)."
+        }
+      }
+    },
     "get_rules": {
       "name": "Get rules",
       "description": "Returns the rules (configuration as used by create_rule/update_rule) with their runtime status: state (planned/reminded/done/missed/inactive), reminders with variables, next matching event, calendar errors.",
@@ -86,7 +104,7 @@
       "fields": {
         "config": {
           "name": "Rule",
-          "description": "Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list; type notify: targets = list of notify.xxx actions, title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data), ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
+          "description": "Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list). Every signal: id, type, enabled, conditions (Home Assistant conditions, 'only if') with conditions_match all/any, limit (per_reminder = maximum sends per reminder, min_interval = minutes between sends), quiet (list of objects with from, to as HH:MM and mode skip or defer = send when the quiet time ends). type notify: targets = list of notify.xxx actions and/or audience all/present/persons (with persons = list of person entities; uses their mobile app devices), title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data. type light_signal: entities = light entities, pattern (effect blink/pulse, count, interval in seconds), color (name, #hex or r,g,b) or color_from = keyword column holding the colour, brightness in percent, restore (bring the light back to its previous state, default true). type announce: players = media players, text, text_plural, volume 0-100, tts = TTS entity, language, voice. type action: actions = any Home Assistant action sequence; the text variables are available as template variables. ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
         }
       }
     },
@@ -100,7 +118,7 @@
         },
         "config": {
           "name": "Changes",
-          "description": "Top-level keys of the rule object to replace. Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list; type notify: targets = list of notify.xxx actions, title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data), ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
+          "description": "Top-level keys of the rule object to replace. Rule object. Required: name, sources (calendar entity ids), reminders (list of objects with 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex and one value per column), signals (list). Every signal: id, type, enabled, conditions (Home Assistant conditions, 'only if') with conditions_match all/any, limit (per_reminder = maximum sends per reminder, min_interval = minutes between sends), quiet (list of objects with from, to as HH:MM and mode skip or defer = send when the quiet time ends). type notify: targets = list of notify.xxx actions and/or audience all/present/persons (with persons = list of person entities; uses their mobile app devices), title, title_plural, message, message_plural, actions = list of objects with ack: true and label, data. type light_signal: entities = light entities, pattern (effect blink/pulse, count, interval in seconds), color (name, #hex or r,g,b) or color_from = keyword column holding the colour, brightness in percent, restore (bring the light back to its previous state, default true). type announce: players = media players, text, text_plural, volume 0-100, tts = TTS entity, language, voice. type action: actions = any Home Assistant action sequence; the text variables are available as template variables. ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
         }
       }
     },
@@ -165,6 +183,12 @@
     },
     "no_upcoming_event": {
       "message": "Rule {rule} has no upcoming event to remind of."
+    },
+    "signal_or_config": {
+      "message": "Give either 'signal' or 'config'."
+    },
+    "signal_failed": {
+      "message": "The signal could not be sent – see the log for details."
     }
   }
 }

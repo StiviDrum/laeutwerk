@@ -31,6 +31,7 @@ from .manager import LaeutwerkManager, RuleNotFoundError, person_name
 
 SERVICE_ACKNOWLEDGE = "acknowledge"
 SERVICE_TRIGGER = "trigger"
+SERVICE_TEST_SIGNAL = "test_signal"
 SERVICE_GET_RULES = "get_rules"
 SERVICE_CREATE_RULE = "create_rule"
 SERVICE_UPDATE_RULE = "update_rule"
@@ -135,6 +136,27 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"rule": rule_id},
             )
 
+    async def test_signal(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        rule_id = call.data[ATTR_RULE]
+        _check_rule(manager, rule_id)
+        if ("signal" in call.data) == ("config" in call.data):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="signal_or_config"
+            )
+        if "config" in call.data:
+            await _require_admin(hass, call)
+        try:
+            sent = await manager.async_test_signal(
+                rule_id, call.data.get("signal"), call.data.get("config")
+            )
+        except (vol.Invalid, ValueError, HomeAssistantError) as err:
+            raise ServiceValidationError(str(err)) from err
+        if not sent:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="signal_failed"
+            )
+
     async def get_rules(call: ServiceCall) -> ServiceResponse:
         manager = get_manager(hass)
         return {
@@ -207,6 +229,14 @@ def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
     register(DOMAIN, SERVICE_TRIGGER, trigger, _RULE_SCHEMA)
+    register(
+        DOMAIN,
+        SERVICE_TEST_SIGNAL,
+        test_signal,
+        _RULE_SCHEMA.extend(
+            {vol.Optional("signal"): cv.string, vol.Optional("config"): dict}
+        ),
+    )
     register(
         DOMAIN,
         SERVICE_GET_RULES,

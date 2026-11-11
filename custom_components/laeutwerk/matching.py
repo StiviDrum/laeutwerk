@@ -9,6 +9,8 @@ import hashlib
 import re
 from typing import Any
 
+from homeassistant.util import dt as dt_util
+
 from .model import (
     MATCH_REGEX,
     MATCH_STARTSWITH,
@@ -181,6 +183,26 @@ def build_occurrences(rule: Rule, events: Iterable[CalendarEvent]) -> list[Occur
         )
         for key, items in groups.items()
     ]
+
+
+def sample_occurrence(rule: Rule) -> Occurrence:
+    """Made-up event for tomorrow (testing a signal without a real event)."""
+    tz = dt_util.get_default_time_zone()
+    day = dt_util.now().date() + timedelta(days=1)
+    title = rule.filter.rows[0].match if rule.filter.rows else rule.name
+    if rule.filter.rows and rule.filter.rows[0].mode == MATCH_REGEX:
+        title = rule.name
+    event = CalendarEvent(
+        calendar=rule.sources[0],
+        summary=title,
+        start=local_instant(day, 0, tz),
+        end=local_instant(day + timedelta(days=1), 0, tz),
+        all_day=True,
+        day=day,
+    )
+    return Occurrence(
+        id="sample", day=day, start=event.start, end=event.end, events=(event,)
+    )
 
 
 def join_words(words: Iterable[str], language: str | None) -> str:

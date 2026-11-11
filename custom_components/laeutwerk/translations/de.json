@@ -70,6 +70,24 @@
         }
       }
     },
+    "test_signal": {
+      "name": "Signal testen",
+      "description": "Sendet ein Signal einer Regel sofort, ohne Bedingungen, Ruhezeiten und Grenzen zu beachten. Nutzt die offene Erinnerung, sonst den nächsten passenden Termin, sonst einen Beispieltermin für morgen. Entweder 'signal' (ID eines gespeicherten Signals) oder 'config' (ein nicht gespeichertes Signal-Objekt, nur Admin) angeben.",
+      "fields": {
+        "rule": {
+          "name": "Regel",
+          "description": "Regel-ID."
+        },
+        "signal": {
+          "name": "Signal",
+          "description": "ID eines Signals der Regel."
+        },
+        "config": {
+          "name": "Signal-Objekt",
+          "description": "Ungespeichertes Signal zum Ausprobieren (gleiche Felder wie ein Signal in create_rule)."
+        }
+      }
+    },
     "get_rules": {
       "name": "Regeln abrufen",
       "description": "Liefert die Regeln (Konfiguration wie bei create_rule/update_rule) mit Laufzeitstatus: Zustand (planned/reminded/done/missed/inactive), Erinnerungen mit Variablen, nächster passender Termin, Kalenderfehler.",
@@ -86,7 +104,7 @@
       "fields": {
         "config": {
           "name": "Regel",
-          "description": "Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste; type notify: targets = Liste von notify.xxx-Aktionen, title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data), ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
+          "description": "Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste). Jedes Signal: id, type, enabled, conditions (Home-Assistant-Bedingungen, „nur wenn“) mit conditions_match all/any, limit (per_reminder = höchstens so oft pro Erinnerung, min_interval = Minuten Mindestabstand), quiet (Liste von Objekten mit from, to als HH:MM und mode skip oder defer = nachholen, sobald die Ruhezeit endet). type notify: targets = Liste von notify.xxx-Aktionen und/oder audience all/present/persons (mit persons = Liste von Personen-Entitäten; nutzt deren Mobile-App-Geräte), title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data. type light_signal: entities = Licht-Entitäten, pattern (effect blink/pulse, count, interval in Sekunden), color (Name, #hex oder r,g,b) oder color_from = Stichwort-Spalte mit der Farbe, brightness in Prozent, restore (Licht danach in den vorherigen Zustand bringen, Standard true). type announce: players = Mediaplayer, text, text_plural, volume 0-100, tts = TTS-Entität, language, voice. type action: actions = beliebige Home-Assistant-Aktionsfolge; die Textvariablen stehen als Template-Variablen bereit. ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
         }
       }
     },
@@ -100,7 +118,7 @@
         },
         "config": {
           "name": "Änderungen",
-          "description": "Zu ersetzende Schlüssel der obersten Ebene des Regel-Objekts. Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste; type notify: targets = Liste von notify.xxx-Aktionen, title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data), ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
+          "description": "Zu ersetzende Schlüssel der obersten Ebene des Regel-Objekts. Regel-Objekt. Pflicht: name, sources (Kalender-Entitäten), reminders (Liste von Objekten mit 'at'). Optional: id, icon, color, enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex und einem Wert je Spalte), signals (Liste). Jedes Signal: id, type, enabled, conditions (Home-Assistant-Bedingungen, „nur wenn“) mit conditions_match all/any, limit (per_reminder = höchstens so oft pro Erinnerung, min_interval = Minuten Mindestabstand), quiet (Liste von Objekten mit from, to als HH:MM und mode skip oder defer = nachholen, sobald die Ruhezeit endet). type notify: targets = Liste von notify.xxx-Aktionen und/oder audience all/present/persons (mit persons = Liste von Personen-Entitäten; nutzt deren Mobile-App-Geräte), title, title_plural, message, message_plural, actions = Liste von Objekten mit ack: true und label, data. type light_signal: entities = Licht-Entitäten, pattern (effect blink/pulse, count, interval in Sekunden), color (Name, #hex oder r,g,b) oder color_from = Stichwort-Spalte mit der Farbe, brightness in Prozent, restore (Licht danach in den vorherigen Zustand bringen, Standard true). type announce: players = Mediaplayer, text, text_plural, volume 0-100, tts = TTS-Entität, language, voice. type action: actions = beliebige Home-Assistant-Aktionsfolge; die Textvariablen stehen als Template-Variablen bereit. ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
         }
       }
     },
@@ -165,6 +183,12 @@
     },
     "no_upcoming_event": {
       "message": "Die Regel {rule} hat keinen anstehenden Termin, an den erinnert werden könnte."
+    },
+    "signal_or_config": {
+      "message": "Entweder 'signal' oder 'config' angeben."
+    },
+    "signal_failed": {
+      "message": "Das Signal konnte nicht gesendet werden – Details stehen im Protokoll."
     }
   }
 }

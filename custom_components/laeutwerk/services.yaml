@@ -24,6 +24,23 @@ trigger:
       selector:
         text:
 
+test_signal:
+  fields:
+    rule:
+      required: true
+      example: muell
+      selector:
+        text:
+    signal:
+      required: false
+      example: push
+      selector:
+        text:
+    config:
+      required: false
+      selector:
+        object:
+
 get_rules:
   fields:
     rule:

@@ -43,7 +43,15 @@ from .model import (
     Rule,
     Signal,
 )
-from .signals import async_clear_notifications, async_send_signal
+from .signals import (
+    SignalRun,
+    async_clear_notifications,
+    async_conditions_met,
+    async_send_signal,
+    is_deferrable,
+    limit_reached,
+    quiet_until,
+)
 from .sources import async_fetch_events
 from .timespec import local_instant, parse_timespec, resolve
 
@@ -81,6 +89,7 @@ class RuleRunner:
         self._unsub_sources: CALLBACK_TYPE | None = None
         self._unsub_debounce: CALLBACK_TYPE | None = None
         self._stopped = False
+        self._sending: set[tuple[str, str]] = set()
 
     # ------------------------------------------------------------ lifecycle
 
@@ -242,6 +251,7 @@ class RuleRunner:
             if now >= expire:
                 reminder.state = STATE_MISSED
                 reminder.finished_at = now
+                reminder.deferred.clear()
                 self._fire(EVENT_MISSED, reminder)
                 self._clear_notifications(reminder)
                 changed = True
@@ -254,8 +264,16 @@ class RuleRunner:
                 reminder.reminded_at = reminder.reminded_at or now
                 self._remind(reminder, reminder_time=due[-1])
                 changed = True
+            for signal_id, when in list(reminder.deferred.items()):
+                if when > now:
+                    continue
+                signal = next((s for s in self.rule.signals if s.id == signal_id), None)
+                del reminder.deferred[signal_id]
+                changed = True
+                if signal and signal.enabled and reminder.state == STATE_REMINDED:
+                    self._dispatch(signal, reminder)
             pending = [w for at, w in times if at not in reminder.fired]
-            candidate = min([*pending, expire])
+            candidate = min([*pending, *reminder.deferred.values(), expire])
             next_time = candidate if next_time is None else min(next_time, candidate)
         self._schedule(next_time)
         return changed
@@ -317,25 +335,58 @@ class RuleRunner:
         self._fire(EVENT_REMINDED, reminder, reminder_time=reminder_time)
         for signal in self.rule.signals:
             if signal.enabled and signal.when == WHEN_NOW:
-                self.hass.async_create_task(self._async_send(signal, reminder))
+                self._dispatch(signal, reminder)
 
-    async def _async_send(self, signal: Signal, reminder: Reminder) -> None:
-        context = Context()
-        sent = await async_send_signal(
-            self.hass,
-            signal,
-            reminder,
-            variables=self.variables(reminder),
-            plural=is_plural(self.rule, reminder.events),
+    def _dispatch(self, signal: Signal, reminder: Reminder) -> None:
+        """Send a signal unless its limits forbid it (quiet time may defer it)."""
+        now = dt_util.utcnow()
+        reminder.deferred.pop(signal.id, None)
+        key = (reminder.id, signal.id)
+        if key in self._sending or limit_reached(signal, reminder, now):
+            return
+        if quiet := quiet_until(signal, now, dt_util.get_default_time_zone()):
+            mode, until = quiet
+            if is_deferrable(mode):
+                reminder.deferred[signal.id] = until
+            return
+        # While it is being sent (a light signal takes seconds) the same
+        # signal is not started again, so limits cannot be exceeded.
+        self._sending.add(key)
+        self.hass.async_create_task(self._async_send(signal, reminder))
+
+    def signal_run(
+        self, signal: Signal, item: Reminder | Occurrence, context: Context
+    ) -> SignalRun:
+        """Build the data for sending a signal for a reminder / an event."""
+        return SignalRun(
+            hass=self.hass,
+            rule_name=self.rule.name,
+            signal=signal,
+            reminder_id=item.id,
+            variables=self.variables(item),
+            plural=is_plural(self.rule, item.events),
             context=context,
         )
-        if not sent:
-            return
-        reminder.signals_sent[signal.id] = reminder.signals_sent.get(signal.id, 0) + 1
-        self._on_changed()
-        self._fire(
-            EVENT_SIGNAL_SENT, reminder, signal_id=signal.id, signal_type=signal.type
-        )
+
+    async def _async_send(self, signal: Signal, reminder: Reminder) -> None:
+        try:
+            if not await async_conditions_met(self.hass, signal):
+                return
+            reminder.signal_last[signal.id] = dt_util.utcnow()
+            reminder.signals_sent[signal.id] = (
+                reminder.signals_sent.get(signal.id, 0) + 1
+            )
+            self._on_changed()
+            run = self.signal_run(signal, reminder, Context())
+            if await async_send_signal(run):
+                self._fire(
+                    EVENT_SIGNAL_SENT,
+                    reminder,
+                    signal_id=signal.id,
+                    signal_type=signal.type,
+                )
+        finally:
+            self._sending.discard((reminder.id, signal.id))
 
     def _clear_notifications(self, reminder: Reminder) -> None:
         if any(reminder.signals_sent.values()):
@@ -388,6 +439,7 @@ class RuleRunner:
             for reminder in targets:
                 reminder.state = STATE_DONE
                 reminder.finished_at = now
+                reminder.deferred.clear()
                 reminder.acknowledged_by = by
                 reminder.acknowledged_via = via
                 self._fire(

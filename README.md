@@ -3,8 +3,8 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.1 contains the core (rules, reminders, push
-> signal, entities, services); the card to edit rules follows in 0.4 – until
+> **Status:** early development. 0.2 contains the core (rules, reminders,
+> entities, services) and all signal types; the card to edit rules follows in 0.4 – until
 > then rules are created with the `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
@@ -94,6 +94,63 @@ data:
   `button.laeutwerk_<rule>_erledigt` or the action `laeutwerk.acknowledge`.
   A reminder can be acknowledged up to 24 h before its first reminder time.
 
+### Signals
+
+A rule can have any number of signals. Every signal has a type, optional
+"only if" conditions, quiet times and a frequency limit:
+
+```yaml
+signals:
+  - id: push
+    type: notify
+    audience: present            # all | present | persons (+ persons: [person.x])
+    targets: [notify.mobile_app_tablet]   # optional, in addition to the audience
+    title: "{wann}: {tonnen}"
+    message: "Bitte heute Abend rausstellen."
+    actions:
+      - {ack: true, label: "Steht draußen"}
+  - id: lampe
+    type: light_signal
+    entity: light.stehleuchte
+    pattern: {effect: blink, count: 3}    # blink | pulse, interval in seconds
+    color_from: farbe            # colour from a keyword column, or color: "#ff8800"
+    restore: true                # previous state (on/off, brightness, colour) afterwards
+    quiet:
+      - {from: "00:00", to: "10:00", mode: skip}
+  - id: ansage
+    type: announce
+    players: [media_player.sonos_wohnzimmer]
+    volume: 45
+    tts: tts.piper               # default: the first TTS entity
+    text: "Stell endlich die {tonne} raus!"
+    text_plural: "Stell endlich {tonnen} raus!"
+    quiet:
+      - {from: "22:00", to: "08:00", mode: defer}   # send when the quiet time ends
+    limit: {per_reminder: 1, min_interval: 60}      # at most once, 60 min apart
+  - id: eigene
+    type: action
+    conditions:
+      - {condition: state, entity_id: input_boolean.urlaub, state: "off"}
+    conditions_match: all        # all | any
+    actions:
+      - action: script.turn_on
+        target: {entity_id: script.muell_szene}
+        data:
+          variables: {text: "{{ wann }}: {{ tonnen }}"}
+```
+
+- **Push audience:** the mobile app devices of all persons, of the persons who
+  are at home, or of the listed persons.
+- **Light:** German and English colour names, `#rrggbb` or `r,g,b`. Lamps
+  without colour just blink. A lamp that was off is switched off again.
+- **Announcement:** played with `announce: true`, so players that support it
+  lower running music and continue afterwards. `volume` is the announcement
+  volume for players that support it (e.g. Sonos).
+- **Custom action:** any Home Assistant actions; the text variables are
+  available as template variables (`{{ tonnen }}`, `{{ reminder_id }}`).
+- **Try it:** `laeutwerk.test_signal` sends one signal immediately (`rule` +
+  `signal`, or `config` with an unsaved signal).
+
 ### Entities (one device per rule)
 
 | Entity | State |
@@ -106,7 +163,7 @@ data:
 
 ### Actions and events
 
-`laeutwerk.acknowledge`, `trigger`, `get_rules`, `create_rule`, `update_rule`,
+`laeutwerk.acknowledge`, `trigger`, `test_signal`, `get_rules`, `create_rule`, `update_rule`,
 `delete_rule`, `duplicate_rule`, `enable`, `disable`. Editing actions need an
 admin (calls from automations are allowed).
 
@@ -139,8 +196,8 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.1 enthält den Kern (Regeln, Erinnerungen,
-> Push-Signal, Entitäten, Dienste); die Karte zum Bearbeiten folgt mit 0.4 –
+> **Status:** frühe Entwicklung. 0.2 enthält den Kern (Regeln, Erinnerungen,
+> Entitäten, Dienste) und alle Signal-Arten; die Karte zum Bearbeiten folgt mit 0.4 –
 > bis dahin legst du Regeln mit der Aktion `laeutwerk.create_rule` an (Beispiel
 > oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 

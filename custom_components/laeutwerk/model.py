@@ -14,7 +14,26 @@ MATCH_REGEX = "regex"
 MATCH_MODES = (MATCH_CONTAINS, MATCH_STARTSWITH, MATCH_REGEX)
 
 SIGNAL_NOTIFY = "notify"
-SIGNAL_TYPES = (SIGNAL_NOTIFY,)
+SIGNAL_LIGHT = "light_signal"
+SIGNAL_ANNOUNCE = "announce"
+SIGNAL_ACTION = "action"
+SIGNAL_TYPES = (SIGNAL_NOTIFY, SIGNAL_LIGHT, SIGNAL_ANNOUNCE, SIGNAL_ACTION)
+
+AUDIENCE_ALL = "all"
+AUDIENCE_PRESENT = "present"
+AUDIENCE_PERSONS = "persons"
+AUDIENCES = (AUDIENCE_ALL, AUDIENCE_PRESENT, AUDIENCE_PERSONS)
+
+EFFECT_BLINK = "blink"
+EFFECT_PULSE = "pulse"
+EFFECTS = (EFFECT_BLINK, EFFECT_PULSE)
+
+QUIET_SKIP = "skip"
+QUIET_DEFER = "defer"
+QUIET_MODES = (QUIET_SKIP, QUIET_DEFER)
+
+MATCH_ALL = "all"
+MATCH_ANY = "any"
 
 WHEN_NOW = "now"
 
@@ -249,6 +268,10 @@ class Reminder:
     acknowledged_by: str | None = None
     acknowledged_via: str | None = None
     signals_sent: dict[str, int] = field(default_factory=dict)
+    # Last time each signal was sent (minimum interval).
+    signal_last: dict[str, datetime] = field(default_factory=dict)
+    # Signals held back by a quiet time: signal id -> when to send them.
+    deferred: dict[str, datetime] = field(default_factory=dict)
 
     @property
     def is_open(self) -> bool:
@@ -272,6 +295,13 @@ class Reminder:
             acknowledged_by=data.get("acknowledged_by"),
             acknowledged_via=data.get("acknowledged_via"),
             signals_sent=dict(data.get("signals_sent", {})),
+            signal_last={
+                key: _parse_dt(value)
+                for key, value in data.get("signal_last", {}).items()
+            },
+            deferred={
+                key: _parse_dt(value) for key, value in data.get("deferred", {}).items()
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -290,6 +320,12 @@ class Reminder:
             "acknowledged_by": self.acknowledged_by,
             "acknowledged_via": self.acknowledged_via,
             "signals_sent": dict(self.signals_sent),
+            "signal_last": {
+                key: value.isoformat() for key, value in self.signal_last.items()
+            },
+            "deferred": {
+                key: value.isoformat() for key, value in self.deferred.items()
+            },
         }
 
 

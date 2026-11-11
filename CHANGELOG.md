@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-11
+
+### Added
+- Light signal (blink / pulse, colour fixed or from a keyword column, previous
+  state restored), announcement (TTS with `announce`, volume, singular /
+  plural text) and custom action (any Home Assistant actions with the text
+  variables).
+- Per signal: "only if" conditions (all / any), quiet times (skip or send when
+  the quiet time ends) and frequency limits (per reminder, minimum interval).
+- Push audience: all persons, persons at home or selected persons.
+- Action `laeutwerk.test_signal` for saved and unsaved signals.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

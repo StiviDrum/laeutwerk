@@ -22,6 +22,7 @@
   "services": {
     "acknowledge": { "service": "mdi:check-circle-outline" },
     "trigger": { "service": "mdi:bell-ring" },
+    "test_signal": { "service": "mdi:test-tube" },
     "get_rules": { "service": "mdi:format-list-bulleted" },
     "create_rule": { "service": "mdi:plus" },
     "update_rule": { "service": "mdi:pencil" },

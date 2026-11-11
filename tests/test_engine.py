@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import Context, Event, HomeAssistant, ServiceCall
+from homeassistant.core import Context, Event, HomeAssistant, ServiceCall, callback
 import pytest
 
 from custom_components.laeutwerk.const import (
@@ -47,13 +47,18 @@ def pushes(hass: HomeAssistant) -> list[ServiceCall]:
 @pytest.fixture
 def events(hass: HomeAssistant) -> list[Event]:
     captured: list[Event] = []
+
+    @callback
+    def capture(event: Event) -> None:
+        captured.append(event)
+
     for event_type in (
         EVENT_REMINDED,
         EVENT_SIGNAL_SENT,
         EVENT_ACKNOWLEDGED,
         EVENT_MISSED,
     ):
-        hass.bus.async_listen(event_type, captured.append)
+        hass.bus.async_listen(event_type, capture)
     return captured
 
 
