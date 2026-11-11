@@ -33,6 +33,7 @@ Danach:
 ## A2. Git
 
 - Arbeit auf `main`, kleine Commits nach Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`).
+- Größere oder riskante Vorhaben auf einem Feature-Branch. Der Orchestrator entscheidet selbst, wann eine Änderung stabil ist (`scripts/check` grün, Build ok, bei UI-Änderungen im echten Frontend gesichtet), führt sie dann ohne Rückfrage per Fast-Forward/Merge nach `main` zusammen und pusht (Stevens Freigabe vom 11.11.2026).
 - Nach jeder erledigten Aufgabe pushen. CI muss grün bleiben; rote CI zuerst reparieren.
 - Am Ende jedes Meilensteins: Version in `manifest.json` + `package.json`, `CHANGELOG.md`, Tag `v0.x.0`, Tag pushen (Release-Workflow baut das ZIP). **Releases nicht als Pre-Release markieren**, sonst bietet HACS Commit-Stände statt Versionen an (bei Zeitwerk passiert).
 - Kein Force-Push auf `main`. Keine Secrets, Tokens, `.storage`-Dateien oder persönlichen Daten committen.
