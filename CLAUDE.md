@@ -59,7 +59,7 @@ Danach:
 - Entwicklung in WSL2/Ubuntu im Linux-Dateisystem (`~/laeutwerk`), nicht unter `/mnt/c/...`.
 - Skripte wie bei Zeitwerk: `scripts/setup`, `scripts/develop` (lokale HA-Testinstanz unter `http://localhost:8123` mit `./config`), `scripts/lint`, `scripts/check` (nur lesend), `scripts/test`, `npm run watch` für die Karte.
 - `config/configuration.yaml` der Testinstanz bildet Stevens Fälle mit Helfern nach: ein lokaler Kalender „Abfallkalender“ mit Terminen Papier/Bio/Rest/Gelb, ein Kalender „Kult61“ mit „Dienst: …“-Terminen, `input_boolean` als Stand-ins für Anwesenheit, Haustür und Lampe, `light` per Template/Demo-Plattform zum Blinken.
-- **Niemals mit Stevens produktivem Home Assistant verbinden oder ihn verändern.** Steven installiert Läutwerk selbst über HACS, sobald ein Release existiert.
+- **Stevens produktives Home Assistant: nur lesen, nie ohne Rückfrage ändern** (Stevens Freigabe vom 12.11.2026). Die Hauptsitzung darf über den Home-Assistant-Connector lesen (Versionen, Läutwerk-Regeln per `laeutwerk.get_rules`, Zustände, Logs), um Fehler nachzustellen. Jede ändernde Aktion (Dienste mit Wirkung, Regeln/Automationen/Helfer anlegen oder ändern, HACS, Neustart) nur nach Stevens ausdrücklichem Ja im Einzelfall. Keine persönlichen Daten aus seinem System ins Repo. Steven installiert Läutwerk selbst über HACS.
 - Zeitabhängige Tests mit eingefrorener Zeit (`freezer`, `async_fire_time_changed`); Sommer-/Winterzeit-Tage (letzter Sonntag im März/Oktober, Europe/Berlin) sind Pflicht.
 
 ## A5. Modelle
@@ -103,7 +103,7 @@ Ablauf je Aufgabe:
 
 Sparsam arbeiten (Stevens Vorgabe vom 12.11.2026): Agenten mit `effort` low (haiku) bzw. medium (sonnet), kurze präzise Aufträge, gezielte Tests beim Iterieren und die volle Suite nur einmal am Ende, kurze Berichte. Einfache Aufgaben (Checks, Doku-Text) gehen an die Haiku-Agenten.
 
-Regeln für alle Subagenten: nur in der eigenen Domäne arbeiten; **niemals `git commit`, `git push`, `git tag` oder Branch-/History-Befehle**; nie Stevens produktives Home Assistant ansprechen; `config/.storage` und Secrets nie lesen. Kleine, klar umrissene Aufgaben (Architektur und knifflige Engine-Logik behält der Orchestrator).
+Regeln für alle Subagenten: nur in der eigenen Domäne arbeiten; **niemals `git commit`, `git push`, `git tag` oder Branch-/History-Befehle**; nie Stevens produktives Home Assistant ansprechen (das darf nur die Hauptsitzung, lesend); `config/.storage` und Secrets nie lesen. Kleine, klar umrissene Aufgaben (Architektur und knifflige Engine-Logik behält der Orchestrator).
 
 Befehle (aus dem Repo-Root):
 
