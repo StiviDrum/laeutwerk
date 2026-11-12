@@ -384,6 +384,11 @@ Schnittstelle:
 - [ ] Offen (Code-Prüfung): Regel-Sensor zeigt bei aktiven Auslöser-Regeln ohne offene Erinnerung „inactive“ – irreführend
 - [x] Release v0.11.3
 
+## 0.11.4 – {seit} live in der Karte (12.11.2026)
+- [x] `liveHeadline` / `describeSince` in format.ts (gleiche Texte wie Backend `describe_since`); Karte, kompakte Zeilen und Fenster rechnen `{seit}` aus `reminded_at` selbst
+- [x] Karten-Takt 60 s → 15 s (an der Minute ausgerichtet hinkte `{seit}` bis zu 59 s hinterher); geprüft: 75 s → „seit 1 Minute“, 135 s → „seit 2 Minuten“
+- [x] Release v0.11.4
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

@@ -12,6 +12,7 @@ import {
   openStatus,
   relativeDay,
   relativeDayTime,
+  liveHeadline,
   reminderTitle,
   tasks,
   type Task,
@@ -48,13 +49,17 @@ export class LaeutwerkTaskDialog extends LitElement {
     if (e.key === "Escape") this.close();
   };
 
+  private _tick = 0;
+
   public connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener("keydown", this._onKey);
+    this._tick = window.setInterval(() => this.requestUpdate(), 30_000);
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.clearInterval(this._tick);
     document.removeEventListener("keydown", this._onKey);
   }
 
@@ -104,7 +109,7 @@ export class LaeutwerkTaskDialog extends LitElement {
 
   private _ask(task: Task, text: string, confirm: string, icon: string): Promise<boolean> {
     return confirmAction({
-      title: reminderTitle(task.reminder),
+      title: liveHeadline(task.rule, task.reminder, new Date(), this._l.lang),
       text,
       confirm,
       cancel: this._l.t("cancel"),
@@ -195,7 +200,7 @@ export class LaeutwerkTaskDialog extends LitElement {
               <div class="row">
                 ${badgeIcon(task.rule, true, task.reminder)}
                 <div class="grow text">
-                  <div class="title">${reminderTitle(task.reminder)}</div>
+                  <div class="title">${liveHeadline(task.rule, task.reminder, now, l.lang)}</div>
                   <div class="sub">
                     ${task.rule.name} ·
                     ${
@@ -276,7 +281,7 @@ export class LaeutwerkTaskDialog extends LitElement {
                       ${badgeIcon(t.rule, true, t.reminder)}
                       <span class="grow text">
                         <span class="name ${t.open ? "" : "dim"}"
-                          >${reminderTitle(t.reminder)}</span
+                          >${t.open ? liveHeadline(t.rule, t.reminder, now, l.lang) : reminderTitle(t.reminder)}</span
                         >
                       </span>
                       ${
@@ -306,7 +311,9 @@ export class LaeutwerkTaskDialog extends LitElement {
                     >
                       ${badgeIcon(t.rule, true, t.reminder)}
                       <span class="grow text">
-                        <span class="name struck">${reminderTitle(t.reminder)}</span>
+                        <span class="name struck"
+                          >${t.open ? liveHeadline(t.rule, t.reminder, now, l.lang) : reminderTitle(t.reminder)}</span
+                        >
                         <span class="sub">${finishedLine(t.reminder, now, l, tz)}</span>
                       </span>
                       <ha-icon class="undo" icon="mdi:undo"></ha-icon>

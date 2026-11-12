@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-11-12
+
+### Fixed
+- Headlines with `{seit}` / `{seit_min}` now count up live in the card
+  (overview, compact card, dialog) instead of showing the waiting time of the
+  last reminder pass. Computed in the browser, no extra server traffic; the
+  card ticks every 15 s.
+
 ## [0.11.3] - 2026-11-12
 
 ### Changed

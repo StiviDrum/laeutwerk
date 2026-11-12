@@ -18,6 +18,7 @@ import {
   compactRows,
   relativeDay,
   relativeDayTime,
+  liveHeadline,
   reminderTitle,
   tasks,
   tooEarlyText,
@@ -175,12 +176,14 @@ export class LaeutwerkCard extends LitElement {
 
   private _startClock(): void {
     window.clearTimeout(this._clock);
-    // Relative texts ("heute", "erinnert 17:00") change with the minute.
+    // Relative texts ("heute", "erinnert 17:00") change with the minute; {seit}
+    // counts from the reminder's own second, so tick every 15 s (cheap: one
+    // re-render, no server traffic) to keep it at most 15 s behind.
     const tick = () => {
       this._now = new Date();
-      this._clock = window.setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+      this._clock = window.setTimeout(tick, 15_000 - (Date.now() % 15_000) + 50);
     };
-    this._clock = window.setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    this._clock = window.setTimeout(tick, 15_000 - (Date.now() % 15_000) + 50);
   }
 
   // --- Data -----------------------------------------------------------------
@@ -581,7 +584,7 @@ export class LaeutwerkCard extends LitElement {
       >
         ${this._icon(rule, false, reminder)}
         <div class="grow text">
-          <div class="name">${reminderTitle(reminder)}</div>
+          <div class="name">${liveHeadline(rule, reminder, this._now, l.lang)}</div>
           <div class="sub">
             ${rule.name} ·
             ${relativeDay(reminder.start, this._now, l, tz)}${
@@ -678,7 +681,7 @@ export class LaeutwerkCard extends LitElement {
           ${this._icon(rule, true, reminder)}
           <div class="grow text">
             <div class="name ${reminder.state === "done" ? "struck" : ""}">
-              ${ahead ? reminderTitle(reminder) : reminder.titles.join(" + ")}
+              ${ahead ? liveHeadline(rule, reminder, this._now, l.lang) : reminder.titles.join(" + ")}
             </div>
             <div class="sub">${finishedLine(reminder, this._now, l, this._tz)}</div>
           </div>
@@ -865,7 +868,9 @@ export class LaeutwerkCard extends LitElement {
           >
             ${this._icon(task.rule, true, task.reminder)}
             <span class="grow cname ${task.open ? "" : "dim"}">
-              <span class="name">${reminderTitle(task.reminder)}</span>
+              <span class="name"
+                >${task.open ? liveHeadline(task.rule, task.reminder, this._now, l.lang) : reminderTitle(task.reminder)}</span
+              >
               ${when ? html`<span class="when"> · ${when}</span>` : nothing}
             </span>
             <ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>

@@ -112,7 +112,8 @@ data:
   `{erinnert_um}` (time of the first reminder, HH:MM), `{nr}` (number of the
   reminder: 1 = first; counts repeats, escalation stages and reminders after
   "later"). They are evaluated at every send; a repeated push replaces the
-  previous one, so the waiting time shown is current.
+  previous one, so the waiting time shown is current. In a headline the card
+  counts `{seit}` up live (every 15 s, in the browser).
 - **Plural per column:** where a plural makes no sense (e.g. `artikel`),
   switch it off in the column header of the card or write the column as
   `{name: artikel, plural: false}`. Then there is no `{artikeln}`, and with
@@ -627,6 +628,7 @@ Zeit- und Nummern-Variablen: `{seit}` (Zeit seit der ersten Erinnerung, z. B.
 `{nr}` (Nummer der Erinnerung: 1 = erste; zählt Wiederholungen, Eskalationsstufen
 und Erinnerungen nach „Später“). Sie werden bei jedem Senden neu berechnet; ein
 wiederholter Push ersetzt den vorherigen, die angezeigte Wartezeit ist also aktuell.
+In einer Überschrift zählt die Karte `{seit}` live weiter (alle 15 s, im Browser).
 
 ## NFC-Tag je Tonne
 

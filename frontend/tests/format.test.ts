@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  describeSince,
+  liveHeadline,
   availableVariables,
   buildOverview,
   dayDiff,
@@ -669,5 +671,39 @@ describe("compactRows", () => {
       ),
     ).toEqual(["c"]);
     expect(compactRows([])).toEqual([]);
+  });
+});
+
+describe("liveHeadline", () => {
+  const rem = {
+    titles: ["Trockner"],
+    variables: { wann: "heute", seit: "alt" },
+    headline: "Alt!",
+    reminded_at: "2026-01-01T10:00:00Z",
+  };
+  const rule = { headline: "{seit_min} min: Trockner wartet {seit}" };
+  it("formats waiting time like the backend", () => {
+    expect(describeSince(0, "de")).toBe("seit weniger als einer Minute");
+    expect(describeSince(1, "de")).toBe("seit 1 Minute");
+    expect(describeSince(25, "de")).toBe("seit 25 Minuten");
+    expect(describeSince(60, "de")).toBe("seit 1 Std.");
+    expect(describeSince(85, "de")).toBe("seit 1 Std. 25 Min.");
+    expect(describeSince(1440, "de")).toBe("seit 1 Tag");
+    expect(describeSince(1620, "de")).toBe("seit 1 Tag 3 Std.");
+    expect(describeSince(2880, "de")).toBe("seit 2 Tagen");
+    expect(describeSince(0, "en")).toBe("for less than a minute");
+    expect(describeSince(25, "en")).toBe("for 25 minutes");
+    expect(describeSince(85, "en")).toBe("for 1 h 25 min");
+    expect(describeSince(1620, "en")).toBe("for 1 day 3 h");
+  });
+  it("recomputes seit and keeps unknown variables", () => {
+    const now = new Date("2026-01-01T11:25:00Z");
+    expect(liveHeadline(rule, rem, now, "de")).toBe("85 min: Trockner wartet seit 1 Std. 25 Min.");
+    expect(liveHeadline({ headline: "{seit} {x}" }, rem, now, "en")).toBe("For 1 h 25 min {x}");
+  });
+  it("falls back to the backend headline", () => {
+    const now = new Date("2026-01-01T11:25:00Z");
+    expect(liveHeadline({ headline: "Hallo" }, rem, now, "de")).toBe("Alt!");
+    expect(liveHeadline(rule, { ...rem, reminded_at: null }, now, "de")).toBe("Alt!");
   });
 });

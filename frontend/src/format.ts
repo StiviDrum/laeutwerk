@@ -81,6 +81,51 @@ export function reminderTitle(reminder: {
   return when ? `${capitalize(when)}: ${what}` : what;
 }
 
+/** Waiting time like the backend's `describe_since` ("seit 25 Minuten" / "for 1 h 25 min"). */
+export function describeSince(minutes: number, lang: string): string {
+  const de = lang.startsWith("de");
+  const m = Math.max(0, Math.floor(minutes));
+  if (m < 1) return de ? "seit weniger als einer Minute" : "for less than a minute";
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const mins = m % 60;
+  const pre = de ? "seit" : "for";
+  const h = de ? "Std." : "h";
+  if (days) {
+    const d = de ? (days === 1 ? "Tag" : "Tagen") : days === 1 ? "day" : "days";
+    return `${pre} ${days} ${d}${hours ? ` ${hours} ${h}` : ""}`;
+  }
+  if (hours) return `${pre} ${hours} ${h}${mins ? ` ${mins} ${de ? "Min." : "min"}` : ""}`;
+  if (de) return `seit ${mins} ${mins === 1 ? "Minute" : "Minuten"}`;
+  return `for ${mins} ${mins === 1 ? "minute" : "minutes"}`;
+}
+
+/** Headline with a live waiting time ({seit}/{seit_min}); else the backend's headline. */
+export function liveHeadline(
+  rule: { headline?: string | null } | undefined,
+  reminder: {
+    titles: string[];
+    variables?: Record<string, string>;
+    headline?: string | null;
+    reminded_at?: string | null;
+  },
+  now: Date,
+  lang: string,
+): string {
+  const template = rule?.headline;
+  if (template && /\{seit(_min)?\}/.test(template) && reminder.reminded_at) {
+    const minutes = Math.floor((now.getTime() - new Date(reminder.reminded_at).getTime()) / 60000);
+    const m = Math.max(0, minutes);
+    const text = renderTemplate(template, {
+      ...reminder.variables,
+      seit: describeSince(m, lang),
+      seit_min: String(m),
+    });
+    if (text.trim()) return text;
+  }
+  return reminderTitle(reminder);
+}
+
 /** Default icon of rules without an own one. */
 export const DEFAULT_ICON = "mdi:bell-ring-outline";
 
