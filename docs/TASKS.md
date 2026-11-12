@@ -310,6 +310,23 @@ Schnittstelle:
 - Im echten Frontend geprüft: Quittieren 12 Tage vorher → `acknowledged: []`, `too_early: "Rest ist erst am 24.11. dran."`; Schritt 5 antippen → genau 1 Schritt offen.
 - [x] Release v0.9.2
 
+## 0.10.0 – Karte, Zeit-Variablen, Wiederholungstexte, Hooks, Stufen (go 12.11.2026)
+Schnittstelle:
+- Variablen (bei jedem Senden neu): `seit` („seit 25 Minuten“, de/en wie `wann`), `seit_min` (Zahl als Text), `erinnert_um` (HH:MM), `nr` (1 = erste Erinnerung; zählt jede Erinnerung: Wiederholung, Stufe, nach „Später“). Vor der ersten Erinnerung: `seit`/`erinnert_um` leer, `seit_min` 0, `nr` 1. Auch in `on_*`-Aktionen.
+- Signal: notify `title_repeat`/`message_repeat`, announce `text_repeat` (ab `nr` ≥ 2, leer → normaler Text); `every_stage: bool` (Signal auch bei jeder Stufe senden).
+- Regel: `on_missed`, `on_reminded` (Aktionslisten wie `on_done`; Variablen + `rule_id`, `reminder_id`, `nr`, `seit_min`; Fehler geloggt, blockieren nichts).
+- Stufe: `min_age` (Dauer, z. B. "8h") – Stufe entfällt, wenn ihr Zeitpunkt näher an der ersten Erinnerung liegt. „um HH:MM“ = nächstes HH:MM **nach** der ersten Erinnerung (bisher: derselbe Tag → feuerte bei Auslöser-Regeln sofort).
+- Regel-Sensor-Attribute `reminded_at`, `last_reminded_at`, `repeats`, `finished_at`; neuer Sensor `sensor.laeutwerk_<regel>_wartet_seit` (timestamp, standardmäßig deaktiviert).
+- Karte: „+ Regel“ im Bereich „Regeln“, „+“ im Kopf entfällt; Hilfe-Blase per Popover (top layer).
+- [ ] 1 „+ Regel“ im Bereich Regeln
+- [ ] 2 Hilfe-Blase über HA-Dialogen
+- [ ] 3 Zeit-Variablen
+- [ ] 4 Text bei Wiederholung
+- [ ] 5 on_missed / on_reminded
+- [ ] 6 Attribute + Sensor „Wartet seit“
+- [ ] 7 Stufen: min_age, „um“ = nächstes, every_stage
+- [ ] 8 Doku, Prüfung, Release v0.10.0
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut
