@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-12
+
+### Fixed
+- Service description of `create_rule` / `update_rule` contained `<…>` and
+  `{…, …}`, which Home Assistant treats as HTML / placeholders (hassfest
+  failed, the description could show garbled in the action editor).
+
 ## [0.9.0] - 2026-11-12
 
 ### Added

@@ -296,6 +296,7 @@ Erkenntnisse:
 - 14: Kalender-Zwischenspeicher bewusst nicht gebaut (Regeln aktualisieren zu eigenen Zeiten mit eigenen Fenstern → selten Treffer). Karte in Chunks: `laeutwerk-card.js` (Stub) + `chunk-laeutwerk-card` 96 954 B (31 686 B gzip -9), `chunk-editors` 100 778 B (22 503), `chunk-help-tip` 16 358 B (5 519), `chunk-card-editor-entry` 4 623 B (1 742); vorher 221 231 B in einer Datei. Ganzer `frontend/`-Ordner als statischer Pfad.
 - Testinstanz hat keine Person mit Companion App → Zuständig/Vertretung zeigen dort nur den Hinweis; mit echter App nicht gesichtet.
 - [x] Release v0.9.0
+- [x] v0.9.1: hassfest-Fehler in Dienstbeschreibungen (`<duration>`, `{entity_id, state}`) – Erkenntnis: nach jedem Push auf die CI warten, nicht nur nach Tags
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
