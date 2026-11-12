@@ -142,7 +142,10 @@ async def test_acknowledge_and_trigger(
     await call(hass, "create_rule", config=kult61_rule())
 
     # Without a rule only reminders that are reminding are acknowledged.
-    assert await call(hass, "acknowledge", response=True) == {"acknowledged": []}
+    assert await call(hass, "acknowledge", response=True) == {
+        "acknowledged": [],
+        "too_early": None,
+    }
 
     # trigger reminds now, regardless of the reminder time.
     await call(hass, "trigger", rule="kult61")
@@ -172,7 +175,7 @@ async def test_acknowledge_single_reminder(
     result = await call(
         hass, "acknowledge", response=True, reminder_id="muell__20261117"
     )
-    assert result == {"acknowledged": ["muell__20261117"]}
+    assert result == {"acknowledged": ["muell__20261117"], "too_early": None}
     assert manager.status("muell")["state"] == "done"
 
 

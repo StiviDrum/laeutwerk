@@ -15,6 +15,7 @@ import {
   reminderTitle,
   tasks,
   type Task,
+  tooEarlyText,
 } from "./format";
 import { confirmAction } from "./confirm-dialog";
 import type { Localizer } from "./localize";
@@ -66,12 +67,28 @@ export class LaeutwerkTaskDialog extends LitElement {
     return tasks(this.rules, this.only);
   }
 
-  private async _call(service: string, data: Record<string, unknown>): Promise<boolean> {
+  private async _call(
+    service: string,
+    data: Record<string, unknown>,
+    returnResponse = false,
+  ): Promise<boolean> {
     if (!this.hass) return false;
     this._busy = true;
     this._error = undefined;
     try {
-      await this.hass.callService("laeutwerk", service, data);
+      const result = await this.hass.callService(
+        "laeutwerk",
+        service,
+        data,
+        undefined,
+        undefined,
+        returnResponse || undefined,
+      );
+      const early = returnResponse ? tooEarlyText(result) : undefined;
+      if (early) {
+        this._error = early;
+        return false;
+      }
       return true;
     } catch (err) {
       this._error = this._l.t("failed", { error: errorText(err) });
@@ -97,10 +114,14 @@ export class LaeutwerkTaskDialog extends LitElement {
     const text = task.open ? l.t("confirm_done") : l.t("confirm_done_early");
     if (!(await this._ask(task, text, doneLabel(task.rule, l), "mdi:check"))) return;
     // Also planned tasks can be done ahead of time (asked above).
-    const ok = await this._call("acknowledge", {
-      rule: task.rule.id,
-      reminder_id: task.reminder.id,
-    });
+    const ok = await this._call(
+      "acknowledge",
+      {
+        rule: task.rule.id,
+        reminder_id: task.reminder.id,
+      },
+      true,
+    );
     if (ok) this.close();
   }
 

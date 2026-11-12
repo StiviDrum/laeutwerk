@@ -15,6 +15,7 @@ from homeassistant.core import (
     Event,
     EventStateChangedData,
     HomeAssistant,
+    State,
     callback,
 )
 from homeassistant.exceptions import ConditionError, HomeAssistantError
@@ -35,7 +36,8 @@ from .const import (
     ACK_VIA_TAG,
     ACK_VIA_TRIGGER,
     DOMAIN,
-    EARLY_ACK_HOURS,
+    EARLY_ALWAYS,
+    EARLY_OFF,
     EVENT_ACKNOWLEDGED,
     EVENT_MISSED,
     EVENT_REMINDED,
@@ -146,7 +148,7 @@ class RuleRunner:
         self._sending: set[tuple[str, str]] = set()
         # Triggers that only listen while a reminder needs them.
         self._opportunities: list[TriggerListener] = []
-        self._ack_triggers: list[tuple[TriggerListener, bool]] = []
+        self._ack_triggers: list[TriggerListener] = []
         self._unsub_tags: CALLBACK_TYPE | None = None
         self._tag_templates: list[str] = [
             ack["tag_id"]
@@ -235,7 +237,7 @@ class RuleRunner:
         self._stopped = True
         if self._on_done is not None:
             await self._on_done.async_stop()
-        for listener in [*self._opportunities, *(a for a, _ in self._ack_triggers)]:
+        for listener in [*self._opportunities, *self._ack_triggers]:
             listener.update(False)
         if self._start_listener is not None:
             self._start_listener.update(False)
@@ -293,30 +295,24 @@ class RuleRunner:
         }
         for ack in rule.acknowledge:
             if ack["type"] == ACK_TRIGGER:
-                early = bool(ack.get("early"))
 
                 async def acknowledge(
                     variables: dict[str, Any],
                     context: Context | None = None,
-                    early: bool = early,
                 ) -> None:
                     name, person = person_ref(self.hass, variables, context)
                     await self.async_acknowledge(
                         by=name or None,
                         via=ACK_VIA_TRIGGER,
-                        early=early,
                         person=person,
                     )
 
                 self._ack_triggers.append(
-                    (
-                        TriggerListener(
-                            self.hass,
-                            f"{rule.name}: acknowledge",
-                            ack["trigger"],
-                            acknowledge,
-                        ),
-                        early,
+                    TriggerListener(
+                        self.hass,
+                        f"{rule.name}: acknowledge",
+                        ack["trigger"],
+                        acknowledge,
                     )
                 )
         if tags or self._tag_templates:
@@ -335,6 +331,7 @@ class RuleRunner:
                     return
                 matching = self.reminders_for_tag(tag_id)
                 if not matching:
+                    self.early_miss(name or None, person, tag_id)
                     _LOGGER.debug(
                         "Rule %s: tag %s does not belong to a due reminder",
                         self.rule.id,
@@ -363,7 +360,8 @@ class RuleRunner:
             self._start_listener.update(self.active)
         for listener in self._opportunities:
             listener.update(reminding)
-        for listener, early in self._ack_triggers:
+        early = self.rule.early["mode"] != EARLY_OFF
+        for listener in self._ack_triggers:
             listener.update(reminding or (early and has_open))
 
     @callback
@@ -839,17 +837,78 @@ class RuleRunner:
         return found
 
     def reminders_for_tag(self, tag_id: str) -> list[Reminder]:
-        """Open reminders (or ones within the early window) a tag belongs to."""
-        now = dt_util.utcnow()
-        candidates = []
-        for reminder in self.reminders.values():
-            if reminder.state == STATE_REMINDED or reminder.snoozed_until is not None:
-                candidates.append(reminder)
-            elif reminder.state == STATE_PLANNED:
-                first = self.next_reminder_time(reminder)
-                if first and first - timedelta(hours=EARLY_ACK_HOURS) <= now:
-                    candidates.append(reminder)
-        return [r for r in candidates if tag_id in self.tag_ids(r)]
+        """Reminding reminders a tag belongs to, else the next one if early is ok."""
+        found = [
+            r
+            for r in self.reminders.values()
+            if self._is_reminding(r) and tag_id in self.tag_ids(r)
+        ]
+        if not found:
+            nxt = self._next_planned(tag_id)
+            if nxt is not None and self._early_ok(nxt, dt_util.utcnow()):
+                found = [nxt]
+        return found
+
+    @staticmethod
+    def _is_reminding(reminder: Reminder) -> bool:
+        return reminder.state == STATE_REMINDED or reminder.snoozed_until is not None
+
+    def _next_planned(self, tag_id: str | None = None) -> Reminder | None:
+        planned = sorted(
+            (
+                r
+                for r in self.reminders.values()
+                if r.state == STATE_PLANNED
+                and (tag_id is None or tag_id in self.tag_ids(r))
+            ),
+            key=lambda r: r.start,
+        )
+        return planned[0] if planned else None
+
+    def _early_ok(self, reminder: Reminder, now: datetime) -> bool:
+        """Whether a planned reminder may be acknowledged before its time."""
+        if self.rule.trigger_mode:
+            return True
+        early = self.rule.early
+        if early["mode"] == EARLY_ALWAYS:
+            return True
+        if early["mode"] == EARLY_OFF:
+            return False
+        first = self.next_reminder_time(reminder)
+        return bool(first and first - timedelta(hours=early["hours"]) <= now)
+
+    def early_miss(
+        self,
+        by: str | None,
+        person: str | None,
+        tag_id: str | None = None,
+        reminder: Reminder | None = None,
+    ) -> str | None:
+        """No target found: message about the next planned reminder (and push)."""
+        if self.rule.trigger_mode:
+            return None
+        nxt = reminder or self._next_planned(tag_id)
+        if nxt is None or nxt.state != STATE_PLANNED:
+            return None
+        feedback = self.rule.early_feedback
+        recipient = person or nxt.assignee
+        name = by if person else (self.assignee_name(recipient) if recipient else None)
+        template = (
+            feedback["message"]
+            if feedback
+            else (
+                "{titel} ist erst {wann} dran."
+                if self.hass.config.language.startswith("de")
+                else "{titel} is not due until {wann}."
+            )
+        )
+        message = render(template, {**self.variables(nxt), "person": name or ""})
+        state = self.hass.states.get(recipient) if recipient else None
+        if feedback and state is not None:
+            self._push_person(
+                state, message, f"laeutwerk_early_{nxt.id}", feedback["clear_after"]
+            )
+        return message
 
     def _variables_of(
         self,
@@ -983,25 +1042,13 @@ class RuleRunner:
         """Reminders a plain "done" refers to.
 
         All reminders that are currently reminding; if there is none, the next
-        planned one when its first reminder time is near (early acknowledge).
+        planned one when the early setting of the rule allows it.
         """
-        reminded = [
-            r
-            for r in self.reminders.values()
-            if r.state == STATE_REMINDED or r.snoozed_until is not None
-        ]
+        reminded = [r for r in self.reminders.values() if self._is_reminding(r)]
         if reminded:
             return reminded
-        planned = sorted(
-            (r for r in self.reminders.values() if r.state == STATE_PLANNED),
-            key=lambda r: r.start,
-        )
-        for reminder in planned:
-            first = self.next_reminder_time(reminder)
-            if first and first - timedelta(hours=EARLY_ACK_HOURS) <= now:
-                return [reminder]
-            break
-        return []
+        nxt = self._next_planned()
+        return [nxt] if nxt is not None and self._early_ok(nxt, now) else []
 
     async def async_acknowledge(
         self,
@@ -1009,8 +1056,9 @@ class RuleRunner:
         reminder_id: str | None = None,
         by: str | None = None,
         via: str | None = None,
-        early: bool = True,
         person: str | None = None,
+        misses: list[str] | None = None,
+        reminding_only: bool = False,
     ) -> list[Reminder]:
         """Mark reminders as done; returns the acknowledged ones.
 
@@ -1021,15 +1069,25 @@ class RuleRunner:
             now = dt_util.utcnow()
             if reminder_id is not None:
                 reminder = self.reminders.get(reminder_id)
-                targets = [reminder] if reminder and reminder.is_open else []
+                targets = (
+                    [reminder]
+                    if reminder
+                    and reminder.is_open
+                    and (self._is_reminding(reminder) or self._early_ok(reminder, now))
+                    else []
+                )
             else:
+                reminder = None
                 targets = self._ackable(now)
-                if not early:
-                    targets = [
-                        r
-                        for r in targets
-                        if r.state == STATE_REMINDED or r.snoozed_until is not None
-                    ]
+                if reminding_only:
+                    targets = [r for r in targets if self._is_reminding(r)]
+            if (
+                not targets
+                and not reminding_only
+                and (text := self.early_miss(by, person, reminder=reminder))
+                and misses is not None
+            ):
+                misses.append(text)
             for reminder in targets:
                 was_reminding = reminder.state == STATE_REMINDED
                 reminder.state = STATE_DONE
@@ -1068,13 +1126,20 @@ class RuleRunner:
         message = render(
             confirm["message"], {**self.variables(reminder), "person": name or ""}
         )
-        tag = f"laeutwerk_confirm_{reminder.id}"
+        self._push_person(
+            state,
+            message,
+            f"laeutwerk_confirm_{reminder.id}",
+            int(confirm.get("clear_after", 10)),
+        )
+
+    def _push_person(self, state: State, message: str, tag: str, delay: int) -> None:
+        """Short push to a person that clears itself after ``delay`` seconds."""
         self.hass.async_create_task(
             async_notify_person(
                 self.hass, state, {"message": message, "data": {"tag": tag}}, Context()
             )
         )
-        delay = int(confirm.get("clear_after", 10))
         if delay <= 0:
             return
 

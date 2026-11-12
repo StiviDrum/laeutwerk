@@ -300,6 +300,21 @@ async def main() -> None:
                     " return c ? c.shadowRoot.innerHTML.length : -1 })()"
                 )
                 print("card rendered, shadow html length:", errors)
+                # Early acknowledge (0.9.2): a reminder days ahead is not done,
+                # the service answers with the "too early" text instead.
+                early = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const r = c._rules.find(x => (x.status?.reminders || [])"
+                    "  .some(m => m.state === 'planned' && new Date(m.start) - Date.now() > 3 * 864e5));"
+                    " if (!r) return 'no planned reminder > 3 days';"
+                    " const m = r.status.reminders.find(m => m.state === 'planned'"
+                    "  && new Date(m.start) - Date.now() > 3 * 864e5);"
+                    " const res = await c.hass.callWS({type: 'call_service', domain: 'laeutwerk',"
+                    "  service: 'acknowledge', service_data: {rule: r.id, reminder_id: m.id},"
+                    "  return_response: true});"
+                    " return JSON.stringify(res.response) })()"
+                )
+                print("acknowledge days ahead:", early)
                 await cdp.shot("overview")
                 # Open the editor for the first rule.
                 await cdp.js(
@@ -314,6 +329,25 @@ async def main() -> None:
                 )
                 await asyncio.sleep(4)
                 await cdp.shot("editor")
+                # 0.9.2: only one step open – tapping a step header closes the rest.
+                accordion = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const heads = e.shadowRoot.querySelectorAll('button.step.head');"
+                    " heads[4].click(); await e.updateComplete;"
+                    " heads[4].click(); await e.updateComplete;"
+                    " const open = [...e.shadowRoot.querySelectorAll('button.step.head')]"
+                    "  .filter(h => h.getAttribute('aria-expanded') === 'true').length;"
+                    " heads[4].scrollIntoView(); return open })()"
+                )
+                print("steps open after tapping step 5:", accordion)
+                await cdp.shot("step5", full=False)
+                await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " e._open = new Set([1, 2, 3, 4, 5, 6, 7]); await e.updateComplete;"
+                    " return true })()"
+                )
                 # Keyword table close-up, a help tip and the suggestion list.
                 await cdp.js(
                     "(() => { const c = window.__find(document, 'laeutwerk-card');"

@@ -562,3 +562,26 @@ describe("source modes and substitute", () => {
     expect(assigneeText(en, "Alida")).toBe("Alida");
   });
 });
+
+describe("0.9.2 helpers", () => {
+  it("early mode keeps hours, default 24", async () => {
+    const { withEarlyMode, emptyRule } = await import("../src/format");
+    const r = emptyRule();
+    expect(withEarlyMode(r, "off").early).toEqual({ mode: "off", hours: 24 });
+    const h = { ...r, early: { mode: "hours" as const, hours: 48 } };
+    expect(withEarlyMode(h, "always").early).toEqual({ mode: "always", hours: 48 });
+    expect(withEarlyMode({ ...r, early: undefined }, "hours").early?.hours).toBe(24);
+  });
+  it("accordion keeps one step open", async () => {
+    const { toggleStepOpen } = await import("../src/format");
+    expect([...toggleStepOpen(new Set([1]), 3)]).toEqual([3]);
+    expect([...toggleStepOpen(new Set([3]), 3)]).toEqual([]);
+  });
+  it("too_early text from the service response", async () => {
+    const { tooEarlyText } = await import("../src/format");
+    expect(tooEarlyText({ response: { too_early: "Erst morgen." } })).toBe("Erst morgen.");
+    expect(tooEarlyText({ response: { too_early: null } })).toBeUndefined();
+    expect(tooEarlyText(undefined)).toBeUndefined();
+    expect(tooEarlyText({})).toBeUndefined();
+  });
+});

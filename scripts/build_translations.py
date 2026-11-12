@@ -16,13 +16,13 @@ RULE_EN = (
     "type light_signal: entities = light entities, pattern (effect blink/pulse, count, interval in seconds), color (name, #hex or r,g,b) or color_from = keyword column holding the colour, brightness in percent, restore (bring the light back to its previous state, default true). "
     "type announce: players = media players, text, text_plural, volume 0-100, tts = TTS entity, language, voice. "
     "type action: actions = any Home Assistant action sequence; the text variables are available as template variables. "
-    "acknowledge (further ways to acknowledge, list of objects: type tag with tag_id = NFC tag; type trigger with trigger = Home Assistant trigger such as a door contact, zone or button, and early = also before the reminder time), "
+    "acknowledge (further ways to acknowledge, list of objects: type tag with tag_id = NFC tag; type trigger with trigger = Home Assistant trigger such as a door contact, zone or button), "
     "repeat ('none' or an object with every = minutes or a duration such as 1h, and max = number of repetitions), "
     "interval (every = days such as 90 or '12w', start = first due date: due again that many days after the last acknowledgement; overdue = reminds daily), "
     "activation (conditions, match all/any, season with from/to as MM-DD: the rule is only active then), on_done (Home Assistant actions run when acknowledged, variables plus person and via), "
     "assignee (persons = person entities, rotation fixed/weekly/per_event/after_last, substitute = person that takes over at the first reminder if substitute_when (entity_id and state) holds; text variable zustaendig, push audience 'assignee'), "
     "escalation (list of stages with after = duration such as 2h or time of day such as 21:30, counted from the first reminder, and optional color = #rrggbb shown in the card; a signal with stage n starts with that stage), "
-    "start_triggers (list of Home Assistant triggers as in automations; instead of calendars the rule starts a reminder whenever one fires and none is open; reminders and filter are ignored, expire defaults to '+12h' and must not be event_start/event_end; start it by hand with the start action), confirm (object with message and clear_after seconds 0-3600, default 10: confirmation push to whoever acknowledged, else the assignee), expire also accepts a plus sign and a duration such as '+12h' (after the start), "
+    "start_triggers (list of Home Assistant triggers as in automations; instead of calendars the rule starts a reminder whenever one fires and none is open; reminders and filter are ignored, expire defaults to '+12h' and must not be event_start/event_end; start it by hand with the start action), early (object with mode off, hours or always, default hours with hours 1-720, default 24: when a planned reminder may be acknowledged before its time; ignored by trigger rules), early_feedback (object with message and clear_after seconds 0-3600, default 10, or null: short push after a too early attempt to the person, else the assignee; variables of the next planned reminder), confirm (object with message and clear_after seconds 0-3600, default 10: confirmation push to whoever acknowledged, else the assignee), expire also accepts a plus sign and a duration such as '+12h' (after the start), "
     "lookahead_days (1-365, default 14, days the calendars are read ahead, must exceed the earliest reminder offset), visible (default true; false hides the rule in the card overview), "
     "ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). "
     "Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. "
@@ -36,13 +36,13 @@ RULE_DE = (
     "type light_signal: entities = Licht-Entitäten, pattern (effect blink/pulse, count, interval in Sekunden), color (Name, #hex oder r,g,b) oder color_from = Stichwort-Spalte mit der Farbe, brightness in Prozent, restore (Licht danach in den vorherigen Zustand bringen, Standard true). "
     "type announce: players = Mediaplayer, text, text_plural, volume 0-100, tts = TTS-Entität, language, voice. "
     "type action: actions = beliebige Home-Assistant-Aktionsfolge; die Textvariablen stehen als Template-Variablen bereit. "
-    "acknowledge (weitere Quittierwege, Liste von Objekten: type tag mit tag_id = NFC-Tag; type trigger mit trigger = Home-Assistant-Trigger wie Türkontakt, Zone oder Taster, und early = auch schon vor dem Erinnerungszeitpunkt), "
+    "acknowledge (weitere Quittierwege, Liste von Objekten: type tag mit tag_id = NFC-Tag; type trigger mit trigger = Home-Assistant-Trigger wie Türkontakt, Zone oder Taster), "
     "repeat ('none' oder ein Objekt mit every = Minuten oder Dauer wie 1h, und max = Anzahl Wiederholungen), "
     "interval (every = Tage wie 90 oder '12w', start = erste Fälligkeit: wieder fällig so viele Tage nach dem letzten Quittieren; überfällig = täglich erinnern), "
     "activation (conditions, match all/any, season mit from/to als MM-TT: Regel nur dann aktiv), on_done (Home-Assistant-Aktionen beim Quittieren, Variablen plus person und via), "
     "assignee (persons = Personen-Entitäten, rotation fixed/weekly/per_event/after_last, substitute = Vertretung, die bei der ersten Erinnerung übernimmt, wenn substitute_when (entity_id and state) zutrifft; Textvariable zustaendig, Push-Zielgruppe 'assignee'), "
     "escalation (Liste von Stufen mit after = Dauer wie 2h oder Uhrzeit wie 21:30, gezählt ab der ersten Erinnerung, und optional color = #rrggbb für die Karte; ein Signal mit stage n startet mit dieser Stufe), "
-    "start_triggers (Liste von Home-Assistant-Triggern wie in Automationen; statt Kalendern startet die Regel eine Erinnerung, sobald einer auslöst und keine offen ist; reminders und filter werden ignoriert, expire ist standardmäßig '+12h' und darf nicht event_start/event_end sein; von Hand mit der Aktion start), confirm (Objekt mit message und clear_after Sekunden 0-3600, Standard 10: Bestätigungs-Push an die erledigende Person, sonst an die Zuständigen), expire kennt auch ein Pluszeichen mit Dauer wie '+12h' (nach dem Start), "
+    "start_triggers (Liste von Home-Assistant-Triggern wie in Automationen; statt Kalendern startet die Regel eine Erinnerung, sobald einer auslöst und keine offen ist; reminders und filter werden ignoriert, expire ist standardmäßig '+12h' und darf nicht event_start/event_end sein; von Hand mit der Aktion start), early (Objekt mit mode off, hours oder always, Standard hours mit hours 1-720, Standard 24: wann eine geplante Erinnerung schon vor ihrer Zeit quittiert werden darf; bei Auslöser-Regeln ohne Wirkung), early_feedback (Objekt mit message und clear_after Sekunden 0-3600, Standard 10, oder null: kurze Push nach einem zu frühen Versuch an die Person, sonst an die Zuständigen; Variablen der nächsten geplanten Erinnerung), confirm (Objekt mit message und clear_after Sekunden 0-3600, Standard 10: Bestätigungs-Push an die erledigende Person, sonst an die Zuständigen), expire kennt auch ein Pluszeichen mit Dauer wie '+12h' (nach dem Start), "
     "lookahead_days (1-365, Standard 14, Tage, die der Kalender vorausgelesen wird, muss größer als die früheste Erinnerung sein), visible (Standard true; false blendet die Regel in der Kartenübersicht aus), "
     "ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). "
     "Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. "
@@ -109,7 +109,7 @@ en = {
     "services": {
         "acknowledge": svc(
             "Acknowledge",
-            "Marks reminders as done. With 'rule': the open reminders of that rule (or its next planned reminder if the first reminder time is less than 24 h away). Without 'rule': all open reminders of all rules. Returns the acknowledged reminder ids when response data is requested.",
+            "Marks reminders as done. With 'rule': the open reminders of that rule (or its next planned reminder, as far as the early setting of the rule allows it). Without 'rule': all open reminders of all rules. Returns acknowledged (reminder ids) and too_early (text such as the next due date when it was too early, else null) when response data is requested.",
             rule=("Rule", "Rule id (see get_rules). Empty: all open reminders."),
             reminder_id=(
                 "Reminder",
@@ -281,7 +281,7 @@ de = {
     "services": {
         "acknowledge": svc(
             "Quittieren",
-            "Markiert Erinnerungen als erledigt. Mit 'rule': die offenen Erinnerungen dieser Regel (oder ihre nächste geplante Erinnerung, wenn der erste Erinnerungszeitpunkt weniger als 24 h entfernt ist). Ohne 'rule': alle offenen Erinnerungen aller Regeln. Liefert auf Wunsch die quittierten Erinnerungs-IDs zurück.",
+            "Markiert Erinnerungen als erledigt. Mit 'rule': die offenen Erinnerungen dieser Regel (oder ihre nächste geplante Erinnerung, soweit die Einstellung early der Regel es erlaubt). Ohne 'rule': alle offenen Erinnerungen aller Regeln. Liefert auf Wunsch acknowledged (Erinnerungs-IDs) und too_early (Text mit dem nächsten Termin, wenn es zu früh war, sonst null) zurück.",
             rule=(
                 "Regel",
                 "Regel-ID (siehe get_rules). Leer: alle offenen Erinnerungen.",

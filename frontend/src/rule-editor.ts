@@ -36,6 +36,8 @@ import {
   keepOnlySource,
   sourceModeOf,
   type SourceMode,
+  toggleStepOpen,
+  withEarlyMode,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
 import { helpTip } from "./help-tip";
@@ -242,17 +244,11 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   private _toggleStep(num: number): void {
-    const open = new Set(this._open);
-    if (open.has(num)) open.delete(num);
-    else open.add(num);
-    this._open = open;
+    this._open = toggleStepOpen(this._open, num);
   }
 
   private _nextStep(num: number): void {
-    const open = new Set(this._open);
-    open.delete(num);
-    open.add(num + 1);
-    this._open = open;
+    this._open = new Set([num + 1]);
     void this.updateComplete.then(() =>
       this.renderRoot.querySelector(`section[data-step="${num + 1}"]`)?.scrollIntoView({
         behavior: "smooth",
@@ -1392,7 +1388,6 @@ export class LaeutwerkRuleEditor extends LitElement {
                 .value=${Array.isArray(a.trigger) ? a.trigger : a.trigger ? [a.trigger] : []}
                 @value-changed=${(e: CustomEvent<{ value: HaConfig[] }>) => setAt(i, { trigger: e.detail.value })}
               ></laeutwerk-field>
-              ${this._toggle(l.t("ack_early"), !!a.early, (v) => setAt(i, { early: v }))}
             </div>`;
           })}
         </div>
@@ -1405,13 +1400,97 @@ export class LaeutwerkRuleEditor extends LitElement {
           </button>
           <button
             class="chip dashed"
-            @click=${() => this._setAck([...acks, { type: "trigger", trigger: [], early: false }])}
+            @click=${() => this._setAck([...acks, { type: "trigger", trigger: [] }])}
           >
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_trigger")}
           </button>
         </div>
+        ${this._trigger ? nothing : this._earlyBlock()}
       `,
     );
+  }
+
+  private _earlyBlock(): TemplateResult {
+    const l = this._l;
+    const r = this._rule;
+    const mode = r.early?.mode ?? "hours";
+    const fb = r.early_feedback;
+    return html`<hr class="sep" />
+      <div class="sublabel head tiprow">${l.t("early")}${helpTip(l, "help_early")}</div>
+      <div class="segmented">
+        ${(["off", "hours", "always"] as const).map(
+          (m) =>
+            html`<button
+              aria-pressed=${mode === m}
+              @click=${() => mode !== m && this._update(withEarlyMode(r, m))}
+            >
+              ${l.t(`early_${m}`)}
+            </button>`,
+        )}
+      </div>
+      ${
+        mode === "hours"
+          ? html`<label class="field"
+              >${l.t("early_hours_field")}
+              <input
+                type="number"
+                min="1"
+                max="720"
+                .value=${String(r.early?.hours ?? 24)}
+                @change=${(e: Event) =>
+                  this._update({
+                    early: {
+                      mode: "hours",
+                      hours: Math.min(
+                        720,
+                        Math.max(1, Math.round(Number((e.target as HTMLInputElement).value)) || 24),
+                      ),
+                    },
+                  })}
+              />
+            </label>`
+          : nothing
+      }
+      ${
+        mode === "always"
+          ? nothing
+          : html`${this._toggle(l.t("early_feedback"), !!fb, (v) =>
+              this._update({
+                early_feedback: v
+                  ? { message: l.t("early_feedback_default"), clear_after: 10 }
+                  : null,
+              }),
+            )}
+            ${
+              fb
+                ? html`<laeutwerk-suggest
+                      .label=${l.t("confirm_message")}
+                      .value=${fb.message}
+                      .variables=${availableVariables(r)}
+                      @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                        this._update({ early_feedback: { ...fb, message: e.detail.value } })}
+                    ></laeutwerk-suggest>
+                    <label class="field"
+                      >${l.t("early_clear")}
+                      <input
+                        type="number"
+                        min="0"
+                        .value=${String(fb.clear_after)}
+                        @change=${(e: Event) =>
+                          this._update({
+                            early_feedback: {
+                              ...fb,
+                              clear_after: Math.max(
+                                0,
+                                Number((e.target as HTMLInputElement).value) || 0,
+                              ),
+                            },
+                          })}
+                      />
+                    </label>`
+                : nothing
+            }`
+      }`;
   }
 
   private _previewLine(text: string, hint = ""): TemplateResult {

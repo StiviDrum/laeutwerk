@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-12
+
+### Added
+- `early` rule setting (`off` / `hours` / `always`) for every way of
+  acknowledging, replacing the fixed 24 h window.
+- `early_feedback`: a too-early attempt sends a short push with the next date,
+  removed again after `clear_after` seconds.
+- `too_early` in the `laeutwerk.acknowledge` response and as a message in the card.
+
+### Changed
+- The rule editor opens one step at a time; shorter help texts.
+- The fixed 24 h window and the per-trigger `early` flag are replaced by the
+  rule setting.
+- Explicitly acknowledging a planned reminder by id now follows the rule setting.
+
 ## [0.9.1] - 2026-11-12
 
 ### Fixed

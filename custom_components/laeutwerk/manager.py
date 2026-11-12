@@ -538,6 +538,7 @@ class LaeutwerkManager:
         by: str | None = None,
         via: str | None = None,
         person: str | None = None,
+        misses: list[str] | None = None,
     ) -> list[Reminder]:
         """Acknowledge the reminders of one rule or all reminding ones."""
         if rule_id is not None:
@@ -546,14 +547,23 @@ class LaeutwerkManager:
             if runner is None:
                 return []
             return await runner.async_acknowledge(
-                reminder_id=reminder_id, by=by, via=via, person=person
+                reminder_id=reminder_id,
+                by=by,
+                via=via,
+                person=person,
+                misses=misses,
             )
         done: list[Reminder] = []
         for runner in list(self.runners.values()):
             if reminder_id is not None and reminder_id not in runner.reminders:
                 continue
             done += await runner.async_acknowledge(
-                reminder_id=reminder_id, by=by, via=via, person=person, early=False
+                reminder_id=reminder_id,
+                by=by,
+                via=via,
+                person=person,
+                misses=misses,
+                reminding_only=reminder_id is None,
             )
         return done
 

@@ -489,8 +489,6 @@ _ACK_SCHEMAS = {
             vol.Required("type"): ACK_TRIGGER,
             vol.Required("trigger"): as_trigger_list,
             vol.Optional("name"): _text,
-            # Also before the reminder time (like the tag and the button).
-            vol.Optional("early", default=False): cv.boolean,
         }
     ),
 }
@@ -557,6 +555,15 @@ def _start_triggers(value: Any) -> list[dict[str, Any]]:
     return as_trigger_list(value) if value else []
 
 
+_EARLY_SCHEMA = vol.Schema(
+    {
+        vol.Optional("mode", default="hours"): vol.In(["off", "hours", "always"]),
+        vol.Optional("hours", default=24): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=720)
+        ),
+    }
+)
+
 _CONFIRM_SCHEMA = vol.Schema(
     {
         vol.Required("message"): _non_empty,
@@ -584,6 +591,10 @@ RULE_SCHEMA = vol.Schema(
         ),
         vol.Optional("start_triggers", default=list): _start_triggers,
         vol.Optional("confirm", default=None): vol.Any(None, _CONFIRM_SCHEMA),
+        vol.Optional("early", default=lambda: {"mode": "hours", "hours": 24}): (
+            _EARLY_SCHEMA
+        ),
+        vol.Optional("early_feedback", default=None): vol.Any(None, _CONFIRM_SCHEMA),
         vol.Optional("signals", default=list): _signals,
         vol.Optional("acknowledge", default=list): [_ack],
         vol.Optional("ack_label", default=None): vol.Any(None, _text),

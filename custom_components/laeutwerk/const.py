@@ -28,9 +28,9 @@ EVENT_MISSED: Final = "laeutwerk_missed"
 LOOKAHEAD_DAYS: Final = 14
 REFRESH_MINUTES: Final = 15
 
-# A reminder that is still "planned" can be acknowledged this long before its
-# first reminder time (e.g. NFC tag at the bin in the afternoon).
-EARLY_ACK_HOURS: Final = 24
+EARLY_OFF: Final = "off"
+EARLY_HOURS: Final = "hours"
+EARLY_ALWAYS: Final = "always"
 
 # Mobile app notification action: LAEUTWERK_ACK__<reminder id>
 ACTION_ACK_PREFIX: Final = "LAEUTWERK_ACK__"

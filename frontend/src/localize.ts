@@ -90,7 +90,16 @@ const en = {
   add_tag: "NFC tag",
   add_trigger: "Door contact, zone or button",
   ack_trigger: "Trigger",
-  ack_early: "also before the reminder time",
+  early: "Finish early",
+  early_off: "No",
+  early_hours: "Before",
+  early_hours_field: "Hours before the reminder",
+  early_always: "Any time",
+  early_feedback: "Reply when it is too early",
+  early_feedback_default: "{titel} is not due until {wann}.",
+  early_clear: "Hide after … s",
+  help_early:
+    "Whether a reminder can be finished before its event. No: only once it is due. Up to 24 h: from one day before. Any time: even weeks ahead, e.g. for a tag at the bin.",
   ack_label: "Text of the done button",
   bundle: "Bundle events of the same day",
   expire: "Expires",
@@ -226,34 +235,34 @@ const en = {
   column_name: "Variable name",
   tag_suggest_placeholder: "Tag id or pick a known tag",
   help_step_calendar:
-    "Where the reminder comes from. Calendar: dates from calendars, to-do lists or date entities (e.g. waste collection). Trigger: starts when something happens (e.g. the washing machine finishes). Interval: due again a number of days after it was last done (e.g. a filter every 90 days).",
+    "Where the reminder comes from. Calendar: events, to-do lists or dates (e.g. waste collection). Trigger: starts when something happens (e.g. the washer is done). Interval: due again N days after the last time (e.g. a filter every 90 days).",
   help_all_day: "Only events without a start time (whole-day events) count.",
   help_keywords:
-    "Only events whose title matches a keyword become reminders (without keywords every event counts). Match: contains, starts with, or regex. Every further column is a free variable for your texts, e.g. {tonne}.",
+    "Only events whose title matches a keyword become reminders (no keywords: every event). Each further column is a variable for your texts, e.g. {tonne}.",
   help_plural:
-    'With several matches in one reminder every column also gets a plural variable: {tonnen} = "Papiertonne and Biotonne". The small button under a column name switches it on or off.',
+    'With several matches every column also gets a plural variable: {tonnen} = "Papiertonne and Biotonne". The button under a column name switches it on or off.',
   help_icon_color:
-    "Tap the round icon in front of a keyword to set its icon and colour (shown in the card) or to delete the keyword. Left empty they come from the rule (step 1), the colour otherwise from the theme. Each one falls back on its own: a keyword with only a colour keeps the rule's icon.",
+    "Tap the round icon before a keyword to set its icon and colour, or to delete it. Empty values come from the rule.",
   help_headline:
-    "Title of the reminder in the card and in notifications, e.g. {wann}: {titel}. Left empty the default is used. The second field is used when several matches are bundled; left empty the first one is used.",
+    "Title in the card and in notifications, e.g. {wann}: {titel}. Empty: default. The second field is used for bundled matches.",
   help_reminders:
-    'When to remind, relative to the event. "-1d 17:00" = the day before at 17:00, "-2h" = two hours before, "09:00" = on the event day at 09:00. You can add several times.',
+    'When to remind, relative to the event: "-1d 17:00" = day before at 17:00, "-2h" = two hours before, "09:00" = on the day at 09:00.',
   help_repeat:
-    "Once: remind only at the times above. Repeat: keep reminding every n minutes while the reminder is open, up to the maximum (default: every 60 minutes, at most 24 times).",
+    "Once: only at the times above. Repeat: remind every n minutes while open, up to the maximum.",
   help_signals:
     "What happens when a reminder is due: push, light, announcement or your own action. Switch a signal on or off, tap it to edit.",
   help_ack:
-    "How a reminder counts as done: the button in the push, an NFC tag, or a trigger such as a door contact or a zone. The card, the button entity and the action always work. A tag id may contain variables (e.g. {nfc}) so that every keyword has its own tag.",
+    "How a reminder counts as done: push button, NFC tag or a trigger (door contact, zone). Card, button and service always work. A tag id may contain variables, e.g. {nfc}.",
   help_visible:
-    "Off: the rule keeps working, but its reminders do not appear in the overview, upcoming, done or compact card. Useful for rules that only send pushes or lights.",
+    "Off: the rule keeps working, but its reminders are hidden in the card. For rules that only send pushes or lights.",
   help_lookahead:
-    "How many days ahead the calendar is read for this rule (1-365). Must reach beyond your earliest reminder, e.g. 7 days before an event needs at least 8.",
+    "Days of the calendar read ahead (1-365). Must exceed your earliest reminder: 7 days before needs at least 8.",
   help_bundle:
     'Events of this rule on the same day become one reminder ("Tomorrow: paper + organic"); one tap finishes all.',
   help_expire:
-    'When an open reminder counts as missed: at the end of the event, on the event day at a given time, or a custom time like "+1d 12:00".',
+    'When an open reminder counts as missed: event end, a time on the event day, or e.g. "+1d 12:00".',
   help_when:
-    "Immediately: at the reminder time. On opportunity: only when the trigger fires while the reminder is open, e.g. the lamp is switched on or the front door opens.",
+    "Immediately: at the reminder time. On opportunity: when the trigger fires while the reminder is open, e.g. the lamp is switched on.",
   help_manual_only:
     "Ignores triggers caused by automations or scripts, so only real operation counts (a light alarm clock will not fire it).",
   help_only_if: "The signal only fires if all (or any one) of these conditions are true.",
@@ -269,7 +278,7 @@ const en = {
   kw_reset_icon: "Reset icon",
   kw_look_hint: "Empty fields use the icon and colour of the rule.",
   help_card_editor:
-    "View: all reminders (overview) or one rule. Rules: limit the overview to some rules. Upcoming and done show or hide those sections. Compact: one line for the dashboard header.",
+    "View: all reminders or one rule. Rules: limit the overview. Upcoming/done: show or hide. Compact: one line for the dashboard header.",
   tag_next: "Next match: {tags}",
   recipients: "Recipients",
   push_to_assignee: "To the responsible person",
@@ -305,7 +314,7 @@ const en = {
   substitute_when: "Substitute takes over when",
   substitute_state: "State",
   help_substitute:
-    "If the condition is true when the reminder starts, the substitute becomes responsible instead of the person from the list, e.g. when the person is away.",
+    "If the condition is true when the reminder starts, the substitute takes over, e.g. when the person is away.",
   err_substitute: "Substitute and condition belong together – set both or neither.",
   substitute_for: "{name} (substitute for {for})",
   confirm_send: "Send short confirmation",
@@ -509,7 +518,16 @@ const de: Strings = {
   add_tag: "NFC-Tag",
   add_trigger: "Türkontakt, Zone oder Taster",
   ack_trigger: "Auslöser",
-  ack_early: "auch schon vor dem Erinnerungszeitpunkt",
+  early: "Vorzeitig erledigen",
+  early_off: "Nein",
+  early_hours: "Vorher",
+  early_hours_field: "Stunden vor der Erinnerung",
+  early_always: "Jederzeit",
+  early_feedback: "Rückmeldung bei zu frühem Erledigen",
+  early_feedback_default: "{titel} ist erst {wann} dran.",
+  early_clear: "Ausblenden nach … s",
+  help_early:
+    "Ob eine Erinnerung vor dem Termin erledigt werden darf. Nein: erst wenn sie fällig ist. Bis 24 Std.: ab einem Tag vorher. Jederzeit: auch Wochen vorher, z. B. mit dem Tag an der Tonne.",
   ack_label: "Text des Erledigt-Knopfs",
   bundle: "Termine desselben Tages bündeln",
   expire: "Verfällt",
@@ -645,34 +663,34 @@ const de: Strings = {
   column_name: "Variablenname",
   tag_suggest_placeholder: "Tag-ID oder bekannten Tag wählen",
   help_step_calendar:
-    "Woher die Termine kommen: Kalender, To-do-Listen mit Fälligkeit, Datums-Entitäten oder Datums-Helfer. Woher die Erinnerung kommt. Kalender: Termine aus Kalendern, To-do-Listen oder Datums-Entitäten (z. B. Müllabfuhr). Auslöser: startet, wenn etwas passiert (z. B. die Waschmaschine ist fertig). Intervall: nach einer Anzahl Tage wieder fällig (z. B. Filter alle 90 Tage).",
+    "Woher die Erinnerung kommt. Kalender: Termine, To-do-Listen oder Datums-Entitäten (z. B. Müllabfuhr). Auslöser: startet, wenn etwas passiert (z. B. Waschmaschine fertig). Intervall: nach N Tagen wieder fällig (z. B. Filter alle 90 Tage).",
   help_all_day: "Nur Termine ohne Uhrzeit (ganztägige Termine) zählen.",
   help_keywords:
-    "Nur Termine, deren Titel zu einem Stichwort passt, werden zu Erinnerungen (ohne Stichwörter zählt jeder Termin). Suchart: enthält, beginnt mit oder Regex. Jede weitere Spalte ist eine freie Variable für deine Texte, z. B. {tonne}.",
+    "Nur Termine, deren Titel zu einem Stichwort passt, werden Erinnerungen (ohne Stichwörter: jeder Termin). Jede weitere Spalte ist eine Variable für deine Texte, z. B. {tonne}.",
   help_plural:
-    "Bei mehreren Treffern in einer Erinnerung bekommt jede Spalte auch eine Mehrzahl-Variable: {tonnen} = „Papiertonne und Biotonne“. Der kleine Knopf unter dem Spaltennamen schaltet sie ein oder aus.",
+    "Bei mehreren Treffern bekommt jede Spalte auch eine Mehrzahl: {tonnen} = „Papiertonne und Biotonne“. Der Knopf unter dem Spaltennamen schaltet sie ein oder aus.",
   help_icon_color:
-    "Tippe auf das runde Icon vor einem Stichwort, um Icon und Farbe festzulegen (wie in der Karte) oder das Stichwort zu löschen. Leer übernehmen sie die Werte der Regel (Schritt 1), die Farbe sonst vom Theme. Beides fällt einzeln zurück: Ein Stichwort nur mit Farbe behält das Icon der Regel.",
+    "Tippe auf das runde Icon vor einem Stichwort, um Icon und Farbe zu setzen oder es zu löschen. Leere Werte kommen von der Regel.",
   help_headline:
-    "Titel der Erinnerung in der Karte und in Mitteilungen, z. B. {wann}: {titel}. Leer gilt die Standard-Überschrift. Das zweite Feld gilt, wenn mehrere Treffer gebündelt sind; leer gilt das erste.",
+    "Titel in Karte und Mitteilungen, z. B. {wann}: {titel}. Leer: Standard. Das zweite Feld gilt bei gebündelten Treffern.",
   help_reminders:
-    "Wann erinnert wird, relativ zum Termin. „-1d 17:00“ = am Vortag um 17:00, „-2h“ = zwei Stunden vorher, „09:00“ = am Tag des Termins um 09:00. Du kannst mehrere Zeitpunkte anlegen.",
+    "Wann erinnert wird, relativ zum Termin: „-1d 17:00“ = Vortag 17:00, „-2h“ = zwei Stunden vorher, „09:00“ = am Tag um 09:00.",
   help_repeat:
-    "Einmal: nur zu den Zeitpunkten oben. Wiederholen: alle n Minuten weiter erinnern, solange die Erinnerung offen ist, bis zum Maximum (Standard: alle 60 Minuten, höchstens 24 Mal).",
+    "Einmal: nur zu den Zeitpunkten oben. Wiederholen: alle n Minuten, solange offen, bis zum Maximum.",
   help_signals:
     "Was bei einer fälligen Erinnerung passiert: Push, Licht, Ansage oder eine eigene Aktion. Schalter ein/aus, zum Bearbeiten antippen.",
   help_ack:
-    "Woran eine Erinnerung als erledigt gilt: Knopf in der Push, NFC-Tag oder ein Auslöser wie Türkontakt oder Zone. Karte, Knopf-Entität und Dienst funktionieren immer. Eine Tag-ID darf Variablen enthalten (z. B. {nfc}), damit jedes Stichwort seinen eigenen Tag hat.",
+    "Woran eine Erinnerung als erledigt gilt: Push-Knopf, NFC-Tag oder Auslöser (Türkontakt, Zone). Karte, Knopf und Dienst gehen immer. Die Tag-ID darf Variablen enthalten, z. B. {nfc}.",
   help_visible:
-    "Aus: die Regel arbeitet weiter, ihre Erinnerungen erscheinen aber nicht in Übersicht, Demnächst, Erledigt und Kompaktkarte. Sinnvoll für Regeln, die nur Pushs oder Licht auslösen.",
+    "Aus: die Regel arbeitet weiter, ihre Erinnerungen fehlen aber in der Karte. Für Regeln, die nur Push oder Licht auslösen.",
   help_lookahead:
-    "Wie viele Tage im Voraus der Kalender für diese Regel gelesen wird (1–365). Muss über deine früheste Erinnerung hinausreichen, z. B. 7 Tage vor dem Termin braucht mindestens 8.",
+    "Tage, die der Kalender vorausgelesen wird (1–365). Muss über die früheste Erinnerung reichen: 7 Tage vorher braucht mindestens 8.",
   help_bundle:
     "Termine dieser Regel am selben Tag werden eine Erinnerung („Morgen: Papier + Bio“); ein Tipp erledigt alle.",
   help_expire:
-    "Wann eine offene Erinnerung als verpasst gilt: zum Ende des Termins, am Termintag zu einer Uhrzeit oder eigene Zeit wie „+1d 12:00“.",
+    "Wann eine offene Erinnerung als verpasst gilt: Terminende, Uhrzeit am Termintag oder z. B. „+1d 12:00“.",
   help_when:
-    "Sofort: zum Erinnerungszeitpunkt. Bei Gelegenheit: nur wenn der Auslöser feuert, während die Erinnerung offen ist, z. B. Lampe wird eingeschaltet oder die Haustür geht auf.",
+    "Sofort: zum Erinnerungszeitpunkt. Bei Gelegenheit: wenn der Auslöser feuert, solange die Erinnerung offen ist, z. B. Lampe wird eingeschaltet.",
   help_manual_only:
     "Ignoriert Auslöser von Automationen oder Skripten, nur echte Bedienung zählt (ein Lichtwecker löst nichts aus).",
   help_only_if: "Das Signal feuert nur, wenn alle (oder eine) dieser Bedingungen erfüllt sind.",
@@ -688,7 +706,7 @@ const de: Strings = {
   kw_reset_icon: "Icon zurücksetzen",
   kw_look_hint: "Leere Felder nehmen Icon und Farbe der Regel.",
   help_card_editor:
-    "Ansicht: alle Erinnerungen (Übersicht) oder eine Regel. Regeln: Übersicht auf einzelne Regeln beschränken. Demnächst und Erledigt blenden diese Bereiche ein oder aus. Kompakt: eine Zeile für den Dashboard-Kopf.",
+    "Ansicht: alle Erinnerungen oder eine Regel. Regeln: Übersicht einschränken. Demnächst/Erledigt: ein- oder ausblenden. Kompakt: eine Zeile für den Dashboard-Kopf.",
   tag_next: "Nächster Treffer: {tags}",
   recipients: "Empfänger",
   push_to_assignee: "An die zuständige Person",
@@ -722,7 +740,7 @@ const de: Strings = {
   substitute_when: "Vertretung übernimmt, wenn",
   substitute_state: "Zustand",
   help_substitute:
-    "Ist die Bedingung beim Start der Erinnerung wahr, ist die Vertretung zuständig statt der Person aus der Liste, z. B. wenn die Person abwesend ist.",
+    "Ist die Bedingung beim Start wahr, übernimmt die Vertretung, z. B. wenn die Person abwesend ist.",
   err_substitute:
     "Vertretung und Bedingung gehören zusammen – beides setzen oder beides leer lassen.",
   substitute_for: "{name} (Vertretung für {for})",

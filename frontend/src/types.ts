@@ -73,12 +73,16 @@ export interface Signal {
   voice?: string;
 }
 
+export interface EarlySetting {
+  mode: "off" | "hours" | "always";
+  hours: number;
+}
+
 export interface Acknowledge {
   type: "notify_action" | "tag" | "trigger";
   tag_id?: string;
   name?: string;
   trigger?: HaConfig | HaConfig[];
-  early?: boolean;
 }
 
 export interface Reminder {
@@ -179,6 +183,10 @@ export interface Rule {
   start_triggers?: HaConfig[] | null;
   /** Short confirmation to the person who finished the task. */
   confirm?: { message: string; clear_after: number } | null;
+  /** Finishing before the event: off, up to N hours before, or always. */
+  early?: EarlySetting;
+  /** Short message to the person who tried to finish too early. */
+  early_feedback?: { message: string; clear_after: number } | null;
   activation?: {
     conditions: HaConfig[];
     match?: "all" | "any";
@@ -281,5 +289,7 @@ export interface HomeAssistant {
     service: string,
     data?: Record<string, unknown>,
     target?: Record<string, unknown>,
+    notifyOnError?: boolean,
+    returnResponse?: boolean,
   ): Promise<unknown>;
 }

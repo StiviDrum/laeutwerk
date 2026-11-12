@@ -1,6 +1,6 @@
 /** Pure display logic of the card (tested with vitest). */
 import type { Localizer, StringKey } from "./localize";
-import type { Badge, ColumnSpec, Reminder, Rule, Signal } from "./types";
+import type { Badge, ColumnSpec, EarlySetting, Reminder, Rule, Signal } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -511,6 +511,7 @@ export function emptyRule(): Rule {
     expire: "event_end",
     interval: null,
     activation: null,
+    early: { mode: "hours", hours: 24 },
     on_done: [],
     assignee: null,
     escalation: [],
@@ -864,4 +865,21 @@ export function pluralHeadlinePreview(
     ? renderTemplate(template, event.variables ?? {})
     : reminderTitle({ titles: event.titles, variables: event.variables });
   return { text, fallback: !own };
+}
+
+/** Rule with a new "finish early" mode (hours keep their last value, default 24). */
+export function withEarlyMode(rule: Rule, mode: EarlySetting["mode"]): Rule {
+  return { ...rule, early: { mode, hours: rule.early?.hours || 24 } };
+}
+
+/** The accordion keeps one step open: opening a step closes the others. */
+export function toggleStepOpen(open: ReadonlySet<number>, num: number): Set<number> {
+  return open.has(num) ? new Set([...open].filter((n) => n !== num)) : new Set([num]);
+}
+
+/** Text of a "too early" answer of the acknowledge service, if there is one. */
+export function tooEarlyText(result: unknown): string | undefined {
+  const r = result as { response?: { too_early?: unknown }; too_early?: unknown } | null;
+  const text = r?.response?.too_early ?? r?.too_early;
+  return typeof text === "string" && text ? text : undefined;
 }

@@ -255,6 +255,12 @@ class Rule:
     start_triggers: list[dict[str, Any]] = field(default_factory=list)
     # 0.9: {message, clear_after} – confirmation to whoever acknowledged.
     confirm: dict[str, Any] | None = None
+    # 0.9.2: acknowledging a planned reminder before its time.
+    early: dict[str, Any] = field(
+        default_factory=lambda: {"mode": "hours", "hours": 24}
+    )
+    # 0.9.2: {message, clear_after} – push after a too early attempt.
+    early_feedback: dict[str, Any] | None = None
 
     @property
     def trigger_mode(self) -> bool:
@@ -302,6 +308,8 @@ class Rule:
             visible=bool(data.get("visible", True)),
             start_triggers=list(data.get("start_triggers") or []),
             confirm=data.get("confirm"),
+            early=dict(data.get("early") or {"mode": "hours", "hours": 24}),
+            early_feedback=data.get("early_feedback"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -332,6 +340,8 @@ class Rule:
             "visible": self.visible,
             "start_triggers": list(self.start_triggers),
             "confirm": self.confirm,
+            "early": dict(self.early),
+            "early_feedback": self.early_feedback,
         }
 
 

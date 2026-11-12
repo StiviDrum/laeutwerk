@@ -50,7 +50,8 @@ A reminder goes through these states: **planned** (event found) → **reminded**
 time, also across restarts; a reminder time missed while Home Assistant was
 off is caught up once.
 
-Calendars are read with `calendar.get_events` (14 days ahead, every 15 minutes
+Calendars are read with `calendar.get_events` (as many days ahead as
+`lookahead_days` (default 14), every 15 minutes
 and when a calendar changes).
 
 ### Example rule
@@ -115,7 +116,7 @@ data:
 - **Acknowledge:** the button in the push notification, the entity
   `button.laeutwerk_<rule>_erledigt`, the action `laeutwerk.acknowledge`, an
   NFC tag or any trigger (see below).
-  A reminder can be acknowledged up to 24 h before its first reminder time.
+  Early acknowledgement depends on the rule's `early` setting (see *Done ahead of time*).
 
 ### Sources
 
@@ -259,11 +260,10 @@ is open, at most M times (default 24).
 ```yaml
 repeat: {every: 1h, max: 5}      # while open: remind again every hour, 5 times
 acknowledge:
-  - {type: tag, tag_id: tonne}   # NFC tag (also before the reminder time)
+  - {type: tag, tag_id: tonne}   # NFC tag (before the reminder time: see `early`)
   - {type: tag, tag_id: "{nfc}"} # tag per bin from the keyword column "nfc"
   - type: trigger                # door contact, zone, button: any trigger
     trigger: {trigger: zone, entity_id: person.steven, zone: zone.kult61, event: enter}
-    early: false                 # true: also before the reminder time
 signals:
   - type: notify
     audience: present
@@ -280,6 +280,27 @@ Other tags do nothing. Fixed and variable tags can be mixed.
 
 `laeutwerk.snooze` (or the push button) sets a reminder back to *planned*; it
 reminds again when the time is over, unless it expires first.
+
+### Done ahead of time
+
+```yaml
+early: {mode: hours, hours: 24}  # off | hours | always (default: hours, 24)
+early_feedback: {message: "{titel} ist erst {wann} dran.", clear_after: 10}
+```
+
+- **`off`:** only from the reminder time on.
+- **`hours`:** from `hours` hours before the first reminder time (default 24).
+- **`always`:** at any time. The early acknowledgement then finishes the next
+  planned reminder (for a tag: the next reminder of that tag; for interval
+  rules the next interval counts from then).
+
+The setting applies to every way of acknowledging: the push button, the card,
+NFC tags, door contacts, zones, button triggers and `laeutwerk.acknowledge`.
+
+**Too early:** `early_feedback` sends a short push with the next date to the
+person who tried (otherwise the responsible person). It is removed again after
+`clear_after` seconds (default 10). The card shows the same text as a short
+message, and `laeutwerk.acknowledge` returns `too_early` with that text.
 
 ### Responsibility, escalation and more
 
@@ -390,7 +411,7 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Compact** (`compact: true`): always the next task in one line (open ones
   first, the one that expires first on top, then planned ones) with the rule's
   icon and the number of open tasks. Tapping opens a dialog: confirm *done*
-  (also ahead of time for planned tasks), *Later*, pick another task, reopen
+  (also ahead of time for planned tasks, if the rule allows it), *Later*, pick another task, reopen
   a task under *Done already*, or edit / create rules (administrators).
 - **Confirmation:** marking a task as done and reopening one ask first – in
   the card and in the compact card's dialog.
@@ -402,8 +423,8 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   Tap a reminder for its details: when it reminded, what was sent, what comes
   next, who is responsible, which tags count. Rules can be sorted and, with
   many rules, searched.
-- **Editor:** steps are collapsed with a one-line summary (new rules are
-  filled in step by step); missing things are checked before saving and
+- **Editor:** one step opens at a time, the others collapse with a one-line
+  summary (new rules are filled in step by step); missing things are checked before saving and
   shown at their step in plain words; unsaved changes need a confirmation and
   are kept as a draft in the browser. Keywords are suggested from the event
   titles of the calendar; text fields suggest variables as you type `{`, the
@@ -550,11 +571,35 @@ durch“ `{` tippen und die Variable aus den Vorschlägen wählen. Bei einem Bü
 quittiert jeder der beiden Tags die ganze Erinnerung, andere Tags nichts.
 Feste und variable Tags lassen sich mischen.
 
+## Vorzeitig erledigen
+
+```yaml
+early: {mode: hours, hours: 24}  # off | hours | always (Standard: hours, 24)
+early_feedback: {message: "{titel} ist erst {wann} dran.", clear_after: 10}
+```
+
+- **Nein** (`off`): erst ab dem Erinnerungszeitpunkt.
+- **Vorher** (`hours`): ab so vielen Stunden vor dem ersten Erinnerungszeitpunkt
+  (`hours`, Standard 24).
+- **Jederzeit** (`always`): zu jeder Zeit. Die vorzeitige Erledigung erledigt
+  dann die nächste geplante Erinnerung (bei einem Tag: die nächste Erinnerung
+  dieses Tags; bei Intervall-Regeln zählt das nächste Intervall ab dann).
+
+Die Einstellung gilt für jeden Weg des Erledigens: den Push-Knopf, die Karte,
+NFC-Tags, Türkontakte, Zonen, Taster-Auslöser und `laeutwerk.acknowledge`.
+
+**Rückmeldung bei zu frühem Erledigen:** `early_feedback` schickt der Person,
+die es versucht hat (sonst der zuständigen Person), eine kurze Push-Nachricht
+mit dem nächsten Termin. Nach `clear_after` Sekunden (Standard 10) verschwindet
+sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
+`laeutwerk.acknowledge` liefert `too_early` mit diesem Text zurück.
+
 ## Bedienung
 
 - **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
   Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
-  Nachfrage als erledigt markieren (geplante auch schon vorab), „Später“,
+  Nachfrage als erledigt markieren (geplante auch schon vorab, wenn die Regel
+  es erlaubt), „Später“,
   eine andere Aufgabe wählen, unter „Schon erledigt“ eine Aufgabe wieder
   öffnen oder Regeln bearbeiten und neu anlegen (Admins).
 - **Rückfrage:** Erledigen und Wieder-Öffnen fragen vorher nach – in der Karte
@@ -568,7 +613,8 @@ Feste und variable Tags lassen sich mischen.
   **Erledigt** erscheint kurz **Rückgängig** (auch als Aktion `laeutwerk.reopen`).
 - Eine Erinnerung **antippen** zeigt Details: wann erinnert, was gesendet
   wurde, was als Nächstes kommt, wer zuständig ist, welche Tags zählen.
-- Im **Regel-Editor** sind die Schritte eingeklappt mit Zusammenfassung; neue
+- Im **Regel-Editor** öffnet sich immer nur ein Schritt, die anderen klappen mit
+  Zusammenfassung zu; neue
   Regeln füllst du Schritt für Schritt („Weiter“). Fehlendes wird vor dem
   Speichern am jeweiligen Schritt angezeigt, ungespeicherte Änderungen
   brauchen eine Bestätigung und bleiben als Entwurf im Browser.

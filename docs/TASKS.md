@@ -298,6 +298,18 @@ Erkenntnisse:
 - [x] Release v0.9.0
 - [x] v0.9.1: hassfest-Fehler in Dienstbeschreibungen (`<duration>`, `{entity_id, state}`) – Erkenntnis: nach jedem Push auf die CI warten, nicht nur nach Tags
 
+## 0.9.2 – Vorzeitig erledigen, Rückmeldung, ein Schritt offen (12.11.2026)
+Schnittstelle:
+- Regel `early`: `{mode: "off" | "hours" | "always", hours: int 1–720}`, Standard `{mode: "hours", hours: 24}`; gilt für alle Quittierwege (Push-Knopf, Karte, Tag, Trigger, Dienst). Das alte `early` je Trigger-Quittierung entfällt. Bei Auslöser-Regeln ohne Bedeutung.
+- Regel `early_feedback`: `{message, clear_after (s, Standard 10)} | null` – zu früher Versuch → kurze Push an die Person (sonst Zuständige), Variablen des nächsten passenden Termins (bei Tag: Termin dieses Tags).
+- `laeutwerk/acknowledge` (WS) bzw. Dienst-Antwort: zusätzlich `too_early: str | null` (gerenderter Text) → Karte zeigt kurze Meldung.
+- Editor: immer nur ein Schritt offen; Texte kürzen, eindeutig bleiben.
+- [x] Backend
+- [x] Karte
+- Erkenntnis: Standardtext ohne ({datum}) – {wann} ist ab einer Woche schon das Datum („am 24.11.“), sonst doppelt. Segment „Vorher“ + Feld „Stunden vor der Erinnerung“ (vorher „Bis … Std. vorher“, brach um und stand doppelt).
+- Im echten Frontend geprüft: Quittieren 12 Tage vorher → `acknowledged: []`, `too_early: "Rest ist erst am 24.11. dran."`; Schritt 5 antippen → genau 1 Schritt offen.
+- [x] Release v0.9.2
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

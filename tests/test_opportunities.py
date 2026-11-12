@@ -387,10 +387,12 @@ async def test_acknowledge_by_trigger(
 ) -> None:
     door = {"trigger": "state", "entity_id": DOOR, "to": "on"}
     manager = await start(
-        hass, freezer, acknowledge=[{"type": "trigger", "trigger": door}]
+        hass,
+        freezer,
+        acknowledge=[{"type": "trigger", "trigger": door}],
+        early={"mode": "off"},
     )
-    listener, early = manager.runners["muell"]._ack_triggers[0]
-    assert not early
+    (listener,) = manager.runners["muell"]._ack_triggers
     assert not listener.active
 
     # Before the reminder time the door does nothing.
@@ -412,7 +414,7 @@ async def test_acknowledge_by_trigger_early(
 ) -> None:
     door = {"trigger": "state", "entity_id": DOOR, "to": "on"}
     manager = await start(
-        hass, freezer, acknowledge=[{"type": "trigger", "trigger": door, "early": True}]
+        hass, freezer, acknowledge=[{"type": "trigger", "trigger": door}]
     )
     await hass.async_block_till_done()
     await switch(hass, DOOR, "on")

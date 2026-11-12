@@ -117,8 +117,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
             by, person = named_person(hass, given)
         else:
             by, person = await async_who(hass, call.context)
+        misses: list[str] = []
         done = await manager.async_acknowledge(
             rule_id,
+            misses=misses,
             reminder_id=call.data.get("reminder_id"),
             by=by,
             via=ACK_VIA_SERVICE,
@@ -126,7 +128,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
         )
         if not call.return_response:
             return None
-        return {"acknowledged": [reminder.id for reminder in done]}
+        return {
+            "acknowledged": [reminder.id for reminder in done],
+            "too_early": None if done or not misses else misses[0],
+        }
 
     async def snooze(call: ServiceCall) -> ServiceResponse:
         manager = get_manager(hass)

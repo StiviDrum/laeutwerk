@@ -19,6 +19,7 @@ import {
   relativeDayTime,
   reminderTitle,
   tasks,
+  tooEarlyText,
 } from "./format";
 import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
 import { localizer, type Localizer, type StringKey } from "./localize";
@@ -237,16 +238,28 @@ export class LaeutwerkCard extends LitElement {
     return !!this.hass?.user?.is_admin;
   }
 
+  private _tooEarly?: string;
+
   private async _call(
     key: string,
     service: string,
     data: Record<string, unknown>,
+    returnResponse = false,
   ): Promise<boolean> {
     if (!this.hass) return false;
     this._busy = key;
     this._actionError = undefined;
+    this._tooEarly = undefined;
     try {
-      await this.hass.callService("laeutwerk", service, data);
+      const result = await this.hass.callService(
+        "laeutwerk",
+        service,
+        data,
+        undefined,
+        undefined,
+        returnResponse || undefined,
+      );
+      if (returnResponse) this._tooEarly = tooEarlyText(result);
       return true;
     } catch (err) {
       this._actionError = this._l.t("failed", { error: errorMessage(err) });
@@ -283,11 +296,17 @@ export class LaeutwerkCard extends LitElement {
     );
     if (!asked) return;
     // Who it was is resolved by Läutwerk from the user (person, else name).
-    const ok = await this._call(reminder.id, "acknowledge", {
-      rule: reminder.rule_id,
-      reminder_id: reminder.id,
-    });
-    if (ok)
+    const ok = await this._call(
+      reminder.id,
+      "acknowledge",
+      {
+        rule: reminder.rule_id,
+        reminder_id: reminder.id,
+      },
+      true,
+    );
+    if (ok && this._tooEarly) this._showToast(this._tooEarly);
+    else if (ok)
       this._showToast(this._l.t("done_toast", { title: reminderTitle(reminder) }), reminder.id);
   }
 

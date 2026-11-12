@@ -266,11 +266,18 @@ async def test_planned_reminder_can_be_done_ahead_by_id(
     _, manager = await setup_integration(hass)
     await manager.async_create_rule(muell_rule())
     await hass.async_block_till_done()
-    # Without an id the 24 h window applies …
-    assert await call(hass, "acknowledge", rule="muell") == {"acknowledged": []}
-    # … with the id it is done right away.
+    # The early setting (default 24 h) applies, also with an id (0.9.2) …
     result = await call(
         hass, "acknowledge", rule="muell", reminder_id="muell__20261124"
     )
-    assert result == {"acknowledged": ["muell__20261124"]}
+    assert result["acknowledged"] == []
+    assert result["too_early"]
+    # … "always" allows it right away.
+    await manager.async_update_rule(
+        "muell", {**manager.rules["muell"].to_dict(), "early": {"mode": "always"}}
+    )
+    result = await call(
+        hass, "acknowledge", rule="muell", reminder_id="muell__20261124"
+    )
+    assert result == {"acknowledged": ["muell__20261124"], "too_early": None}
     assert manager.reminders["muell"]["muell__20261124"].state == "done"
