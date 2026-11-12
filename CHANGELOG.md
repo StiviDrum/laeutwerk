@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-12
+
+### Added
+- Compact card dialog: on/off switch next to every rule.
+
+### Fixed
+- Compact card dialog: reminders show the keyword icon in its colour (like
+  the big card) instead of the rule icon.
+
+### Changed
+- Help for "Kommt bei": every reminder is a pass (first, repeat, "later",
+  stage); "from 2nd" covers all after the first.
+
 ## [0.11.0] - 2026-11-12
 
 ### Changed

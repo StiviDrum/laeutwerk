@@ -580,6 +580,9 @@ async def main() -> None:
                     " await card._openDialog(); await new Promise(r => setTimeout(r, 800));"
                     " const d = find(document, 'laeutwerk-task-dialog')[0];"
                     " if (!d) return 'no dialog';"
+                    # 0.11.1: every rule in the dialog has its on/off switch.
+                    " await d.updateComplete;"
+                    " const switches = d.shadowRoot.querySelectorAll('[role=switch]').length;"
                     " d._editing = JSON.parse(JSON.stringify(card._rules[0])); d._page = 'edit';"
                     " await d.updateComplete; await new Promise(r => setTimeout(r, 1500));"
                     " const e = d.shadowRoot.querySelector('laeutwerk-rule-editor');"
@@ -593,7 +596,7 @@ async def main() -> None:
                     " const trg = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
                     "  .find(f => f.selector && f.selector.trigger);"
                     " const trigger = !!(trg && window.__find(trg.shadowRoot, 'ha-automation-trigger'));"
-                    " return JSON.stringify({picker, trigger}) })()"
+                    " return JSON.stringify({picker, trigger, switches, rules: card._rules.length}) })()"
                 )
                 print("compact dialog editor:", compact)
                 await cdp.shot("compact_dialog", full=False)
@@ -605,6 +608,9 @@ async def main() -> None:
                     " find(document, 'laeutwerk-task-dialog').forEach(d => d.close ? d.close() : d.remove());"
                     " return true })()"
                 )
+                info = json.loads(compact) if compact.startswith("{") else {}
+                if info.get("switches", 0) < info.get("rules", 1):
+                    raise SystemExit("compact dialog: rule switches missing")
                 if '"picker":true' not in str(compact):
                     raise SystemExit("compact dialog: source picker not rendered")
                 # Trigger source (0.9.0): step 1 in trigger mode, all steps open.

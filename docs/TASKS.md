@@ -364,6 +364,12 @@ Schnittstelle:
 - Erkenntnis: `send_on: all` sendet jetzt auch bei jeder erreichten Stufe (vorher nur Durchlauf 1 + Wiederholungen).
 - [x] Doku, Prüfung, Release v0.11.0
 
+## 0.11.1 – Kompaktes Fenster (12.11.2026)
+- [x] Schalter an/aus je Regel im Fenster der kompakten Karte (`check_card.py` prüft: ein Schalter pro Regel; echter Klick aus/an geprüft)
+- [x] Stichwort-Icons im Fenster (vorher nur Regel-Icon) – gemeinsames `badge-icon.ts` für Karte und Fenster
+- [x] Hilfe „Kommt bei“: Durchlauf erklärt, gekürzt
+- [x] Release v0.11.1
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

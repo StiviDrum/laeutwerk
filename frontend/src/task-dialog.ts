@@ -17,6 +17,7 @@ import {
   type Task,
   tooEarlyText,
 } from "./format";
+import { badgeIcon, badgeIconStyles } from "./badge-icon";
 import { confirmAction } from "./confirm-dialog";
 import type { Localizer } from "./localize";
 import { shared, tokens } from "./styles";
@@ -189,7 +190,7 @@ export class LaeutwerkTaskDialog extends LitElement {
         task
           ? html`<div class="question">
               <div class="row">
-                ${this._icon(task.rule)}
+                ${badgeIcon(task.rule, true, task.reminder)}
                 <div class="grow text">
                   <div class="title">${reminderTitle(task.reminder)}</div>
                   <div class="sub">
@@ -269,7 +270,7 @@ export class LaeutwerkTaskDialog extends LitElement {
                         this._error = undefined;
                       }}
                     >
-                      ${this._icon(t.rule)}
+                      ${badgeIcon(t.rule, true, t.reminder)}
                       <span class="grow text">
                         <span class="name ${t.open ? "" : "dim"}"
                           >${reminderTitle(t.reminder)}</span
@@ -294,7 +295,7 @@ export class LaeutwerkTaskDialog extends LitElement {
                         void this._reopen(t);
                       }}
                     >
-                      ${this._icon(t.rule)}
+                      ${badgeIcon(t.rule, true, t.reminder)}
                       <span class="grow text">
                         <span class="name struck">${reminderTitle(t.reminder)}</span>
                         <span class="sub">${finishedLine(t.reminder, now, l, tz)}</span>
@@ -311,20 +312,35 @@ export class LaeutwerkTaskDialog extends LitElement {
               <div class="divided">
                 ${this.rules.map(
                   (rule) =>
-                    html`<button
-                      class="row item"
-                      @click=${() => {
-                        this._editing = rule;
-                        this._page = "edit";
-                      }}
-                    >
-                      ${this._icon(rule)}
-                      <span class="grow text">
-                        <span class="name">${rule.name}</span>
-                        ${rule.enabled ? nothing : html`<span class="sub">${l.t("rule_off")}</span>`}
-                      </span>
-                      <ha-icon class="undo" icon="mdi:pencil-outline"></ha-icon>
-                    </button>`,
+                    html`<div class="row item">
+                      <button
+                        class="row grow rulebtn"
+                        @click=${() => {
+                          this._editing = rule;
+                          this._page = "edit";
+                        }}
+                      >
+                        ${badgeIcon(rule, true)}
+                        <span class="grow text">
+                          <span class="name">${rule.name}</span>
+                          ${rule.enabled ? nothing : html`<span class="sub">${l.t("rule_off")}</span>`}
+                        </span>
+                        <ha-icon class="undo" icon="mdi:pencil-outline"></ha-icon>
+                      </button>
+                      <button
+                        class="switch"
+                        role="switch"
+                        aria-checked=${rule.enabled}
+                        aria-label=${rule.name}
+                        ?disabled=${this._busy}
+                        @click=${(ev: Event) => {
+                          ev.stopPropagation();
+                          void this._call(rule.enabled ? "disable" : "enable", { rule: rule.id });
+                        }}
+                      >
+                        <span></span>
+                      </button>
+                    </div>`,
                 )}
               </div>
               <button class="chip dashed new" @click=${() => (this._page = "pick")}>
@@ -335,19 +351,10 @@ export class LaeutwerkTaskDialog extends LitElement {
     `;
   }
 
-  private _icon(rule: Rule): TemplateResult {
-    const color = rule.color ?? "var(--lw-text-2)";
-    return html`<span
-      class="icon small"
-      style="background: color-mix(in srgb, ${color} 22%, transparent); color: ${color}"
-    >
-      <ha-icon .icon=${rule.icon || "mdi:bell-ring-outline"}></ha-icon>
-    </span>`;
-  }
-
   static styles = [
     tokens,
     shared,
+    badgeIconStyles,
     css`
       :host {
         position: fixed;
@@ -437,6 +444,10 @@ export class LaeutwerkTaskDialog extends LitElement {
         text-decoration: line-through;
         color: var(--lw-text-2);
         font-weight: 500;
+      }
+      .rulebtn {
+        text-align: left;
+        min-height: 48px;
       }
       .undo {
         color: var(--lw-text-2);

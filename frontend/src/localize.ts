@@ -215,7 +215,7 @@ const en = {
   from_stage_n: "from stage {n}",
   stage_repeat: "Also on later repeats",
   help_send_on:
-    "Example waste: push on every reminder, lamp first only, announcement only at stage 1. Stage: once when it is reached, or also on later repeats.",
+    "Every reminder is a pass: the first, each repeat, each 'later', each stage. 'From 2nd' = all after the first; 'Stage' = once when reached (or also later). E.g. waste: push every time, lamp first only, announcement at stage 1.",
   limits_hint: "E.g. front door: at most 1x - otherwise at every opening.",
   expire_never: "Never",
   expire_never_hint: "A new trigger replaces the open reminder (it counts as missed).",
@@ -664,7 +664,7 @@ const de: Strings = {
   from_stage_n: "ab Stufe {n}",
   stage_repeat: "Auch bei späteren Wiederholungen",
   help_send_on:
-    "Beispiel Müll: Push bei jeder Erinnerung, Lampe nur beim ersten Mal, Durchsage nur bei Stufe 1. Stufe: genau einmal beim Erreichen, oder auch bei späteren Wiederholungen.",
+    "Jede Erinnerung ist ein Durchlauf: die erste, jede Wiederholung, jedes „Später“, jede Stufe. „Ab 2.“ = alle nach der ersten; „Stufe“ = einmal beim Erreichen (oder auch danach). Z. B. Müll: Push jedes Mal, Lampe nur beim ersten, Durchsage bei Stufe 1.",
   limits_hint: "z. B. Haustür: höchstens 1× – sonst bei jedem Öffnen.",
   expire_never: "Nie",
   expire_never_hint: "Ein neuer Auslöser ersetzt die offene Erinnerung (sie gilt als verpasst).",
