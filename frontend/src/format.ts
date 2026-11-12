@@ -1,6 +1,6 @@
 /** Pure display logic of the card (tested with vitest). */
 import type { Localizer, StringKey } from "./localize";
-import type { ColumnSpec, PersonInfo, Reminder, Rule, Signal } from "./types";
+import type { Badge, ColumnSpec, PersonInfo, Reminder, Rule, Signal } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -68,14 +68,105 @@ export function relativeDayTime(iso: string, now: Date, l: Localizer, timeZone?:
   return `${relativeDay(iso, now, l, timeZone)} ${formatTime(iso, timeZone)}`;
 }
 
-/** "Morgen: Papier + Bio". */
+/** "Morgen: Papier + Bio" (or the rule's own headline when the backend sent one). */
 export function reminderTitle(reminder: {
   titles: string[];
   variables?: Record<string, string>;
+  headline?: string | null;
 }): string {
-  const what = reminder.titles.join(" + ");
+  const own = reminder.headline?.trim();
+  if (own) return own;
+  const what = (reminder.titles ?? []).join(" + ");
   const when = reminder.variables?.wann;
   return when ? `${capitalize(when)}: ${what}` : what;
+}
+
+/** Default icon of rules without an own one. */
+export const DEFAULT_ICON = "mdi:bell-ring-outline";
+
+/**
+ * Icon and colour of one keyword badge. Both fall back independently:
+ * keyword -> rule -> default (colour: null = caller's default).
+ */
+export function badgeLook(
+  rule: { icon?: string | null; color?: string | null } | undefined,
+  badge: Partial<Badge> | undefined,
+  defaultIcon = DEFAULT_ICON,
+): Badge & { icon: string } {
+  return {
+    icon: badge?.icon || rule?.icon || defaultIcon,
+    color: badge?.color || rule?.color || null,
+  };
+}
+
+/**
+ * Distinct looks of a reminder/event, in order (at least one). Without
+ * badges the older `colors` list is used, else just the rule's look.
+ */
+export function badgeLooks(
+  rule: { icon?: string | null; color?: string | null } | undefined,
+  item: { badges?: Badge[]; colors?: string[] } | undefined,
+  defaultIcon = DEFAULT_ICON,
+): (Badge & { icon: string })[] {
+  const source: Partial<Badge>[] = item?.badges?.length
+    ? item.badges
+    : (item?.colors ?? []).map((color) => ({ icon: null, color }));
+  const looks: (Badge & { icon: string })[] = [];
+  for (const badge of source) {
+    const look = badgeLook(rule, badge, defaultIcon);
+    if (!looks.some((x) => x.icon === look.icon && x.color === look.color)) looks.push(look);
+  }
+  return looks.length ? looks : [badgeLook(rule, undefined, defaultIcon)];
+}
+
+/** Headline preview in the editor: own template (plural for bundles) or the default. */
+export function headlinePreview(
+  rule: { headline?: string | null; headline_plural?: string | null },
+  event: { titles: string[]; variables?: Record<string, string> } | undefined,
+): string {
+  if (!event) return "";
+  const plural = event.titles.length > 1 ? rule.headline_plural?.trim() : "";
+  const template = plural || rule.headline?.trim();
+  return template
+    ? renderTemplate(template, event.variables ?? {})
+    : reminderTitle({ titles: event.titles, variables: event.variables });
+}
+
+/** Variable suggestions for a text field: `{na` at the cursor offers names starting with "na". */
+export function variableQuery(
+  text: string,
+  cursor: number,
+): { start: number; query: string } | null {
+  const m = /\{([^\W\d]\w*)?$/u.exec(text.slice(0, cursor));
+  return m ? { start: m.index, query: m[1] ?? "" } : null;
+}
+
+/** Insert `{name}` in place of the typed `{query` (and a directly following `}`). */
+export function insertVariable(
+  text: string,
+  cursor: number,
+  name: string,
+): { text: string; cursor: number } | null {
+  const q = variableQuery(text, cursor);
+  if (!q) return null;
+  const tail = text.slice(cursor);
+  const after = tail.replace(/^\w*\}?/u, "");
+  const insert = `{${name}}`;
+  return { text: text.slice(0, q.start) + insert + after, cursor: q.start + insert.length };
+}
+
+/** Case-insensitive filtering of suggestions (prefix matches first). */
+export function filterSuggestions<T extends { value: string; label?: string }>(
+  items: T[],
+  query: string,
+  limit = 8,
+): T[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return items.slice(0, limit);
+  const hay = (i: T) => `${i.value} ${i.label ?? ""}`.toLowerCase();
+  const starts = items.filter((i) => i.value.toLowerCase().startsWith(q));
+  const rest = items.filter((i) => !starts.includes(i) && hay(i).includes(q));
+  return [...starts, ...rest].slice(0, limit);
 }
 
 /** Status chip of an open reminder: "erinnert 17:00" / "fällig seit gestern". */

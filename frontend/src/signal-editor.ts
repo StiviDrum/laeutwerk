@@ -15,6 +15,7 @@ import {
   renderTemplate,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
+import { helpTip } from "./help-tip";
 import { shared, tokens } from "./styles";
 import type {
   HaConfig,
@@ -55,7 +56,6 @@ export class LaeutwerkSignalEditor extends LitElement {
   @state() private _yaml = false;
   @state() private _yamlError?: string;
   @state() private _testState?: string;
-  @state() private _focus = "message";
   /** Persons with their phones (laeutwerk/persons), loaded once. */
   @state() private _persons?: PersonInfo[];
   /** Open sections (collapsible like the steps of the rule editor). */
@@ -140,12 +140,6 @@ export class LaeutwerkSignalEditor extends LitElement {
       conditions_match: this._sig.conditions_match,
       quiet: this._sig.quiet,
     };
-  }
-
-  private _insertVariable(name: string): void {
-    const key = this._focus as keyof Signal;
-    const current = String(this._sig[key] ?? "");
-    this._set({ [key]: `${current}${current && !current.endsWith(" ") ? " " : ""}{${name}}` });
   }
 
   private async _test(): Promise<void> {
@@ -255,17 +249,20 @@ export class LaeutwerkSignalEditor extends LitElement {
   private _whenBody(): TemplateResult {
     const l = this._l;
     const opportunity = this._sig.when !== "now";
-    return html`<div class="segmented">
-        <button aria-pressed=${!opportunity} @click=${() => this._set({ when: "now" })}>
-          ${l.t("when_now")}
-        </button>
-        <button
-          aria-pressed=${opportunity}
-          @click=${() =>
-            !opportunity && this._set({ when: { opportunity: [], manual_only: false } })}
-        >
-          ${l.t("when_opportunity")}
-        </button>
+    return html`<div class="row">
+        <div class="segmented grow">
+          <button aria-pressed=${!opportunity} @click=${() => this._set({ when: "now" })}>
+            ${l.t("when_now")}
+          </button>
+          <button
+            aria-pressed=${opportunity}
+            @click=${() =>
+              !opportunity && this._set({ when: { opportunity: [], manual_only: false } })}
+          >
+            ${l.t("when_opportunity")}
+          </button>
+        </div>
+        ${helpTip(l, "help_when")}
       </div>
       ${opportunity ? this._opportunity() : nothing}`;
   }
@@ -285,6 +282,7 @@ export class LaeutwerkSignalEditor extends LitElement {
               </button>`,
           )}
         </div>
+        ${helpTip(l, "help_only_if")}
       </div>
       <laeutwerk-field
         .hass=${this.hass}
@@ -341,7 +339,6 @@ export class LaeutwerkSignalEditor extends LitElement {
     const l = this._l;
     const when = this._sig.when as { opportunity: HaConfig | HaConfig[]; manual_only?: boolean };
     return html`
-      <div class="hint">${l.t("when_opportunity_hint")}</div>
       <laeutwerk-field
         .hass=${this.hass}
         .localize=${l}
@@ -350,14 +347,18 @@ export class LaeutwerkSignalEditor extends LitElement {
         @value-changed=${(e: CustomEvent<{ value: unknown }>) =>
           this._set({ when: { ...when, opportunity: list(e.detail.value) } })}
       ></laeutwerk-field>
-      ${this._toggle(l.t("manual_only"), !!when.manual_only, (v) =>
-        this._set({ when: { ...when, manual_only: v } }),
+      ${this._toggle(
+        l.t("manual_only"),
+        !!when.manual_only,
+        (v) => this._set({ when: { ...when, manual_only: v } }),
+        "help_manual_only",
       )}
     `;
   }
 
   private _fields(): TemplateResult {
     const s = this._sig;
+    const l = this._l;
     if (s.type === "notify") return this._notifyFields();
     if (s.type === "light_signal") return this._lightFields();
     if (s.type === "announce") return this._announceFields();
@@ -369,7 +370,16 @@ export class LaeutwerkSignalEditor extends LitElement {
         @value-changed=${(e: CustomEvent<{ value: unknown }>) =>
           this._set({ actions: list(e.detail.value) })}
       ></laeutwerk-field>
-      ${this._variables(false)}`;
+      <div class="sublabel tiprow">
+        ${l.t("variables")}${html`<laeutwerk-help-tip
+          .text=${l.t("help_action_vars", {
+            list: this._variableNames()
+              .map((n) => `{${n}}`)
+              .join(" "),
+          })}
+          .label=${l.t("help")}
+        ></laeutwerk-help-tip>`}
+      </div>`;
   }
 
   private _notifyFields(): TemplateResult {
@@ -394,7 +404,7 @@ export class LaeutwerkSignalEditor extends LitElement {
         renderTemplate(s.title, this.sample) || s.title || "",
         () =>
           html`${this._text("title", l.t("push_title"))}
-          ${this._text("message", l.t("push_message"), true)} ${this._variables(false)}`,
+          ${this._text("message", l.t("push_message"), true)}`,
         true,
       )}
       ${this._section(
@@ -667,7 +677,12 @@ export class LaeutwerkSignalEditor extends LitElement {
           @change=${(e: Event) => this._set({ brightness: Number((e.target as HTMLInputElement).value) })}
         />
       </label>
-      ${this._toggle(l.t("restore"), s.restore !== false, (v) => this._set({ restore: v }))}
+      ${this._toggle(
+        l.t("restore"),
+        s.restore !== false,
+        (v) => this._set({ restore: v }),
+        "help_restore",
+      )}
     `;
   }
 
@@ -708,7 +723,7 @@ export class LaeutwerkSignalEditor extends LitElement {
             this._set({ tts: e.detail.value || undefined })}
         ></laeutwerk-field>
       </div>
-      ${this._text("text", l.t("spoken_text"), true)} ${this._variables(false)}
+      ${this._text("text", l.t("spoken_text"), true)}
     `;
   }
 
@@ -721,22 +736,18 @@ export class LaeutwerkSignalEditor extends LitElement {
     const l = this._l;
     const s = this._sig;
     const pluralKey = `${key}_plural` as "title_plural" | "message_plural" | "text_plural";
-    const input = (k: typeof key | typeof pluralKey) => {
-      const value = String(s[k] ?? "");
-      const onInput = (e: Event) =>
-        this._set({ [k]: (e.target as HTMLInputElement | HTMLTextAreaElement).value });
-      return multiline
-        ? html`<textarea
-            .value=${value}
-            @focus=${() => (this._focus = k)}
-            @input=${onInput}
-          ></textarea>`
-        : html`<input .value=${value} @focus=${() => (this._focus = k)} @input=${onInput} />`;
-    };
+    const names = this._variableNames();
+    const input = (k: typeof key | typeof pluralKey, fieldLabel: string) =>
+      html`<laeutwerk-suggest
+        .label=${fieldLabel}
+        .multiline=${multiline}
+        .variables=${names}
+        .value=${String(s[k] ?? "")}
+        @value-changed=${(e: CustomEvent<{ value: string }>) => this._set({ [k]: e.detail.value })}
+      ></laeutwerk-suggest>`;
     const preview = renderTemplate(s[key], this.sample);
     return html`
-      <label class="field">${label} ${input(key)}</label>
-      <label class="field">${l.t("plural_variant")} ${input(pluralKey)}</label>
+      ${input(key, label)} ${input(pluralKey, l.t("plural_variant"))}
       ${
         preview && Object.keys(this.sample).length
           ? html`<div class="preview">
@@ -747,14 +758,8 @@ export class LaeutwerkSignalEditor extends LitElement {
     `;
   }
 
-  private _variables(opportunityOnly: boolean): TemplateResult {
-    const names = availableVariables(this.rule, this._sig.when !== "now" || opportunityOnly);
-    return html`<div class="wrap vars" aria-label=${this._l.t("variables")}>
-      ${names.map(
-        (name) =>
-          html`<button class="chip" @click=${() => this._insertVariable(name)}>{${name}}</button>`,
-      )}
-    </div>`;
+  private _variableNames(): string[] {
+    return availableVariables(this.rule, this._sig.when !== "now");
   }
 
   private _stage(): TemplateResult | typeof nothing {
@@ -815,8 +820,9 @@ export class LaeutwerkSignalEditor extends LitElement {
             @change=${(e: Event) => setLimit("min_interval", (e.target as HTMLInputElement).value)}
           />
         </label>
+        ${helpTip(l, "help_limits")}
       </div>
-      <div class="sublabel">${l.t("quiet_times")}</div>
+      <div class="sublabel tiprow">${l.t("quiet_times")}${helpTip(l, "help_quiet")}</div>
       <div class="divided">
         ${quiet.map(
           (q, i) =>
@@ -857,9 +863,14 @@ export class LaeutwerkSignalEditor extends LitElement {
     `;
   }
 
-  private _toggle(label: string, value: boolean, onChange: (v: boolean) => void): TemplateResult {
+  private _toggle(
+    label: string,
+    value: boolean,
+    onChange: (v: boolean) => void,
+    help?: StringKey,
+  ): TemplateResult {
     return html`<div class="toggle">
-      <span>${label}</span>
+      <span class="tiprow">${label}${help ? helpTip(this._l, help) : nothing}</span>
       <button
         class="switch"
         role="switch"
@@ -1051,9 +1062,10 @@ export class LaeutwerkSignalEditor extends LitElement {
         color: var(--lw-text-2);
         margin-top: 4px;
       }
-      .vars .chip {
-        min-height: 32px;
-        font-family: ui-monospace, monospace;
+      .tiprow {
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
       .preview {
         display: flex;

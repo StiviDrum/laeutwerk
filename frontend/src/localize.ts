@@ -64,8 +64,6 @@ const en = {
   column_placeholder: "variable",
   remove: "Remove",
   no_keywords: "Without keywords every event of the calendar counts.",
-  plural_hint:
-    "Each column becomes a variable, e.g. {example}. With several matches the plural is built automatically: {plural}.",
   preview: "Next matches",
   preview_none: "No matching event in the next 14 days.",
   preview_bundled: "bundled",
@@ -94,7 +92,6 @@ const en = {
   no_signals: "No signal yet – without a signal the reminder only shows up in the card.",
   ack_push: "Button in the push notification",
   ack_push_none: "No push signal with a done button yet.",
-  ack_always: "Card, button entity and the acknowledge action always work.",
   ack_tag: "NFC tag",
   ack_tag_placeholder: "Tag id",
   add_tag: "NFC tag",
@@ -204,10 +201,7 @@ const en = {
   export: "Export",
   export_hint: "Copy this YAML to keep or move the rule.",
   sources: "Sources",
-  sources_hint: "Calendars, to-do lists with due dates, date entities or date helpers",
   interval: "Recurring after it was last done",
-  interval_hint:
-    "No calendar needed – e.g. a filter: due again 90 days after you last changed it. If it is overdue it reminds every day until done.",
   interval_days: "Every (days)",
   interval_start: "First due",
   step_advanced: "Advanced",
@@ -236,9 +230,64 @@ const en = {
   rule_inactive: "inactive",
   plural_toggle: "Plural variable on / off",
   plural_off: "no plural",
-  plural_hint_off:
-    'Each column becomes a variable; with several matches it contains their different values, joined with "and".',
   tag_variable_hint: "Only the tag of the due hit counts (resolved per event).",
+  help: "Help",
+  headline: "Headline",
+  headline_plural: "Headline (several events)",
+  headline_default: "{wann}: {titel}",
+  keywords_label: "Keywords",
+  times_label: "Times",
+  signals_label: "Signals of this rule",
+  ack_head: "Ways to finish",
+  icon_color: "Icon and colour",
+  keyword_icon: "Icon",
+  kw_pick_icon: "Choose icon",
+  match_mode: "Match",
+  column_name: "Variable name",
+  tag_suggest_placeholder: "Tag id or pick a known tag",
+  help_step_calendar:
+    'Where the dates come from: calendars, to-do lists with due dates, date entities or date helpers. In the "Custom" mode there is no calendar: the rule is due again a number of days after it was last done (e.g. a filter after 90 days).',
+  help_all_day: "Only events without a start time (whole-day events) count.",
+  help_keywords:
+    "Only events whose title matches a keyword become reminders (without keywords every event counts). Match: contains, starts with, or regex. Every further column is a free variable for your texts, e.g. {tonne}.",
+  help_plural:
+    'With several matches in one reminder every column also gets a plural variable: {tonnen} = "Papiertonne and Biotonne". The small button under a column name switches it on or off.',
+  help_icon_color:
+    "Tap the round icon in front of a keyword to set its icon and colour (shown in the card) or to delete the keyword. Left empty they come from the rule (step 1), the colour otherwise from the theme. Each one falls back on its own: a keyword with only a colour keeps the rule's icon.",
+  help_headline:
+    "Title of the reminder in the card and in notifications, e.g. {wann}: {titel}. Left empty the default is used. The plural headline is used when several events are bundled.",
+  help_reminders:
+    'When to remind, relative to the event. "-1d 17:00" = the day before at 17:00, "-2h" = two hours before, "09:00" = on the event day at 09:00. You can add several times.',
+  help_repeat:
+    "Once: remind only at the times above. Hourly or every n minutes: keep reminding while the reminder is open, up to the maximum.",
+  help_signals:
+    "What happens when a reminder is due: push, light, announcement or your own action. Switch a signal on or off, tap it to edit.",
+  help_ack:
+    "How a reminder counts as done: the button in the push, an NFC tag, or a trigger such as a door contact or a zone. The card, the button entity and the action always work. A tag id may contain variables (e.g. {nfc}) so that every keyword has its own tag.",
+  help_bundle:
+    'Events of this rule on the same day become one reminder ("Tomorrow: paper + organic"); one tap finishes all.',
+  help_expire:
+    'When an open reminder counts as missed: at the end of the event, on the event day at a given time, or a custom time like "+1d 12:00".',
+  help_when:
+    "Immediately: at the reminder time. On opportunity: only when the trigger fires while the reminder is open, e.g. the lamp is switched on or the front door opens.",
+  help_manual_only:
+    "Ignores triggers caused by automations or scripts, so only real operation counts (a light alarm clock will not fire it).",
+  help_only_if: "The signal only fires if all (or any one) of these conditions are true.",
+  help_limits:
+    "Max. per reminder: how often this signal may fire for one reminder. Minimum interval: minutes between two firings.",
+  help_quiet:
+    "Skip: the signal is dropped during the quiet time. Catch up: it fires as soon as the quiet time ends.",
+  help_restore:
+    "Saves the state of the light before the signal and restores it afterwards (on/off, brightness, colour).",
+  help_text_vars:
+    "Type { to choose a variable; it is inserted as {name}. The plural field is used when several events are bundled.",
+  help_action_vars: "Variables you can use in your actions: {list}",
+  kw_look_edit: "Icon, colour and delete",
+  kw_delete: "Delete keyword",
+  kw_reset_icon: "Reset icon",
+  kw_look_hint: "Empty fields use the icon and colour of the rule.",
+  help_card_editor:
+    "View: all reminders (overview) or one rule. Rules: limit the overview to some rules. Upcoming and done show or hide those sections. Compact: one line for the dashboard header.",
   tag_next: "Next match: {tags}",
   recipients: "Recipients",
   push_to_assignee: "To the responsible person",
@@ -335,8 +384,6 @@ const en = {
   draft_discard: "Discard",
   discard_changes: "Discard changes?",
   saved: "Saved.",
-  known_tags: "Known tags",
-  no_known_tags: "No tags known yet – scan one with the companion app first.",
   suggestions: "Found in the calendar",
   suggestions_all: "Take all",
   later_1h: "1 hour",
@@ -439,8 +486,6 @@ const de: Strings = {
   column_placeholder: "variable",
   remove: "Entfernen",
   no_keywords: "Ohne Stichwörter zählt jeder Termin des Kalenders.",
-  plural_hint:
-    "Jede Spalte wird eine Variable, z. B. {example}. Bei mehreren Treffern entsteht automatisch die Mehrzahl: {plural}.",
   preview: "Nächste Treffer",
   preview_none: "Kein passender Termin in den nächsten 14 Tagen.",
   preview_bundled: "gebündelt",
@@ -469,7 +514,6 @@ const de: Strings = {
   no_signals: "Noch kein Signal – ohne Signal erscheint die Erinnerung nur in der Karte.",
   ack_push: "Knopf in der Push-Benachrichtigung",
   ack_push_none: "Noch kein Push-Signal mit Erledigt-Knopf.",
-  ack_always: "Karte, Knopf-Entität und der Dienst „Quittieren“ funktionieren immer.",
   ack_tag: "NFC-Tag",
   ack_tag_placeholder: "Tag-ID",
   add_tag: "NFC-Tag",
@@ -577,10 +621,7 @@ const de: Strings = {
   export: "Exportieren",
   export_hint: "Dieses YAML kopieren, um die Regel zu sichern oder zu übertragen.",
   sources: "Quellen",
-  sources_hint: "Kalender, To-do-Listen mit Fälligkeit, Datums-Entitäten oder Datums-Helfer",
   interval: "Wiederkehrend nach dem letzten Erledigen",
-  interval_hint:
-    "Kein Kalender nötig – z. B. Filter: wieder fällig 90 Tage, nachdem du ihn zuletzt getauscht hast. Ist es überfällig, erinnert es jeden Tag, bis es erledigt ist.",
   interval_days: "Alle (Tage)",
   interval_start: "Erstmals fällig",
   step_advanced: "Erweitert",
@@ -610,9 +651,64 @@ const de: Strings = {
   rule_inactive: "inaktiv",
   plural_toggle: "Mehrzahl-Variable an / aus",
   plural_off: "keine Mehrzahl",
-  plural_hint_off:
-    "Jede Spalte wird eine Variable; bei mehreren Treffern enthält sie die verschiedenen Werte, mit „und“ verbunden.",
   tag_variable_hint: "Es zählt nur der Tag des fälligen Treffers (je Termin aufgelöst).",
+  help: "Hilfe",
+  headline: "Überschrift",
+  headline_plural: "Überschrift (Mehrzahl)",
+  headline_default: "{wann}: {titel}",
+  keywords_label: "Stichwörter",
+  times_label: "Zeitpunkte",
+  signals_label: "Signale dieser Regel",
+  ack_head: "So wird erledigt",
+  icon_color: "Icon und Farbe",
+  keyword_icon: "Icon",
+  kw_pick_icon: "Icon wählen",
+  match_mode: "Suchart",
+  column_name: "Variablenname",
+  tag_suggest_placeholder: "Tag-ID oder bekannten Tag wählen",
+  help_step_calendar:
+    "Woher die Termine kommen: Kalender, To-do-Listen mit Fälligkeit, Datums-Entitäten oder Datums-Helfer. Im Modus „Benutzerdefiniert“ gibt es keinen Kalender: Die Regel ist eine Anzahl Tage nach dem letzten Erledigen wieder fällig (z. B. ein Filter nach 90 Tagen).",
+  help_all_day: "Nur Termine ohne Uhrzeit (ganztägige Termine) zählen.",
+  help_keywords:
+    "Nur Termine, deren Titel zu einem Stichwort passt, werden zu Erinnerungen (ohne Stichwörter zählt jeder Termin). Suchart: enthält, beginnt mit oder Regex. Jede weitere Spalte ist eine freie Variable für deine Texte, z. B. {tonne}.",
+  help_plural:
+    "Bei mehreren Treffern in einer Erinnerung bekommt jede Spalte auch eine Mehrzahl-Variable: {tonnen} = „Papiertonne und Biotonne“. Der kleine Knopf unter dem Spaltennamen schaltet sie ein oder aus.",
+  help_icon_color:
+    "Tippe auf das runde Icon vor einem Stichwort, um Icon und Farbe festzulegen (wie in der Karte) oder das Stichwort zu löschen. Leer übernehmen sie die Werte der Regel (Schritt 1), die Farbe sonst vom Theme. Beides fällt einzeln zurück: Ein Stichwort nur mit Farbe behält das Icon der Regel.",
+  help_headline:
+    "Titel der Erinnerung in der Karte und in Mitteilungen, z. B. {wann}: {titel}. Leer gilt die Standard-Überschrift. Die Mehrzahl-Überschrift gilt, wenn mehrere Termine gebündelt sind.",
+  help_reminders:
+    "Wann erinnert wird, relativ zum Termin. „-1d 17:00“ = am Vortag um 17:00, „-2h“ = zwei Stunden vorher, „09:00“ = am Tag des Termins um 09:00. Du kannst mehrere Zeitpunkte anlegen.",
+  help_repeat:
+    "Einmal: nur zu den Zeitpunkten oben. Stündlich oder alle n Minuten: weiter erinnern, solange die Erinnerung offen ist, bis zum Maximum.",
+  help_signals:
+    "Was bei einer fälligen Erinnerung passiert: Push, Licht, Ansage oder eine eigene Aktion. Schalter ein/aus, zum Bearbeiten antippen.",
+  help_ack:
+    "Woran eine Erinnerung als erledigt gilt: Knopf in der Push, NFC-Tag oder ein Auslöser wie Türkontakt oder Zone. Karte, Knopf-Entität und Dienst funktionieren immer. Eine Tag-ID darf Variablen enthalten (z. B. {nfc}), damit jedes Stichwort seinen eigenen Tag hat.",
+  help_bundle:
+    "Termine dieser Regel am selben Tag werden eine Erinnerung („Morgen: Papier + Bio“); ein Tipp erledigt alle.",
+  help_expire:
+    "Wann eine offene Erinnerung als verpasst gilt: zum Ende des Termins, am Termintag zu einer Uhrzeit oder eigene Zeit wie „+1d 12:00“.",
+  help_when:
+    "Sofort: zum Erinnerungszeitpunkt. Bei Gelegenheit: nur wenn der Auslöser feuert, während die Erinnerung offen ist, z. B. Lampe wird eingeschaltet oder die Haustür geht auf.",
+  help_manual_only:
+    "Ignoriert Auslöser von Automationen oder Skripten, nur echte Bedienung zählt (ein Lichtwecker löst nichts aus).",
+  help_only_if: "Das Signal feuert nur, wenn alle (oder eine) dieser Bedingungen erfüllt sind.",
+  help_limits:
+    "Max. je Erinnerung: wie oft dieses Signal pro Erinnerung feuern darf. Mindestabstand: Minuten zwischen zwei Auslösungen.",
+  help_quiet:
+    "Auslassen: das Signal entfällt in der Ruhezeit. Nachholen: es feuert, sobald die Ruhezeit endet.",
+  help_restore:
+    "Sichert den Zustand der Lampe vor dem Signal und stellt ihn danach wieder her (an/aus, Helligkeit, Farbe).",
+  help_text_vars:
+    "Tippe { und wähle eine Variable; sie wird als {name} eingefügt. Das Mehrzahl-Feld gilt, wenn mehrere Termine gebündelt sind.",
+  help_action_vars: "Variablen, die du in deinen Aktionen nutzen kannst: {list}",
+  kw_look_edit: "Icon, Farbe und Löschen",
+  kw_delete: "Stichwort löschen",
+  kw_reset_icon: "Icon zurücksetzen",
+  kw_look_hint: "Leere Felder nehmen Icon und Farbe der Regel.",
+  help_card_editor:
+    "Ansicht: alle Erinnerungen (Übersicht) oder eine Regel. Regeln: Übersicht auf einzelne Regeln beschränken. Demnächst und Erledigt blenden diese Bereiche ein oder aus. Kompakt: eine Zeile für den Dashboard-Kopf.",
   tag_next: "Nächster Treffer: {tags}",
   recipients: "Empfänger",
   push_to_assignee: "An die zuständige Person",
@@ -708,8 +804,6 @@ const de: Strings = {
   draft_discard: "Verwerfen",
   discard_changes: "Änderungen verwerfen?",
   saved: "Gespeichert.",
-  known_tags: "Angelernte Tags",
-  no_known_tags: "Noch keine Tags bekannt – zuerst einen mit der Companion-App scannen.",
   suggestions: "Im Kalender gefunden",
   suggestions_all: "Alle übernehmen",
   later_1h: "1 Stunde",

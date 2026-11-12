@@ -243,6 +243,19 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Brands-Repo nimmt keine Custom Integrations mehr an (seit HA 2026.3) – lokaler `brand/`-Ordner genügt, wie bei Zeitwerk.
 - [x] Release v0.7.7
 
+## 0.8.0 – Stichwort-Icons, Überschrift, aufgeräumter Editor (12.11.2026)
+- [x] Backend: `KeywordRow.icon` (flach in der Zeile wie `color`, Spalte „icon“ bleibt Spalte), `Rule.headline`/`headline_plural`; Payloads `headline` + `badges` [{icon, color}] je Treffer; Sensor-Attribut `headline`; Müll-Vorlage mit Icons
+- [x] Karte: Badges mit Rückfall je Feld (Icon/Farbe des Stichworts, sonst der Regel) in Übersicht, Demnächst, Erledigt, Kompakt, Editor-Vorschau; bis zu 3 Badges bei Bündeln; Farbpunkte entfallen
+- [x] Überschrift-Felder in Schritt 6 mit Live-Vorschau
+- [x] Stichwort-Tabelle neu: runder Icon-Knopf öffnet `laeutwerk-keyword-look` (Icon, Farbe, Stichwort löschen), Spaltenkopf kompakt mit „n“-Mehrzahl-Schalter, Fade am rechten Rand
+  - Erkenntnis: rechts angeheftetes × verdeckte die Variablenspalten bei 390 px → Löschen ins Fenster verlegt.
+- [x] Angelernte Tag-Chips und Variablen-Chips entfernt → `laeutwerk-suggest` (Vorschläge beim Tippen: `{` → Variablen, NFC → bekannte Tags)
+- [x] `laeutwerk-help-tip` („?“, Hover/Fokus/Antippen) statt Hinweistexten; fehlende Erklärungen ergänzt (de/en)
+- [x] Social-Preview-Bild (`docs/brand/social-preview.png`) – muss Steven in den Repo-Einstellungen hochladen
+- [x] Im echten Frontend geprüft (`check_card.py`: Stichwort-Tabelle, Icon/Farb-Fenster, Farbkreis darüber, „?“-Blase, Vorschlagsliste `{w` → `{wann}`); `check_card.py` meldet sich ohne gespeicherte Tokens mit dem Dev-Benutzer an
+  - Bundle 185 443 → 210 248 Bytes (ungezippt, gemessen).
+- [x] Release v0.8.0
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

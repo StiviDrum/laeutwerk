@@ -2,6 +2,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import { ensureHaSelector } from "./ha-field";
+import { helpTip } from "./help-tip";
 import { localizer, type StringKey } from "./localize";
 import type { HomeAssistant, LaeutwerkCardConfig, Rule } from "./types";
 
@@ -124,13 +125,14 @@ export class LaeutwerkCardEditor extends LitElement {
     };
     if (this._native && this.hass) {
       return html`<ha-form
-        .hass=${this.hass}
-        .data=${data}
-        .schema=${this._schema(data.view ?? "overview")}
-        .computeLabel=${this._label}
-        @value-changed=${(ev: CustomEvent<{ value: LaeutwerkCardConfig }>) =>
-          this._changed(ev.detail.value)}
-      ></ha-form>`;
+          .hass=${this.hass}
+          .data=${data}
+          .schema=${this._schema(data.view ?? "overview")}
+          .computeLabel=${this._label}
+          @value-changed=${(ev: CustomEvent<{ value: LaeutwerkCardConfig }>) =>
+            this._changed(ev.detail.value)}
+        ></ha-form>
+        <div class="helprow">${this._l.t("help")}${helpTip(this._l, "help_card_editor")}</div>`;
     }
     // Fallback without HA's form elements.
     const l = this._l;
@@ -192,10 +194,18 @@ export class LaeutwerkCardEditor extends LitElement {
             </fieldset>`
       }
       ${check("show_upcoming")} ${check("show_done")} ${check("compact")}
+      <div class="helprow">${l.t("help")}${helpTip(l, "help_card_editor")}</div>
     </div>`;
   }
 
   static styles = css`
+    .helprow {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--secondary-text-color);
+    }
     .form {
       display: flex;
       flex-direction: column;

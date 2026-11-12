@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-12
+
+### Added
+- Own icon per keyword (`icon` in the keyword row, next to its colour). The
+  card (overview, upcoming, done, compact, editor preview) shows the icon of
+  the due keyword tinted in its colour; bundles show up to three badges. Icon
+  and colour fall back to the rule's icon / colour independently.
+- Editable headline per rule (`headline`, `headline_plural`, with variables),
+  e.g. "{wann} raus: {tonnen}"; also the `headline` attribute of the rule
+  sensor. Reminder payloads carry `headline` and `badges`.
+- Help behind small "?" icons (hover, focus or tap) in the rule, signal and
+  card editors, with new explanations for every step.
+- Suggestions while typing: `{` offers the available variables in all text
+  fields (signal texts, headline, tag ids), NFC tag fields offer the tags
+  Home Assistant knows.
+- GitHub social preview image.
+
+### Changed
+- Keyword table redesigned: compact header, fixed keyword column with a round
+  icon button (icon, colour, delete keyword), plural toggle in the column
+  header, fade at the right edge while more columns follow.
+- Removed the known-tag chips and the variable chips (replaced by the
+  suggestions).
+- Built-in "Müll" template comes with keyword icons.
+
 ## [0.7.7] - 2026-11-12
 
 ### Added

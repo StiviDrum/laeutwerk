@@ -85,7 +85,13 @@ data:
 - **Keyword table:** an event matches when its title contains a keyword
   (`mode: contains`, default), starts with it (`startswith`) or matches a
   regular expression (`regex`). Without rows every event matches. Every column
-  becomes a text variable.
+  becomes a text variable. Each keyword can have its own `icon` and `color`
+  (`{match: Bio, icon: "mdi:leaf", color: "#43a047"}`); the card shows the
+  icon of the due keyword in its colour. Each part falls back to the rule's
+  icon / colour on its own (icon only → rule colour, colour only → rule icon).
+- **Headline:** `headline` (and `headline_plural` for bundles) sets how a
+  reminder is titled in the card and the `headline` sensor attribute, e.g.
+  `"{wann} raus: {tonnen}"`; default "{wann}: titles" ("Morgen: Papier + Bio").
 - **Times** (`reminders[].at`, `expire`): `-1d 17:00` (the day before at
   17:00), `09:00` or `event_day 09:00` (on the event day), `-2h` / `-30m` /
   `-7d` (before the start), and for `expire` also `event_start` / `event_end`
@@ -331,8 +337,12 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   filled in step by step); missing things are checked before saving and
   shown at their step in plain words; unsaved changes need a confirmation and
   are kept as a draft in the browser. Keywords are suggested from the event
-  titles of the calendar, NFC tags can be picked from the tags Home Assistant
-  knows, signals can be tested before saving.
+  titles of the calendar; text fields suggest variables as you type `{`, the
+  NFC tag field suggests the tags Home Assistant knows; signals can be tested
+  before saving. Explanations sit behind small **?** icons (hover or tap).
+- **Keyword table:** tap the round icon of a keyword to set its icon and
+  colour or to delete it; the keyword column stays fixed while the variable
+  columns scroll sideways.
 - **One rule** (`view: rule`): the rule's reminders plus its history (last
   10 finished reminders: done by whom and how, or missed).
 - **Visual editor:** all options can be set in the dashboard's card editor.
@@ -341,7 +351,7 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   stage's colour (set per stage in step 7). Lists have thin dividers.
 - **Signal editor:** type, *immediately / on opportunity* with Home
   Assistant's trigger editor, *only if* with the condition editor, the fields
-  of the type with variable chips and a text preview, limits and quiet times,
+  of the type with variable suggestions and a text preview, limits and quiet times,
   *Test* and *Edit as YAML*. Every part is collapsible with a short summary;
   a push is split into recipients (tick persons), texts and buttons.
 - **Colours** are picked with Läutwerk's own colour wheel (rule, keywords,
@@ -423,7 +433,7 @@ die Mehrzahl: `{name: tonne, plural: tonnen_liste}`.
 
 Mit einer Spalte wie `nfc` (Tag-ID je Tonne) und `tag_id: "{nfc}"` quittiert
 nur der Tag der Tonne, die gerade fällig ist – im Editor unter „Erledigt
-durch“ per Variablen-Chip. Bei einem Bündel (Rest + Bio am selben Tag)
+durch“ `{` tippen und die Variable aus den Vorschlägen wählen. Bei einem Bündel (Rest + Bio am selben Tag)
 quittiert jeder der beiden Tags die ganze Erinnerung, andere Tags nichts.
 Feste und variable Tags lassen sich mischen.
 
@@ -453,9 +463,18 @@ Feste und variable Tags lassen sich mischen.
   „Push · Steven, Anna“); Signale einer Eskalationsstufe sind in deren Farbe
   markiert – die Farben legst du in Schritt 7 je Stufe fest. Listen haben
   feine Trennlinien.
-- **Stichwörter** werden aus den Termintiteln des Kalenders vorgeschlagen,
-  **NFC-Tags** aus den in Home Assistant angelernten Tags ausgewählt, und
-  Signale lassen sich schon vor dem Speichern **testen**.
+- **Stichwörter** werden aus den Termintiteln des Kalenders vorgeschlagen.
+  Textfelder schlagen beim Tippen von `{` die Variablen vor, das NFC-Feld die
+  in Home Assistant bekannten Tags. Signale lassen sich schon vor dem
+  Speichern **testen**. Erklärungen liegen hinter kleinen **?** (Mouseover
+  oder Antippen).
+- **Icon und Farbe je Stichwort:** in der Stichwort-Tabelle den runden Kreis
+  antippen – dort auch „Stichwort löschen“. Die Karte zeigt das Icon des
+  fälligen Stichworts in seiner Farbe; fehlt eines von beiden, gilt das Icon
+  bzw. die Farbe der Regel.
+- **Überschrift** (Schritt 6 „Feinheiten“): wie eine Erinnerung heißt, z. B.
+  `{wann} raus: {tonnen}`, mit eigener Mehrzahl-Variante; ohne Angabe
+  „Morgen: Papier + Bio“. Auch als Attribut `headline` am Regel-Sensor.
 - **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
 - **Quelle** in Schritt 1: *Kalender* oder *Benutzerdefiniert* – wiederkehrend
   nach dem letzten Erledigen (z. B. Filter alle 90 Tage), ohne Kalender.

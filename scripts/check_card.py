@@ -63,11 +63,36 @@ async def tokens(session: aiohttp.ClientSession) -> dict:
             "code": code,
             "client_id": CLIENT_ID,
         }
-    else:
+    elif TOKENS.exists():
         saved = json.loads(TOKENS.read_text())
         data = {
             "grant_type": "refresh_token",
             "refresh_token": saved["refresh_token"],
+            "client_id": CLIENT_ID,
+        }
+    else:
+        # New output folder: log in as the dev user created during onboarding.
+        async with session.post(
+            f"{HA}/auth/login_flow",
+            json={
+                "client_id": CLIENT_ID,
+                "handler": ["homeassistant", None],
+                "redirect_uri": CLIENT_ID,
+            },
+        ) as resp:
+            flow_id = (await resp.json())["flow_id"]
+        async with session.post(
+            f"{HA}/auth/login_flow/{flow_id}",
+            json={
+                "client_id": CLIENT_ID,
+                "username": "dev",
+                "password": "dev-dev-dev",
+            },
+        ) as resp:
+            code = (await resp.json())["result"]
+        data = {
+            "grant_type": "authorization_code",
+            "code": code,
             "client_id": CLIENT_ID,
         }
     async with session.post(f"{HA}/auth/token", data=data) as resp:
@@ -252,6 +277,23 @@ async def main() -> None:
                 await cdp.call("Page.navigate", url=f"{HA}/laeutwerk-dev/lw")
                 await asyncio.sleep(10)
                 await cdp.js(FIND)
+                # Keyword icons + headline (0.8.0): first row icon only (rule
+                # colour), second row icon and colour, then a custom headline.
+                updated = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const r = JSON.parse(JSON.stringify(c._rules[0]));"
+                    " const rows = (r.filter && r.filter.keywords && r.filter.keywords.rows) || [];"
+                    " const icons = ['mdi:newspaper-variant-outline', 'mdi:leaf',"
+                    "  'mdi:trash-can-outline', 'mdi:recycle'];"
+                    " rows.forEach((row, i) => { row.icon = icons[i % 4];"
+                    "  if (i === 0) delete row.color; else if (!row.color) row.color = '#43a047'; });"
+                    " r.headline = '{wann} raus: {titel}';"
+                    " delete r.status;"
+                    " await c.hass.callWS({type: 'laeutwerk/rules/update', rule_id: r.id, rule: r});"
+                    " await new Promise(res => setTimeout(res, 3000));"
+                    " return rows.length })()"
+                )
+                print("keyword rows with icons:", updated)
                 errors = await cdp.js(
                     "(() => { const c = window.__find(document, 'laeutwerk-card');"
                     " return c ? c.shadowRoot.innerHTML.length : -1 })()"
@@ -268,6 +310,54 @@ async def main() -> None:
                 )
                 await asyncio.sleep(4)
                 await cdp.shot("editor")
+                # Keyword table close-up, a help tip and the suggestion list.
+                await cdp.js(
+                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const sec = e.shadowRoot.querySelectorAll('section')[1];"
+                    " sec.scrollIntoView(); return true })()"
+                )
+                await asyncio.sleep(1)
+                await cdp.shot("keywords")
+                tip = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const t = e.shadowRoot.querySelector('laeutwerk-help-tip');"
+                    " if (!t) return 'no help tip'; t.scrollIntoView({block: 'center'});"
+                    " const b = t.shadowRoot.querySelector('button') || t;"
+                    " b.click(); await new Promise(r => setTimeout(r, 400));"
+                    " return (t.shadowRoot.textContent || '').trim().slice(0, 80) })()"
+                )
+                print("help tip:", tip)
+                await cdp.shot("helptip")
+                await cdp.js(
+                    "(() => { document.body.dispatchEvent(new PointerEvent('pointerdown',"
+                    " {bubbles: true, composed: true})); document.body.click(); return true })()"
+                )
+                suggest = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const s = [...e.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
+                    "  .find(x => x.shadowRoot.querySelector('input,textarea'));"
+                    " if (!s) return 'no suggest field'; s.scrollIntoView({block: 'center'});"
+                    " const i = s.shadowRoot.querySelector('input,textarea'); i.focus();"
+                    " i.value = '{w'; i.setSelectionRange(2, 2);"
+                    " i.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
+                    " await new Promise(r => setTimeout(r, 500));"
+                    " const root = s.shadowRoot; const items = [...root.querySelectorAll('li, .item, [role=option]')];"
+                    " return items.map(x => x.textContent.trim()) })()"
+                )
+                print("suggestions for '{w':", suggest)
+                await cdp.shot("suggest")
+                await cdp.js(
+                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const s = [...e.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
+                    "  .find(x => x.shadowRoot.querySelector('input,textarea'));"
+                    " if (s) { const i = s.shadowRoot.querySelector('input,textarea');"
+                    "  i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); i.blur(); }"
+                    " return true })()"
+                )
                 # Own colour picker (0.7.6): open it from the rule colour,
                 # tap the wheel, check the value, then cancel.
                 picked = await cdp.js(
@@ -296,15 +386,26 @@ async def main() -> None:
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
                     " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const cell = e.shadowRoot.querySelector('.kcolor laeutwerk-field');"
-                    " if (!cell) return false; cell.scrollIntoView();"
-                    " cell.shadowRoot.querySelector('.colorbtn, .pick').click(); return true })()"
+                    # 0.8.0: tap the keyword's round icon -> icon + colour popup.
+                    " const b = e.shadowRoot.querySelector('.kwrow:not(.head) .lookbtn');"
+                    " if (!b) return false; b.scrollIntoView({block: 'center'}); b.click();"
+                    " await new Promise(r => setTimeout(r, 800)); return true })()"
+                )
+                await asyncio.sleep(1)
+                await cdp.shot("keyword_look")
+                await cdp.js(
+                    "(async () => { const k = document.querySelector('laeutwerk-keyword-look');"
+                    " if (!k) return false;"
+                    " const f = k.shadowRoot.querySelectorAll('laeutwerk-field')[1];"
+                    " f.shadowRoot.querySelector('.colorbtn, .pick').click(); return true })()"
                 )
                 await asyncio.sleep(1)
                 await cdp.shot("colorpicker_keyword")
                 await cdp.js(
                     "(() => { const p = document.querySelector('laeutwerk-color-popup');"
-                    " if (p) p.shadowRoot.querySelector('.pill.outline').click(); return true })()"
+                    " if (p) p.shadowRoot.querySelector('.pill.outline').click();"
+                    " const k = document.querySelector('laeutwerk-keyword-look');"
+                    " if (k) k.shadowRoot.querySelector('.pill.outline').click(); return true })()"
                 )
                 # Open the second signal (opportunity trigger) in the signal editor.
                 await cdp.js(
@@ -334,8 +435,14 @@ async def main() -> None:
                 # changes (the card re-renders the editor on every hass update).
                 await cdp.js(
                     "(() => { const se = window.__find(document, 'laeutwerk-signal-editor');"
-                    " const ta = se.shadowRoot.querySelector('textarea');"
-                    " ta.value = 'EDIT SURVIVES'; ta.dispatchEvent(new Event('input')); return true })()"
+                    # Texts sit in suggestion fields (0.8.0); fall back to a plain textarea.
+                    " const sf = [...se.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
+                    "  .find(x => x.multiline);"
+                    " const ta = sf ? sf.shadowRoot.querySelector('textarea')"
+                    "  : se.shadowRoot.querySelector('textarea');"
+                    " ta.value = 'EDIT SURVIVES';"
+                    " ta.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
+                    " return true })()"
                 )
                 for value in range(3):
                     async with session.post(

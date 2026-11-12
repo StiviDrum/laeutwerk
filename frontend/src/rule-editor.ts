@@ -7,6 +7,10 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { property, state } from "lit/decorators.js";
 import {
   SIGNAL_ICONS,
+  availableVariables,
+  badgeLook,
+  badgeLooks,
+  headlinePreview,
   defaultSignal,
   describeTimespec,
   formatDate,
@@ -31,12 +35,15 @@ import {
   signalSummary,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
+import { helpTip } from "./help-tip";
+import { editKeywordLook } from "./keyword-look";
 import { shared, tokens } from "./styles";
 import type {
   Acknowledge,
   HaConfig,
   HomeAssistant,
   KeywordRow,
+  Badge,
   MatchMode,
   PreviewResult,
   PersonInfo,
@@ -109,6 +116,8 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _draft?: { rule: Rule; saved_at: string };
   @state() private _knownTags?: { id: string; name?: string | null }[];
   @state() private _titles?: TitleSuggestion[];
+  /** The keyword table can scroll further to the right (shows an edge fade). */
+  @state() private _kwMore = false;
   private _initial = "";
   private _previewTimer?: number;
   private _draftTimer?: number;
@@ -543,11 +552,6 @@ export class LaeutwerkRuleEditor extends LitElement {
     const l = this._l;
     const valid = ruleComplete(this._rule);
     return html`<div class="page">
-      <datalist id="lw-known-tags">
-        ${(this._knownTags ?? []).map(
-          (tag) => html`<option value=${tag.id}>${tag.name ?? ""}</option>`,
-        )}
-      </datalist>
       <div class="separator">
         ${this._rule.id ? l.t("edit_rule") : l.t("new_rule")}<span class="line"></span>
       </div>
@@ -734,7 +738,7 @@ export class LaeutwerkRuleEditor extends LitElement {
               this._update({ color: e.detail.value || null })}
           ></laeutwerk-field>
         </div>
-        <div class="sublabel">${l.t("source_mode")}</div>
+        <div class="sublabel tiprow">${l.t("source_mode")}${helpTip(l, "help_step_calendar")}</div>
         <div class="segmented">
           <button aria-pressed=${!this._custom} @click=${() => this._setCustom(false)}>
             ${l.t("source_calendar")}
@@ -769,7 +773,6 @@ export class LaeutwerkRuleEditor extends LitElement {
           this._update({ sources: Array.isArray(value) ? value : value ? [value] : [] }, true);
         }}
       ></laeutwerk-field>
-      <div class="hint">${l.t("sources_hint")}</div>
     `;
   }
 
@@ -778,7 +781,6 @@ export class LaeutwerkRuleEditor extends LitElement {
     const l = this._l;
     const interval = this._rule.interval ?? { every: 90 };
     return html`
-      <div class="hint">${l.t("interval_hint")}</div>
       <div class="row">
         <label class="field grow"
           >${l.t("interval_days")}
@@ -809,123 +811,162 @@ export class LaeutwerkRuleEditor extends LitElement {
     `;
   }
 
+  /** Round preview of a keyword's icon in its colour (with the rule as fallback). */
+  private _kwBadge(row: KeywordRow, columns: string[], size = 36): TemplateResult {
+    const named = ["farbe", "colour"].find((c) => columns.includes(c));
+    const look = badgeLook(this._rule, {
+      icon: row.icon ?? null,
+      color: row.color ?? (named && row[named] ? colorNameToHex(String(row[named])) : null),
+    });
+    const color = look.color ?? "var(--lw-text-2)";
+    return html`<span
+      class="kwbadge"
+      style="width:${size}px;height:${size}px;background: color-mix(in srgb, ${color} 22%, transparent); color: ${color}"
+      ><ha-icon .icon=${look.icon}></ha-icon
+    ></span>`;
+  }
+
+  /** Up to three small badges of a preview hit. */
+  private _hitBadges(event: { badges?: Badge[]; colors?: string[] }): TemplateResult {
+    const looks = badgeLooks(this._rule, event).slice(0, 3);
+    return html`<span class="hitbadges">
+      ${looks.map((look) => {
+        const color = look.color ?? "var(--lw-text-2)";
+        return html`<span
+          class="kwbadge"
+          style="width:28px;height:28px;background: color-mix(in srgb, ${color} 22%, transparent); color: ${color}"
+          ><ha-icon .icon=${look.icon}></ha-icon
+        ></span>`;
+      })}
+    </span>`;
+  }
+
   private _stepEvents(): TemplateResult {
     const l = this._l;
     const { columns: specs, rows } = this._rule.filter.keywords;
     const columns = specs.map(colName);
-    const withPlural = specs.find((c) => colPlural(c));
     return this._step(
       2,
       "step_events",
       html`
-        ${this._toggle(l.t("only_all_day"), this._rule.filter.all_day, (v) =>
-          this._update({ filter: { ...this._rule.filter, all_day: v } }, true),
+        ${this._toggle(
+          l.t("only_all_day"),
+          this._rule.filter.all_day,
+          (v) => this._update({ filter: { ...this._rule.filter, all_day: v } }, true),
+          "help_all_day",
         )}
-        <div class="table" role="table">
-          <div class="tr head" role="row">
-            <div class="th kw" role="columnheader">${l.t("keyword")}</div>
-            ${
-              columns.includes("color")
-                ? nothing
-                : html`<div class="th kcolor" role="columnheader">${l.t("color")}</div>`
-            }
-            ${specs.map((spec, i) => {
-              const plural = colPlural(spec);
-              return html`<div class="th col" role="columnheader">
-                <div class="colhead">
-                  <input
-                    class="colname"
-                    .value=${colName(spec)}
-                    aria-label=${l.t("add_column")}
-                    @change=${(e: Event) =>
-                      this._update(
-                        renameColumn(this._rule, i, (e.target as HTMLInputElement).value),
-                        true,
-                      )}
-                  />
-                  <button
-                    class="x"
-                    aria-label=${l.t("remove")}
-                    @click=${() => this._removeColumn(i)}
-                  >
-                    <ha-icon icon="mdi:close"></ha-icon>
-                  </button>
+        <div class="sublabel tiprow">${l.t("keywords_label")}${helpTip(l, "help_keywords")}</div>
+        <div class="kwwrap ${this._kwMore ? "more" : ""}">
+          <div class="kwtable" role="table" @scroll=${this._kwScroll}>
+            <div class="kwinner">
+              <div class="kwrow head" role="row">
+                <div class="stick hcell" role="columnheader">
+                  ${l.t("keyword")}${helpTip(l, "help_icon_color")}
                 </div>
-                <button
-                  class="plural"
-                  role="switch"
-                  aria-checked=${!!plural}
-                  title=${l.t("plural_toggle")}
-                  @click=${() => this._update(setColumnPlural(this._rule, i, !plural))}
-                >
-                  ${plural ? `{${plural}}` : l.t("plural_off")}
-                </button>
-              </div>`;
-            })}
-            <div class="th end"></div>
-          </div>
-          ${rows.map(
-            (row, i) =>
-              html`<div class="tr" role="row">
-                <div class="td kw" role="cell">
-                  <input
-                    .value=${row.match}
-                    @input=${(e: Event) => this._setRow(i, { match: (e.target as HTMLInputElement).value })}
-                  />
-                  <select
-                    aria-label="mode"
-                    @change=${(e: Event) =>
-                      this._setRow(i, { mode: (e.target as HTMLSelectElement).value as MatchMode })}
-                  >
-                    ${(["contains", "startswith", "regex"] as const).map(
-                      (m) =>
-                        html`<option value=${m} ?selected=${(row.mode ?? "contains") === m}>
-                          ${l.t(`mode_${m}` as StringKey)}
-                        </option>`,
-                    )}
-                  </select>
-                </div>
-                ${
-                  columns.includes("color")
-                    ? nothing
-                    : html`<div class="td kcolor" role="cell">
-                        <laeutwerk-field
-                          .hass=${this.hass}
-                          .localize=${l}
-                          .selector=${{ color_rgb: {} }}
-                          .swatches=${this._kwSwatches()}
-                          .suggest=${suggestColor(row, i, columns)}
-                          .value=${row.color ?? ""}
-                          @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                            this._setRow(i, { color: e.detail.value || undefined })}
-                        ></laeutwerk-field>
-                      </div>`
-                }
-                ${columns.map(
-                  (c) =>
-                    html`<div class="td col" role="cell">
+                <div class="c-mode hcell" role="columnheader">${l.t("match_mode")}</div>
+                ${specs.map((spec, i) => {
+                  const plural = colPlural(spec);
+                  return html`<div class="c-var hcell" role="columnheader">
+                    <div class="vhead">
                       <input
-                        list=${/nfc|tag/i.test(c) ? "lw-known-tags" : nothing}
-                        .value=${row[c] ?? ""}
-                        @input=${(e: Event) => this._setRow(i, { [c]: (e.target as HTMLInputElement).value })}
+                        class="vname"
+                        .value=${colName(spec)}
+                        aria-label=${l.t("column_name")}
+                        @change=${(e: Event) =>
+                          this._update(
+                            renameColumn(this._rule, i, (e.target as HTMLInputElement).value),
+                            true,
+                          )}
                       />
-                    </div>`,
-                )}
-                <div class="td end" role="cell">
-                  <button
-                    class="x"
-                    aria-label=${l.t("remove")}
-                    @click=${() => this._setRows(rows.filter((_, j) => j !== i))}
-                  >
-                    <ha-icon icon="mdi:close"></ha-icon>
-                  </button>
-                </div>
-              </div>`,
-          )}
+                      <button
+                        class="plural"
+                        role="switch"
+                        aria-checked=${!!plural}
+                        title=${plural ? `${l.t("plural_toggle")}: {${plural}}` : l.t("plural_toggle")}
+                        aria-label=${l.t("plural_toggle")}
+                        @click=${() => this._update(setColumnPlural(this._rule, i, !plural))}
+                      >
+                        n
+                      </button>
+                      <button
+                        class="x"
+                        aria-label=${l.t("remove")}
+                        @click=${() => this._removeColumn(i)}
+                      >
+                        <ha-icon icon="mdi:close"></ha-icon>
+                      </button>
+                    </div>
+                  </div>`;
+                })}
+              </div>
+              ${rows.map(
+                (row, i) =>
+                  html`<div class="kwrow" role="row">
+                    <div class="stick" role="cell">
+                      <button
+                        class="lookbtn"
+                        aria-label=${l.t("kw_look_edit")}
+                        title=${l.t("kw_look_edit")}
+                        @click=${() => this._editLook(i, columns)}
+                      >
+                        ${this._kwBadge(row, columns, 38)}
+                        ${
+                          row.icon || row.color
+                            ? nothing
+                            : html`<span class="plusdot"><ha-icon icon="mdi:plus"></ha-icon></span>`
+                        }
+                      </button>
+                      <input
+                        class="kwinput"
+                        .value=${row.match}
+                        aria-label=${l.t("keyword")}
+                        @input=${(e: Event) => this._setRow(i, { match: (e.target as HTMLInputElement).value })}
+                      />
+                    </div>
+                    <div class="c-mode" role="cell">
+                      <select
+                        aria-label=${l.t("match_mode")}
+                        @change=${(e: Event) =>
+                          this._setRow(i, {
+                            mode: (e.target as HTMLSelectElement).value as MatchMode,
+                          })}
+                      >
+                        ${(["contains", "startswith", "regex"] as const).map(
+                          (m) =>
+                            html`<option value=${m} ?selected=${(row.mode ?? "contains") === m}>
+                              ${l.t(`mode_${m}` as StringKey)}
+                            </option>`,
+                        )}
+                      </select>
+                    </div>
+                    ${columns.map(
+                      (c) =>
+                        html`<div class="c-var" role="cell">
+                          ${
+                            /nfc|tag/i.test(c)
+                              ? html`<laeutwerk-suggest
+                                  .items=${this._tagItems()}
+                                  .value=${row[c] ?? ""}
+                                  .placeholder=${l.t("tag_suggest_placeholder")}
+                                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                                    this._setRow(i, { [c]: e.detail.value })}
+                                ></laeutwerk-suggest>`
+                              : html`<input
+                                  .value=${row[c] ?? ""}
+                                  aria-label=${c}
+                                  @input=${(e: Event) => this._setRow(i, { [c]: (e.target as HTMLInputElement).value })}
+                                />`
+                          }
+                        </div>`,
+                    )}
+                  </div>`,
+              )}
+            </div>
+          </div>
         </div>
         <div class="wrap">
           <button
-            class="chip dashed"
+            class="addbtn"
             @click=${() =>
               this._setRows([
                 ...rows,
@@ -934,12 +975,13 @@ export class LaeutwerkRuleEditor extends LitElement {
           >
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_keyword")}
           </button>
-          <button class="chip dashed" @click=${this._addColumn}>
+          <button class="addbtn" @click=${this._addColumn}>
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_column")}
           </button>
+          ${helpTip(l, "help_plural")}
           ${
             this._colorColumn()
-              ? html`<button class="chip accent" @click=${this._takeColumnColors}>
+              ? html`<button class="addbtn accent" @click=${this._takeColumnColors}>
                   <ha-icon icon="mdi:palette-outline"></ha-icon>${l.t("colors_from_column", {
                     column: this._colorColumn()!,
                   })}
@@ -947,21 +989,48 @@ export class LaeutwerkRuleEditor extends LitElement {
               : nothing
           }
         </div>
-        <div class="hint">
-          ${
-            !rows.length
-              ? l.t("no_keywords")
-              : withPlural
-                ? l.t("plural_hint", {
-                    example: `{${colName(withPlural)}}`,
-                    plural: `{${colPlural(withPlural)}}`,
-                  })
-                : l.t("plural_hint_off")
-          }
-        </div>
+        ${!rows.length ? html`<div class="hint">${l.t("no_keywords")}</div>` : nothing}
         ${this._suggestions()} ${this._previewList()}
       `,
     );
+  }
+
+  private _kwScroll = (): void => {
+    const el = this.renderRoot.querySelector<HTMLElement>(".kwtable");
+    if (!el) return;
+    const more = el.scrollWidth - el.scrollLeft - el.clientWidth > 4;
+    if (more !== this._kwMore) this._kwMore = more;
+  };
+
+  protected updated(): void {
+    this._kwScroll();
+  }
+
+  /** Open the icon/colour popup of keyword row `index`. */
+  private async _editLook(index: number, columns: string[]): Promise<void> {
+    const row = this._rule.filter.keywords.rows[index];
+    if (!row) return;
+    const result = await editKeywordLook({
+      hass: this.hass,
+      localize: this._l,
+      title: row.match || this._l.t("keyword"),
+      icon: row.icon ?? "",
+      color: row.color ?? "",
+      rule: this._rule,
+      swatches: this._kwSwatches(),
+      suggest: suggestColor(row, index, columns),
+      dark: !!this.hass?.themes?.darkMode,
+    });
+    if (result === "delete") {
+      this._setRows(this._rule.filter.keywords.rows.filter((_, j) => j !== index));
+    } else if (result) {
+      this._setRow(index, { icon: result.icon || undefined, color: result.color || undefined });
+    }
+  }
+
+  /** Known NFC tags as suggestion items. */
+  private _tagItems(): { value: string; label?: string }[] {
+    return (this._knownTags ?? []).map((tag) => ({ value: tag.id, label: tag.name ?? undefined }));
   }
 
   private _suggestions(): TemplateResult | typeof nothing {
@@ -995,24 +1064,6 @@ export class LaeutwerkRuleEditor extends LitElement {
       </div>`;
   }
 
-  /** Tags that were scanned in Home Assistant before (tag/list). */
-  private _knownTagChips(pick: (id: string) => void): TemplateResult {
-    const l = this._l;
-    const tags = this._knownTags ?? [];
-    if (!tags.length) {
-      return html`<div class="hint">${this._knownTags ? l.t("no_known_tags") : ""}</div>`;
-    }
-    return html`<div class="sublabel">${l.t("known_tags")}</div>
-      <div class="wrap">
-        ${tags.map(
-          (tag) =>
-            html`<button class="chip" title=${tag.id} @click=${() => pick(tag.id)}>
-              <ha-icon icon="mdi:nfc-variant"></ha-icon>${tag.name || tag.id}
-            </button>`,
-        )}
-      </div>`;
-  }
-
   private _previewList(): TemplateResult {
     const l = this._l;
     if (this._previewError) return html`<div class="error">${this._previewError}</div>`;
@@ -1030,8 +1081,8 @@ export class LaeutwerkRuleEditor extends LitElement {
                 (e) =>
                   html`<div class="prev">
                     <span class="date">${formatDate(e.start, l, tz)}</span>
+                    ${this._hitBadges(e)}
                     <span class="grow">${e.titles.join(" + ")}</span>
-                    ${e.colors.map((c) => html`<span class="dot" style="background:${c}"></span>`)}
                     ${
                       e.titles.length > 1
                         ? html`<span class="chip accent">${l.t("preview_bundled")}</span>`
@@ -1056,6 +1107,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       3,
       "step_when",
       html`
+        <div class="sublabel tiprow">${l.t("times_label")}${helpTip(l, "help_reminders")}</div>
         <div class="wrap">
           ${r.reminders.map(
             (item, i) =>
@@ -1132,7 +1184,7 @@ export class LaeutwerkRuleEditor extends LitElement {
               </div>`
             : nothing
         }
-        <div class="sublabel">${l.t("repeat")}</div>
+        <div class="sublabel tiprow">${l.t("repeat")}${helpTip(l, "help_repeat")}</div>
         <div class="segmented">
           <button
             aria-pressed=${repeat === "none"}
@@ -1200,6 +1252,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       4,
       "step_signals",
       html`
+        <div class="sublabel tiprow">${l.t("signals_label")}${helpTip(l, "help_signals")}</div>
         ${signals.length ? nothing : html`<div class="hint">${l.t("no_signals")}</div>`}
         <div class="divided">
           ${signals.map((s, i) => {
@@ -1270,6 +1323,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       5,
       "step_ack",
       html`
+        <div class="sublabel tiprow">${l.t("ack_head")}${helpTip(l, "help_ack")}</div>
         <div class="divided">
           <div class="ackrow">
             <ha-icon icon="mdi:cellphone-check"></ha-icon>
@@ -1282,45 +1336,22 @@ export class LaeutwerkRuleEditor extends LitElement {
               return html`<div class="ackrow">
                 <ha-icon icon="mdi:nfc-variant"></ha-icon>
                 <div class="grow">
-                  <input
+                  <laeutwerk-suggest
                     .value=${a.tag_id ?? ""}
-                    placeholder=${l.t("ack_tag_placeholder")}
-                    @input=${(e: Event) => setAt(i, { tag_id: (e.target as HTMLInputElement).value })}
+                    .placeholder=${l.t("ack_tag_placeholder")}
+                    .items=${this._tagItems()}
+                    .variables=${tagVariables(this._rule)}
+                    @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                      setAt(i, { tag_id: e.detail.value })}
                     @change=${() => this._schedulePreview(300)}
-                    list="lw-known-tags"
-                  />
-                  ${this._knownTagChips((id) => {
-                    setAt(i, { tag_id: id });
-                    this._schedulePreview(300);
-                  })}
-                  ${
-                    this._rule.filter.keywords.columns.length
-                      ? html`<div class="wrap vars">
-                          ${tagVariables(this._rule).map(
-                            (name) =>
-                              html`<button
-                                class="chip"
-                                @click=${() => {
-                                  setAt(i, { tag_id: `${a.tag_id ?? ""}{${name}}` });
-                                  this._schedulePreview(300);
-                                }}
-                              >
-                                {${name}}
-                              </button>`,
-                          )}
-                        </div>`
-                      : nothing
-                  }
+                  ></laeutwerk-suggest>
                   ${
                     templateVariables(a.tag_id).length
                       ? html`<div class="hint">
-                          ${l.t("tag_variable_hint")}
                           ${
                             this._preview?.events[0]?.tags?.length
-                              ? html`<br />${l.t("tag_next", {
-                                    tags: this._preview.events[0].tags.join(", "),
-                                  })}`
-                              : nothing
+                              ? l.t("tag_next", { tags: this._preview.events[0].tags.join(", ") })
+                              : l.t("tag_variable_hint")
                           }
                         </div>`
                       : nothing
@@ -1371,10 +1402,26 @@ export class LaeutwerkRuleEditor extends LitElement {
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_trigger")}
           </button>
         </div>
-
-        <div class="hint">${l.t("ack_always")}</div>
       `,
     );
+  }
+
+  /** Live preview of the headline(s) with the next real event. */
+  private _headlinePreview(): TemplateResult | typeof nothing {
+    const event = this._preview?.events[0];
+    if (!event) return nothing;
+    const line = headlinePreview(this._rule, event);
+    const bundled = this._preview?.events.find((e) => e.titles.length > 1);
+    const plural =
+      this._rule.headline_plural?.trim() && bundled ? headlinePreview(this._rule, bundled) : "";
+    return html`${[line, plural]
+      .filter(Boolean)
+      .map(
+        (text) =>
+          html`<div class="preview">
+            <ha-icon icon="mdi:eye-outline"></ha-icon><span>${text}</span>
+          </div>`,
+      )}`;
   }
 
   private _stepDetails(): TemplateResult {
@@ -1387,9 +1434,29 @@ export class LaeutwerkRuleEditor extends LitElement {
       6,
       "step_details",
       html`
-        ${this._toggle(l.t("bundle"), r.bundle, (v) => this._update({ bundle: v }, true))}
-        <div class="hint">${l.t("bundle_hint")}</div>
-        <div class="sublabel">${l.t("expire")}</div>
+        ${this._toggle(
+          l.t("bundle"),
+          r.bundle,
+          (v) => this._update({ bundle: v }, true),
+          "help_bundle",
+        )}
+        <div class="sublabel tiprow">${l.t("headline")}${helpTip(l, "help_headline")}</div>
+        <laeutwerk-suggest
+          .value=${r.headline ?? ""}
+          .placeholder=${l.t("headline_default")}
+          .variables=${availableVariables(r)}
+          @value-changed=${(e: CustomEvent<{ value: string }>) =>
+            this._update({ headline: e.detail.value || null })}
+        ></laeutwerk-suggest>
+        <laeutwerk-suggest
+          .value=${r.headline_plural ?? ""}
+          .placeholder=${r.headline || l.t("headline_default")}
+          .variables=${availableVariables(r)}
+          @value-changed=${(e: CustomEvent<{ value: string }>) =>
+            this._update({ headline_plural: e.detail.value || null })}
+        ></laeutwerk-suggest>
+        ${this._headlinePreview()}
+        <div class="sublabel tiprow">${l.t("expire")}${helpTip(l, "help_expire")}</div>
         <div class="segmented">
           <button
             aria-pressed=${kind === "end"}
@@ -1449,7 +1516,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       7,
       "step_advanced",
       html`
-        <div class="sublabel">${l.t("assignee")}</div>
+        <div class="sublabel tiprow">${l.t("assignee")}${helpTip(l, "assignee_hint")}</div>
         <laeutwerk-field
           .hass=${this.hass}
           .localize=${l}
@@ -1489,7 +1556,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                     )}
                   </select>
                 </label>
-                <div class="hint">${l.t("assignee_hint")}</div>
+
                 ${
                   stats.length
                     ? html`<div class="wrap">
@@ -1545,8 +1612,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           })}
         </div>
 
-        <div class="sublabel">${l.t("escalation")}</div>
-        <div class="hint">${l.t("escalation_hint")}</div>
+        <div class="sublabel tiprow">${l.t("escalation")}${helpTip(l, "escalation_hint")}</div>
         <div class="divided">
           ${stages.map(
             (stage, i) =>
@@ -1604,8 +1670,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           </button>
         </div>
 
-        <div class="sublabel">${l.t("on_done")}</div>
-        <div class="hint">${l.t("on_done_hint")}</div>
+        <div class="sublabel tiprow">${l.t("on_done")}${helpTip(l, "on_done_hint")}</div>
         <laeutwerk-field
           .hass=${this.hass}
           .localize=${l}
@@ -1693,9 +1758,14 @@ export class LaeutwerkRuleEditor extends LitElement {
     </div>`;
   }
 
-  private _toggle(label: string, value: boolean, onChange: (v: boolean) => void): TemplateResult {
+  private _toggle(
+    label: string,
+    value: boolean,
+    onChange: (v: boolean) => void,
+    help?: StringKey,
+  ): TemplateResult {
     return html`<div class="toggle">
-      <span>${label}</span>
+      <span class="tiprow">${label}${help ? helpTip(this._l, help) : nothing}</span>
       <button
         class="switch"
         role="switch"
@@ -1727,88 +1797,203 @@ export class LaeutwerkRuleEditor extends LitElement {
         width: 56px;
         padding: 4px;
       }
-      /* Keyword table: horizontally scrollable with fixed column widths. */
-      .table {
+      /* Keyword table: horizontally scrollable, fixed column widths, sticky first column. */
+      .kwwrap {
+        position: relative;
+      }
+      .kwwrap::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 6px;
+        width: 28px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        background: linear-gradient(to right, transparent, var(--lw-bg));
+        border-radius: 0 12px 12px 0;
+      }
+      .kwwrap.more::after {
+        opacity: 0.9;
+      }
+      .kwtable {
         overflow-x: auto;
+        padding-bottom: 6px;
+        overscroll-behavior-x: contain;
+        margin: 0 -4px;
+      }
+      .kwinner {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        padding-bottom: 4px;
-        overscroll-behavior-x: contain;
-      }
-      .tr {
-        display: flex;
-        gap: 6px;
         width: max-content;
-        align-items: center;
+        min-width: 100%;
       }
-      .th {
+      .kwrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px 6px 0;
+        border-top: 1px solid var(--lw-border);
+      }
+      .kwrow.head {
+        border-top: 0;
+        align-items: flex-end;
+        padding: 0 8px 2px 0;
+      }
+      .hcell {
         font-size: 12px;
         font-weight: 600;
         color: var(--lw-text-2);
       }
-      .kw {
-        width: 168px;
+      .stick {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        width: 176px;
         flex-shrink: 0;
+        box-sizing: border-box;
         display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 0 2px 6px;
+        /* Solid copy of the panel colour, so scrolled cells do not show through. */
+        background: linear-gradient(var(--lw-surface), var(--lw-surface)), var(--lw-bg);
+        box-shadow: 6px 0 6px -6px rgba(0, 0, 0, 0.35);
+      }
+      .hcell.stick {
+        padding-top: 0;
+        padding-bottom: 0;
+        box-shadow: none;
+        align-items: center;
+        gap: 0;
+      }
+      .lookbtn {
+        position: relative;
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .plusdot {
+        position: absolute;
+        right: 1px;
+        bottom: 1px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: var(--lw-accent);
+        color: var(--lw-on-accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .plusdot ha-icon {
+        --mdc-icon-size: 12px;
+      }
+      .kwbadge {
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .kwbadge ha-icon {
+        --mdc-icon-size: 55%;
+      }
+      .hitbadges {
+        display: inline-flex;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .hitbadges .kwbadge ha-icon {
+        --mdc-icon-size: 16px;
+      }
+      .stick .kwbadge ha-icon {
+        --mdc-icon-size: 20px;
+      }
+      .kwinput {
+        flex: 1;
+        min-width: 0;
+      }
+      .c-mode {
+        width: 104px;
+        flex-shrink: 0;
+      }
+      .c-var {
+        width: 148px;
+        flex-shrink: 0;
+      }
+      .c-mode select {
+        padding: 0 6px;
+        font-size: 13px;
+      }
+      .tiprow {
+        display: flex;
+        align-items: center;
         gap: 4px;
       }
-      .td.kw input {
-        width: 92px;
+      .hcell.tiprow {
+        gap: 0;
       }
-      .td.kw select {
-        width: 72px;
-        padding: 0 4px;
-        font-size: 12px;
-      }
-      .col {
-        width: 120px;
-        flex-shrink: 0;
+      .vhead {
         display: flex;
         align-items: center;
         gap: 2px;
       }
-      .th.col {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 4px;
+      .vhead .x {
+        width: 28px;
       }
-      .colhead {
-        display: flex;
-        align-items: center;
-        gap: 2px;
+      .vname {
+        min-height: 36px;
+        padding: 0 8px;
+        font-size: 13px;
+        font-family: ui-monospace, monospace;
+        background: var(--lw-surface-2);
+        color: var(--lw-text);
       }
       .plural {
         position: relative;
-        min-height: 28px;
-        border-radius: 14px;
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        border-radius: 13px;
         border: 1px dashed var(--lw-border);
-        font-size: 11px;
-        font-weight: 500;
+        font-size: 12px;
+        font-weight: 600;
         font-family: ui-monospace, monospace;
         color: var(--lw-text-2);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
       .plural::before {
         content: "";
         position: absolute;
-        inset: -8px -2px;
+        inset: -9px -3px;
       }
       .plural[aria-checked="true"] {
         border-style: solid;
         background: color-mix(in srgb, var(--lw-accent) 14%, transparent);
         color: var(--lw-text);
       }
-      .end {
-        width: 36px;
-        flex-shrink: 0;
+      .addbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 22px;
+        border: 1px dashed var(--lw-border);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--lw-text);
       }
-      .colname {
-        min-height: 36px;
-        font-size: 12px;
-        font-family: ui-monospace, monospace;
+      .addbtn ha-icon {
+        --mdc-icon-size: 18px;
+      }
+      .addbtn.accent {
+        border-style: solid;
+        background: color-mix(in srgb, var(--lw-accent) 16%, transparent);
       }
       .x {
         width: 36px;
@@ -1820,12 +2005,25 @@ export class LaeutwerkRuleEditor extends LitElement {
         color: var(--lw-text-2);
       }
       .x ha-icon {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 18px;
       }
       .x.small {
         width: 28px;
         height: 28px;
         margin-right: -8px;
+      }
+      .preview {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-size: 13px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--lw-surface-2);
+      }
+      .preview ha-icon {
+        --mdc-icon-size: 16px;
+        color: var(--lw-text-2);
       }
       .prev {
         display: flex;

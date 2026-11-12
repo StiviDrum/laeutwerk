@@ -10,7 +10,15 @@ export interface KeywordRow {
   mode?: MatchMode;
   /** Own colour of the keyword (#rrggbb). */
   color?: string;
+  /** Own icon of the keyword (mdi:…). */
+  icon?: string;
   [column: string]: string | undefined;
+}
+
+/** Icon and colour of one matching keyword row (either may be missing). */
+export interface Badge {
+  icon: string | null;
+  color: string | null;
 }
 
 export interface QuietTime {
@@ -82,6 +90,10 @@ export interface Reminder {
   state: ReminderState;
   titles: string[];
   colors?: string[];
+  /** Headline rendered by the backend from the rule's headline template. */
+  headline?: string | null;
+  /** One badge per matching keyword row, in order. */
+  badges?: Badge[];
   variables?: Record<string, string>;
   reminded_at: string | null;
   finished_at: string | null;
@@ -120,6 +132,8 @@ export interface UpcomingEvent {
   titles: string[];
   days_until: number;
   colors: string[];
+  headline?: string | null;
+  badges?: Badge[];
   all_day: boolean;
   variables: Record<string, string>;
   reminder_times?: string[];
@@ -150,6 +164,9 @@ export interface Rule {
   signals: Signal[];
   acknowledge: Acknowledge[];
   ack_label: string | null;
+  /** Headline template, e.g. "{wann}: {titel}" (empty = default). */
+  headline?: string | null;
+  headline_plural?: string | null;
   repeat: "none" | { every: number | string; max?: number };
   bundle: boolean;
   expire: string;

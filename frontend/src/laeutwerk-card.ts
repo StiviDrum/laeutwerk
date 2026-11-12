@@ -5,6 +5,8 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
+  badgeLook,
+  badgeLooks,
   buildOverview,
   doneLabel,
   canReopen,
@@ -21,6 +23,9 @@ import { LaeutwerkCardEditor } from "./card-editor";
 import { LaeutwerkColorPopup } from "./color-picker";
 import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
 import { LaeutwerkField } from "./ha-field";
+import { LaeutwerkHelpTip } from "./help-tip";
+import { LaeutwerkKeywordLook } from "./keyword-look";
+import { LaeutwerkSuggest } from "./suggest-field";
 import { localizer, type Localizer, type StringKey } from "./localize";
 import { defineElements } from "./register";
 import { applyRuleEvent } from "./rule-events";
@@ -30,6 +35,7 @@ import { LaeutwerkTaskDialog } from "./task-dialog";
 import { LaeutwerkTemplatePicker } from "./template-picker";
 import { shared, tokens } from "./styles";
 import type {
+  Badge,
   HistoryEntry,
   HomeAssistant,
   LaeutwerkCardConfig,
@@ -38,8 +44,6 @@ import type {
   RuleEvent,
 } from "./types";
 import { CARD_VERSION } from "./version";
-
-const DEFAULT_ICON = "mdi:bell-ring-outline";
 
 function errorMessage(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) return String(err.message);
@@ -509,20 +513,30 @@ export class LaeutwerkCard extends LitElement {
     this._details = this._details === reminder.id ? undefined : reminder.id;
   }
 
-  private _icon(rule: Rule, small = false): TemplateResult {
-    const color = rule.color ?? "var(--lw-text-2)";
-    return html`<span
-      class="icon ${small ? "small" : ""}"
-      style="background: color-mix(in srgb, ${color} 22%, transparent); color: ${color}"
-    >
-      <ha-icon .icon=${rule.icon || DEFAULT_ICON}></ha-icon>
-    </span>`;
-  }
-
-  private _dots(colors: string[] | undefined): TemplateResult | typeof nothing {
-    if (!colors?.length) return nothing;
-    return html`<span class="dots">
-      ${colors.map((c) => html`<span class="dot" style="background:${c}"></span>`)}
+  /**
+   * Round icon of a rule. With a reminder/event the first keyword badge
+   * (icon + colour, each falling back to the rule) fills the circle; more
+   * distinct badges of a bundle are small overlapping circles (max. 2).
+   */
+  private _icon(
+    rule: Rule,
+    small = false,
+    item?: { badges?: Badge[]; colors?: string[] },
+  ): TemplateResult {
+    const looks = item ? badgeLooks(rule, item) : [badgeLook(rule, undefined)];
+    const circle = (look: { icon: string; color: string | null }, extra = false) => {
+      const color = look.color ?? "var(--lw-text-2)";
+      return html`<span
+        class="icon ${small ? "small" : ""} ${extra ? "extra" : ""}"
+        style="background: color-mix(in srgb, ${color} 22%, transparent); color: ${color}"
+      >
+        <ha-icon .icon=${look.icon}></ha-icon>
+      </span>`;
+    };
+    if (looks.length < 2) return circle(looks[0]);
+    return html`<span class="iconstack ${small ? "small" : ""}">
+      ${circle(looks[0])}
+      ${looks.slice(1, 3).map((look, i) => html`<span class="x${i}">${circle(look, true)}</span>`)}
     </span>`;
   }
 
@@ -536,7 +550,7 @@ export class LaeutwerkCard extends LitElement {
         aria-expanded=${this._details === reminder.id}
         @click=${() => this._toggleDetails(reminder)}
       >
-        ${this._icon(rule)}
+        ${this._icon(rule, false, reminder)}
         <div class="grow text">
           <div class="name">${reminderTitle(reminder)}</div>
           <div class="sub">
@@ -551,7 +565,6 @@ export class LaeutwerkCard extends LitElement {
       </button>
       <div class="row meta">
         <span class="chip">${openStatus(reminder, this._now, l, tz)}</span>
-        ${this._dots(reminder.colors)}
       </div>
       ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
       ${
@@ -613,12 +626,11 @@ export class LaeutwerkCard extends LitElement {
         : "";
     return html`<div class="entry">
       <button class="row item tap" @click=${() => this._toggleDetails(reminder)}>
-        ${this._icon(rule, true)}
+        ${this._icon(rule, true, reminder)}
         <div class="grow text">
           <div class="name">${reminder.titles.join(" + ")}</div>
           <div class="sub">${next}</div>
         </div>
-        ${this._dots(reminder.colors)}
         <span class="when">${relativeDay(reminder.start, this._now, l, tz)}</span>
       </button>
       ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
@@ -631,7 +643,7 @@ export class LaeutwerkCard extends LitElement {
     return html`<div class="entry">
       <div class="row">
         <button class="row item finished tap grow" @click=${() => this._toggleDetails(reminder)}>
-          ${this._icon(rule, true)}
+          ${this._icon(rule, true, reminder)}
           <div class="grow text">
             <div class="name ${reminder.state === "done" ? "struck" : ""}">
               ${ahead ? reminderTitle(reminder) : reminder.titles.join(" + ")}
@@ -802,7 +814,7 @@ export class LaeutwerkCard extends LitElement {
       // Planned tasks already say when in their title ("Am Freitag: …").
       const when = task.open ? openStatus(task.reminder, this._now, l, this._tz) : "";
       line = html`<span class="badge-wrap">
-          ${this._icon(task.rule, true)}
+          ${this._icon(task.rule, true, task.reminder)}
           ${openCount ? html`<span class="badge">${openCount}</span>` : nothing}
         </span>
         <span class="grow oneline ${task.open ? "" : "dim"}">
@@ -915,15 +927,31 @@ export class LaeutwerkCard extends LitElement {
         flex-wrap: wrap;
         gap: 8px;
       }
-      .dots {
+      .iconstack {
+        position: relative;
         display: inline-flex;
-        gap: 4px;
+        flex-shrink: 0;
       }
-      .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 5px;
-        box-shadow: 0 0 0 1px var(--lw-border);
+      .iconstack .x0,
+      .iconstack .x1 {
+        position: absolute;
+        bottom: -4px;
+        display: flex;
+      }
+      .iconstack .x0 {
+        right: -6px;
+      }
+      .iconstack .x1 {
+        right: 14px;
+      }
+      .iconstack .icon.extra {
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        box-shadow: 0 0 0 2px var(--lw-surface);
+      }
+      .iconstack .icon.extra ha-icon {
+        --mdc-icon-size: 14px;
       }
       .item {
         min-height: 48px;
@@ -1097,6 +1125,9 @@ void defineElements([
   ["laeutwerk-rule-editor", LaeutwerkRuleEditor],
   ["laeutwerk-signal-editor", LaeutwerkSignalEditor],
   ["laeutwerk-field", LaeutwerkField],
+  ["laeutwerk-help-tip", LaeutwerkHelpTip],
+  ["laeutwerk-keyword-look", LaeutwerkKeywordLook],
+  ["laeutwerk-suggest", LaeutwerkSuggest],
   ["laeutwerk-card-editor", LaeutwerkCardEditor],
   ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
   ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
