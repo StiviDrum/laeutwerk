@@ -74,22 +74,33 @@ class KeywordRow:
     values: dict[str, str] = field(default_factory=dict)
     # Colour of the keyword (#rrggbb), e.g. the colour of the bin.
     color: str | None = None
+    # Icon of the keyword (mdi:...), e.g. the bin symbol.
+    icon: str | None = None
 
     @classmethod
     def from_dict(
-        cls, data: dict[str, Any], *, color_is_column: bool = False
+        cls,
+        data: dict[str, Any],
+        *,
+        color_is_column: bool = False,
+        icon_is_column: bool = False,
     ) -> KeywordRow:
         """Create from the stored (flat) form.
 
         ``color_is_column``: an older table has a column named "color"; then
         "color" is that column's value, not the keyword colour.
         """
-        own = ("match", "mode") if color_is_column else ("match", "mode", "color")
+        own = ["match", "mode"]
+        if not color_is_column:
+            own.append("color")
+        if not icon_is_column:
+            own.append("icon")
         return cls(
             match=data["match"],
             mode=data.get("mode", MATCH_CONTAINS),
             values={key: str(value) for key, value in data.items() if key not in own},
             color=None if color_is_column else (data.get("color") or None),
+            icon=None if icon_is_column else (data.get("icon") or None),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -99,6 +110,8 @@ class KeywordRow:
             data["mode"] = self.mode
         if self.color:
             data["color"] = self.color
+        if self.icon:
+            data["icon"] = self.icon
         return {**data, **self.values}
 
 
@@ -151,6 +164,7 @@ class Filter:
                 KeywordRow.from_dict(
                     row,
                     color_is_column="color" in [column_name(s) for s in specs],
+                    icon_is_column="icon" in [column_name(s) for s in specs],
                 )
                 for row in keywords.get("rows", [])
             ],
@@ -231,6 +245,9 @@ class Rule:
     reminders: list[str]
     icon: str | None = None
     color: str | None = None
+    # Editable headline of a reminder ({variables}); None: the card's default.
+    headline: str | None = None
+    headline_plural: str | None = None
     enabled: bool = True
     filter: Filter = field(default_factory=Filter)
     signals: list[Signal] = field(default_factory=list)
@@ -272,6 +289,8 @@ class Rule:
             reminders=[item["at"] for item in data["reminders"]],
             icon=data.get("icon"),
             color=data.get("color"),
+            headline=data.get("headline") or None,
+            headline_plural=data.get("headline_plural") or None,
             enabled=bool(data.get("enabled", True)),
             filter=Filter.from_dict(data.get("filter") or {}),
             signals=[Signal.from_dict(item) for item in data.get("signals", [])],
@@ -294,6 +313,8 @@ class Rule:
             "name": self.name,
             "icon": self.icon,
             "color": self.color,
+            "headline": self.headline,
+            "headline_plural": self.headline_plural,
             "enabled": self.enabled,
             "sources": list(self.sources),
             "filter": self.filter.to_dict(),

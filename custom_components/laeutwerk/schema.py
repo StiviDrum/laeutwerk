@@ -64,6 +64,11 @@ def _text(value: Any) -> str:
     return cv.string(value).strip()
 
 
+def _opt_text(value: Any) -> str | None:
+    """Text that may be empty: empty / None become None."""
+    return None if value is None else (_text(value) or None)
+
+
 def _non_empty(value: Any) -> str:
     text = _text(value)
     if not text:
@@ -217,7 +222,11 @@ def _keywords(value: Any) -> dict[str, Any]:
         row = {str(key).lower(): val for key, val in raw.items()}
         # "color" is the keyword's own colour – unless an older table has a
         # column of that name.
-        own = _ROW_KEYS if "color" in columns else (*_ROW_KEYS, "color")
+        own = list(_ROW_KEYS)
+        if "color" not in columns:
+            own.append("color")
+        if "icon" not in columns:
+            own.append("icon")
         if unknown := set(row) - set(columns) - set(own):
             raise vol.Invalid(
                 f"keyword row {index}: unknown column(s) {', '.join(sorted(unknown))}"
@@ -246,6 +255,13 @@ def _keywords(value: Any) -> dict[str, Any]:
                 clean["color"] = _hex_color(row["color"])
             except vol.Invalid as err:
                 raise vol.Invalid(f"keyword row {index}: {err}") from err
+        if "icon" not in columns and row.get("icon"):
+            try:
+                clean["icon"] = cv.icon(row["icon"])
+            except vol.Invalid as err:
+                raise vol.Invalid(
+                    f"keyword row {index}: icon must look like 'mdi:recycle' ({err})"
+                ) from err
         for column in columns:
             clean[column] = _text(row.get(column, "") or "")
         rows.append(clean)
@@ -540,6 +556,8 @@ RULE_SCHEMA = vol.Schema(
         vol.Required("name"): _non_empty,
         vol.Optional("icon", default=None): vol.Any(None, cv.icon),
         vol.Optional("color", default=None): vol.Any(None, _text),
+        vol.Optional("headline", default=None): _opt_text,
+        vol.Optional("headline_plural", default=None): _opt_text,
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Optional("sources", default=list): vol.All(
             cv.ensure_list, [_source_entity], vol.Unique()

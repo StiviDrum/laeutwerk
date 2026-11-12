@@ -39,8 +39,10 @@ from .issues import async_check_rule, async_clear_rule
 from .matching import (
     Occurrence,
     build_occurrences,
+    hit_badges,
     hit_colors,
     match_event,
+    render_headline,
     sample_occurrence,
 )
 from .model import STATE_INACTIVE, Reminder, Rule, Signal
@@ -667,9 +669,13 @@ class LaeutwerkManager:
         payload["titles"] = [event.summary for event in reminder.events]
         if rule := self.rules.get(rule_id):
             payload["colors"] = hit_colors(rule, reminder.events)
+            payload["badges"] = hit_badges(rule, reminder.events)
         if runner is not None:
             next_time = runner.next_reminder_time(reminder)
             payload["variables"] = runner.variables(reminder)
+            payload["headline"] = render_headline(
+                runner.rule, reminder.events, payload["variables"]
+            )
             payload["expires_at"] = runner.expire_at(reminder).isoformat()
             payload["next_reminder_at"] = next_time.isoformat() if next_time else None
             payload["assignee_name"] = runner.assignee_name(reminder.assignee)
@@ -719,6 +725,7 @@ def occurrence_payload(
     if occurrence is None:
         return None
     today = dt_util.now().date()
+    variables = runner.variables(occurrence)
     return {
         "id": occurrence.id,
         "day": occurrence.day.isoformat(),
@@ -727,9 +734,11 @@ def occurrence_payload(
         "titles": [event.summary for event in occurrence.events],
         "days_until": (occurrence.day - today).days,
         "colors": hit_colors(runner.rule, occurrence.events),
+        "badges": hit_badges(runner.rule, occurrence.events),
+        "headline": render_headline(runner.rule, occurrence.events, variables),
         "tags": runner.tag_ids(occurrence),
         "all_day": all(event.all_day for event in occurrence.events),
-        "variables": runner.variables(occurrence),
+        "variables": variables,
     }
 
 

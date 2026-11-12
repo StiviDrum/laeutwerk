@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import LaeutwerkConfigEntry
 from .entity import LaeutwerkEntity, async_setup_rule_entities
 from .manager import LaeutwerkManager, occurrence_payload
+from .matching import render_headline
 from .model import (
     STATE_DONE,
     STATE_INACTIVE,
@@ -69,7 +70,7 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Attributes per SPEC B6."""
-        attributes: dict[str, Any] = {"rule_id": self._rule_id}
+        attributes: dict[str, Any] = {"rule_id": self._rule_id, "headline": None}
         if (runner := self.runner) is None:
             return attributes
         upcoming = runner.next_occurrence()
@@ -82,6 +83,9 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
                 "event_start": current.start.isoformat(),
                 "bundled_titles": [event.summary for event in current.events],
                 "variables": runner.variables(current),
+                "headline": render_headline(
+                    runner.rule, current.events, runner.variables(current)
+                ),
                 "acknowledged_by": current.acknowledged_by,
                 "acknowledged_at": (
                     current.finished_at.isoformat()

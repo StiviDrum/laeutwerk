@@ -285,6 +285,40 @@ def hit_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
     return [color for color in colors if color]
 
 
+def hit_badges(rule: Rule, events: Iterable[CalendarEvent]) -> list[dict[str, Any]]:
+    """Icon and colour per matching keyword row, identical pairs removed.
+
+    Colour: the row's own, else the legacy column colour (``color_from`` or a
+    column named farbe / color). The card adds the rule's icon / colour as the
+    fallback.
+    """
+    rows = hits_of(rule, list(events))
+    column = next(
+        (s.config["color_from"] for s in rule.signals if s.config.get("color_from")),
+        None,
+    ) or next((c for c in COLOR_COLUMNS if c in rule.filter.columns), None)
+    badges: list[dict[str, Any]] = []
+    for row in rows:
+        color = row.color or (color_hex(row.values.get(column)) if column else None)
+        badge = {"icon": row.icon, "color": color}
+        if badge not in badges:
+            badges.append(badge)
+    return badges
+
+
+def render_headline(
+    rule: Rule, events: Iterable[CalendarEvent], variables: Mapping[str, str]
+) -> str | None:
+    """Render the rule headline (plural variant for several hits); None if unset."""
+    events = list(events)
+    template = (
+        rule.headline_plural
+        if rule.headline_plural and is_plural(rule, events)
+        else rule.headline
+    )
+    return render(template, variables) if template else None
+
+
 def is_plural(rule: Rule, events: Iterable[CalendarEvent]) -> bool:
     """Whether the plural text variants apply (more than one hit / event)."""
     events = list(events)

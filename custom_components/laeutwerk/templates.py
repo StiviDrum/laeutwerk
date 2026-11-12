@@ -50,16 +50,28 @@ def _builtin_de() -> list[dict[str, Any]]:
                         "rows": [
                             {
                                 "match": "Papier",
+                                "icon": "mdi:newspaper-variant-outline",
                                 "tonne": "Papiertonne",
                                 "farbe": "blau",
                             },
-                            {"match": "Bio", "tonne": "Biotonne", "farbe": "braun"},
+                            {
+                                "match": "Bio",
+                                "icon": "mdi:leaf",
+                                "tonne": "Biotonne",
+                                "farbe": "braun",
+                            },
                             {
                                 "match": "Rest",
+                                "icon": "mdi:trash-can-outline",
                                 "tonne": "Restmülltonne",
                                 "farbe": "grau",
                             },
-                            {"match": "Gelb", "tonne": "gelben Sack", "farbe": "gelb"},
+                            {
+                                "match": "Gelb",
+                                "icon": "mdi:recycle",
+                                "tonne": "gelben Sack",
+                                "farbe": "gelb",
+                            },
                         ],
                     },
                 },
