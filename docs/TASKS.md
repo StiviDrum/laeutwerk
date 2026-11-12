@@ -264,6 +264,33 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Zuständigkeit Steven erklärt: wirkt nur auf Push mit Empfänger „Zuständige“, `{zustaendig}` und Statistik; fest angehakte Personen bekommen den Push immer, quittieren darf jeder
 - [x] Release v0.8.1
 
+## 0.9.0 – Stevens Sammelliste (go 12.11.2026)
+Schnittstellen (fest, Backend und Karte arbeiten parallel dagegen):
+- `assignee`: `{persons, rotation, substitute?: person.x, substitute_when?: {entity_id, state}}`; Vertretung wird beim Erinnern geprüft → `reminder.assignee` = Vertretung, `reminder.substitute_for` = ursprüngliche Person; Payload `assignee_name`, `substitute_for_name`
+- `laeutwerk/persons`: nur Personen mit Mobile-App-Gerät
+- `lookahead_days`: int 1–365, Standard 14, ≥ früheste Erinnerung + 1 Tag
+- Quelle Auslöser: `start_triggers` (Trigger-Liste wie Automationen); genau eine Quelle: `sources` | `start_triggers` | `interval`; Erinnerung sofort beim Auslösen, keine zweite solange eine offen ist; `expire` zusätzlich `+<dauer>` (nach Start), Standard bei Auslöser `+12h`; Dienst `laeutwerk.start`
+- `visible`: bool, Standard true (false = nicht in der Übersicht)
+- `confirm`: `{message, clear_after (s, Standard 10)} | null` – Bestätigung an die erledigende Person, sonst Zuständige; `on_done`-Variablen `person_entity`, `zustaendig_entity`
+- Haushalts-Ruhezeit: Integrations-Optionen `quiet` (Liste wie beim Signal); WebSocket `laeutwerk/settings` → `{quiet}`
+- `sensor.laeutwerk_offen`: Anzahl offener Erinnerungen, Attribut `reminders` [{rule_id, rule_name, headline, assignee_name, since}]
+
+- [ ] 1 Zuständigkeit mit Vertretung
+- [ ] 2 Nur Personen mit Companion App
+- [ ] 3 Bereiche je Schritt mit Trennstrich
+- [ ] 4 Abstand der „?“ einheitlich
+- [ ] 5 Vorausschauen (Tage) je Regel
+- [ ] 6 Quellen Kalender · Auslöser · Intervall
+- [ ] 7 Wiederholen: einmal · wiederholen
+- [ ] 8 Regel in der Übersicht ausblenden
+- [ ] 9 Bestätigung beim Erledigen
+- [ ] 10 Haushalts-Ruhezeit
+- [ ] 11 Wiederholte Pushs ersetzen (prüfen: `tag` je Erinnerung existiert)
+- [ ] 12 Gesamtsensor offene Erinnerungen
+- [ ] 13 README komplett (docs-writer)
+- [ ] 14 Code-Prüfung, Editor nachladen, Kalender-Abfragen bündeln, Altlasten raus (keine Rücksicht auf alte Regeln – Stevens Vorgabe)
+- [ ] Release v0.9.0
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut
