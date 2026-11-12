@@ -37,11 +37,7 @@ class _VersionedStore(Store[StoredData]):
         old_minor_version: int,
         old_data: dict[str, Any],
     ) -> StoredData:
-        """Migrate older storage versions.
-
-        1.1 -> 1.2: history per rule (starts empty).
-        1.2 -> 1.3: user templates (start empty).
-        """
+        """Load an older store as is; missing parts start empty."""
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
         )

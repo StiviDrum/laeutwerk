@@ -8,10 +8,8 @@ import { property, state } from "lit/decorators.js";
 import {
   SIGNAL_ICONS,
   availableVariables,
-  colorNameToHex,
   columnNames,
   defaultSignal,
-  mapTargetsToPersons,
   renderTemplate,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -83,10 +81,6 @@ export class LaeutwerkSignalEditor extends LitElement {
     if (changed.has("signal") && this.signal) {
       this._sig = JSON.parse(JSON.stringify(this.signal)) as Signal;
       this._openSec = new Set(["what", "texts"]);
-    }
-    if ((changed.has("signal") || changed.has("_persons")) && this._sig && this._persons) {
-      const mapped = mapTargetsToPersons(this._sig, this._persons);
-      if (mapped !== this._sig) this._sig = mapped;
     }
   }
 
@@ -648,7 +642,7 @@ export class LaeutwerkSignalEditor extends LitElement {
               .selector=${{ color_rgb: {} }}
               .swatches=${keywordColors.map((k) => ({ label: k.match, color: k.color }))}
               .suggest=${keywordColors[0]?.color ?? ""}
-              .value=${s.color ? (colorNameToHex(s.color) ?? s.color) : ""}
+              .value=${s.color ?? ""}
               @value-changed=${(e: CustomEvent<{ value: string }>) =>
                 this._set({ color: e.detail.value || undefined })}
             ></laeutwerk-field>`

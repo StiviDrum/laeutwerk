@@ -79,7 +79,6 @@ async def test_crud(
     assert status["state"] == "planned"
     reminder = status["reminders"][0]
     assert reminder["titles"] == ["Bio", "Papier"]
-    assert reminder["colors"] == ["#008000", "#0000ff"]
     assert reminder["next_reminder_at"] == "2026-11-16T16:00:00+00:00"
     assert status["next_event"]["all_day"] is True
 
@@ -183,7 +182,6 @@ async def test_preview_saved_and_unsaved(
     assert first["variables"]["tonnen"] == "Biotonne und Papiertonne"
     assert first["reminder_times"] == ["2026-11-16T16:00:00+00:00"]
     assert first["expires_at"] == "2026-11-17T11:00:00+00:00"
-    assert first["colors"] == ["#008000", "#0000ff"]
     assert saved["total_events"] == 4
     assert saved["errors"] == {}
     assert "tonnen" in saved["variables"]

@@ -20,20 +20,11 @@ import {
   reminderTitle,
   tasks,
 } from "./format";
-import { LaeutwerkCardEditor } from "./card-editor";
-import { LaeutwerkColorPopup } from "./color-picker";
 import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
-import { LaeutwerkField } from "./ha-field";
-import { LaeutwerkHelpTip } from "./help-tip";
-import { LaeutwerkKeywordLook } from "./keyword-look";
-import { LaeutwerkSuggest } from "./suggest-field";
 import { localizer, type Localizer, type StringKey } from "./localize";
 import { defineElements } from "./register";
+import type { LaeutwerkTaskDialog } from "./task-dialog";
 import { applyRuleEvent } from "./rule-events";
-import { LaeutwerkRuleEditor } from "./rule-editor";
-import { LaeutwerkSignalEditor } from "./signal-editor";
-import { LaeutwerkTaskDialog } from "./task-dialog";
-import { LaeutwerkTemplatePicker } from "./template-picker";
 import { shared, tokens } from "./styles";
 import type {
   Badge,
@@ -67,10 +58,22 @@ export class LaeutwerkCard extends LitElement {
   @state() private _search = "";
   private _toastTimer?: number;
   private _dialog?: LaeutwerkTaskDialog;
+  private _dialogLoading = false;
+  private _filtered?: { rules: Rule[]; only: string[]; result: Rule[] };
+  private _memo?: {
+    rules: Rule[];
+    now: Date;
+    lang: string;
+    overview: ReturnType<typeof buildOverview>;
+    date: string;
+  };
   /** Rule open in the editor (new rule: without id). */
   @state() private _editing?: Rule;
   /** Template picker for a new rule is open. */
   @state() private _picking = false;
+  /** The lazy editor chunk is loaded and its elements are defined. */
+  @state() private _editorsReady = false;
+  private _editorsLoading = false;
   @state() private _now = new Date();
   /** History of the rule shown with view: rule. */
   @state() private _history?: HistoryEntry[];
@@ -98,7 +101,8 @@ export class LaeutwerkCard extends LitElement {
     return { columns: 12, min_columns: 6, rows: "auto" };
   }
 
-  public static getConfigElement(): HTMLElement {
+  public static async getConfigElement(): Promise<HTMLElement> {
+    await import("./card-editor-entry").then((m) => m.ready);
     return document.createElement("laeutwerk-card-editor");
   }
 
@@ -143,7 +147,22 @@ export class LaeutwerkCard extends LitElement {
     );
   }
 
+  /** Load the editor chunk on first use (resolves once its elements exist). */
+  private _loadEditors(): Promise<void> {
+    return import("./editors").then((m) => {
+      this._editorsReady = true;
+      return m.ready;
+    });
+  }
+
   protected willUpdate(changed: PropertyValues): void {
+    if ((this._editing || this._picking) && !this._editorsReady && !this._editorsLoading) {
+      this._editorsLoading = true;
+      this._loadEditors().catch((e) => {
+        this._editorsLoading = false;
+        this._error = String(e);
+      });
+    }
     if (changed.has("hass") && this.hass) {
       this.toggleAttribute("dark", !!this.hass.themes?.darkMode);
       if (!this._unsub && this.isConnected) this._subscribe();
@@ -332,6 +351,9 @@ export class LaeutwerkCard extends LitElement {
       </ha-card>`;
     }
     if (!this._rules) return html`<ha-card><div class="message">${l.t("loading")}</div></ha-card>`;
+    if ((this._picking || this._editing) && !this._editorsReady) {
+      return html`<ha-card><div class="message">${l.t("loading")}</div></ha-card>`;
+    }
     if (this._picking) {
       return html`<ha-card>
         <laeutwerk-template-picker
@@ -369,7 +391,12 @@ export class LaeutwerkCard extends LitElement {
   private _rulesFiltered(): Rule[] {
     const only = this._config?.rules;
     const rules = this._rules ?? [];
-    return only?.length ? rules.filter((r) => only.includes(r.id ?? "")) : rules;
+    if (!only?.length) return rules;
+    const c = this._filtered;
+    if (c && c.rules === rules && c.only === only) return c.result;
+    const result = rules.filter((r) => only.includes(r.id ?? ""));
+    this._filtered = { rules, only, result };
+    return result;
   }
 
   private _renderOverview(
@@ -378,13 +405,23 @@ export class LaeutwerkCard extends LitElement {
   ): TemplateResult {
     const l = this._l;
     const cfg = this._config!;
-    const overview = buildOverview(rules, this._now, this._tz);
-    const date = new Intl.DateTimeFormat(l.lang, {
-      timeZone: this._tz,
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }).format(this._now);
+    const memo = this._memo;
+    if (!memo || memo.rules !== rules || memo.now !== this._now || memo.lang !== l.lang) {
+      const date = new Intl.DateTimeFormat(l.lang, {
+        timeZone: this._tz,
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      }).format(this._now);
+      this._memo = {
+        rules,
+        now: this._now,
+        lang: l.lang,
+        overview: buildOverview(rules, this._now, this._tz),
+        date,
+      };
+    }
+    const { overview, date } = this._memo!;
     const empty = !overview.open.length;
     return html`<ha-card>
       <div class="head">
@@ -523,11 +560,7 @@ export class LaeutwerkCard extends LitElement {
    * (icon + colour, each falling back to the rule) fills the circle; more
    * distinct badges of a bundle are small overlapping circles (max. 2).
    */
-  private _icon(
-    rule: Rule,
-    small = false,
-    item?: { badges?: Badge[]; colors?: string[] },
-  ): TemplateResult {
+  private _icon(rule: Rule, small = false, item?: { badges?: Badge[] }): TemplateResult {
     const looks = item ? badgeLooks(rule, item) : [badgeLook(rule, undefined)];
     const circle = (look: { icon: string; color: string | null }, extra = false) => {
       const color = look.color ?? "var(--lw-text-2)";
@@ -853,7 +886,14 @@ export class LaeutwerkCard extends LitElement {
   }
 
   /** The task dialog lives at <body> level (not clipped by the grid cell). */
-  private _openDialog(): void {
+  private async _openDialog(): Promise<void> {
+    if (this._dialog || this._dialogLoading) return;
+    this._dialogLoading = true;
+    try {
+      await this._loadEditors();
+    } finally {
+      this._dialogLoading = false;
+    }
     if (this._dialog) return;
     const dialog = document.createElement("laeutwerk-task-dialog") as LaeutwerkTaskDialog;
     dialog.hass = this.hass;
@@ -1137,17 +1177,7 @@ export { CARD_VERSION };
 
 void defineElements([
   ["laeutwerk-card", LaeutwerkCard],
-  ["laeutwerk-rule-editor", LaeutwerkRuleEditor],
-  ["laeutwerk-signal-editor", LaeutwerkSignalEditor],
-  ["laeutwerk-field", LaeutwerkField],
-  ["laeutwerk-help-tip", LaeutwerkHelpTip],
-  ["laeutwerk-keyword-look", LaeutwerkKeywordLook],
-  ["laeutwerk-suggest", LaeutwerkSuggest],
-  ["laeutwerk-card-editor", LaeutwerkCardEditor],
-  ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
-  ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
   ["laeutwerk-confirm", LaeutwerkConfirm],
-  ["laeutwerk-color-popup", LaeutwerkColorPopup],
 ]);
 
 declare global {

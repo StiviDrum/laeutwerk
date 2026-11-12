@@ -76,9 +76,10 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         )
         return
 
-    url = f"{CARD_URL_BASE}/{CARD_FILENAME}"
+    # The whole directory: the card loads hashed chunks lazily.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(url, str(card_path), cache_headers=True)]
+        [StaticPathConfig(CARD_URL_BASE, str(card_path.parent), cache_headers=True)]
     )
+    url = f"{CARD_URL_BASE}/{CARD_FILENAME}"
     # Content hash busts the browser cache after updates and dev rebuilds.
     add_extra_js_url(hass, f"{url}?v={digest}")

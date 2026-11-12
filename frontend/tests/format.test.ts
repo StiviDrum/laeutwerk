@@ -14,11 +14,9 @@ import {
   renderTemplate,
   signalSummary,
   signalTitle,
-  colorNameToHex,
-  mapTargetsToPersons,
 } from "../src/format";
 import { localizer } from "../src/localize";
-import type { PersonInfo, Reminder, Rule, Signal } from "../src/types";
+import type { Reminder, Rule } from "../src/types";
 
 const TZ = "Europe/Berlin";
 const de = localizer("de");
@@ -516,51 +514,6 @@ describe("signal titles and stage colours", () => {
     expect(stageColor(staged, undefined)).toBeNull();
     expect(stageColor(staged, 1)).toBe("#123456");
     expect(stageColor(staged, 2)).toBe("#ff5a6e"); // default for stage 2
-  });
-});
-
-describe("push targets of older signals", () => {
-  const persons = [
-    { entity_id: "person.steven", name: "Steven", notify: ["notify.mobile_app_pixel"] },
-    { entity_id: "person.anna", name: "Anna", notify: ["notify.mobile_app_iphone"] },
-  ] as PersonInfo[];
-  const push = (extra: Partial<Signal>) =>
-    ({ type: "notify", enabled: true, when: "now", ...extra }) as Signal;
-
-  it("ticks the person of a phone and keeps other notify actions", () => {
-    const mapped = mapTargetsToPersons(
-      push({ targets: ["notify.mobile_app_pixel", "notify.alexa_media_kueche"] }),
-      persons,
-    );
-    expect(mapped.audience).toBe("persons");
-    expect(mapped.persons).toEqual(["person.steven"]);
-    expect(mapped.targets).toEqual(["notify.alexa_media_kueche"]);
-  });
-
-  it("adds to ticked persons and drops the list when everything is mapped", () => {
-    const mapped = mapTargetsToPersons(
-      push({ audience: "persons", persons: ["person.anna"], targets: ["notify.mobile_app_pixel"] }),
-      persons,
-    );
-    expect(mapped.persons).toEqual(["person.anna", "person.steven"]);
-    expect(mapped.targets).toBeUndefined();
-  });
-
-  it("leaves signals alone it cannot map without changing who gets it", () => {
-    const present = push({ audience: "present", targets: ["notify.mobile_app_pixel"] });
-    expect(mapTargetsToPersons(present, persons)).toBe(present);
-    const unknown = push({ targets: ["notify.alexa_media_kueche"] });
-    expect(mapTargetsToPersons(unknown, persons)).toBe(unknown);
-    const everyone = push({ audience: "all", targets: ["notify.mobile_app_iphone"] });
-    expect(mapTargetsToPersons(everyone, persons)).toEqual(push({ audience: "all" }));
-  });
-});
-
-describe("colour names", () => {
-  it("turns older colour words into hex", () => {
-    expect(colorNameToHex("blau")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(colorNameToHex("#00FF00")).toBe("#00ff00");
-    expect(colorNameToHex("irgendwas")).toBeNull();
   });
 });
 

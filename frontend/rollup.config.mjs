@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync } from "node:fs";
 import nodeResolve from "@rollup/plugin-node-resolve";
 import replace from "@rollup/plugin-replace";
 import terser from "@rollup/plugin-terser";
@@ -27,17 +27,27 @@ const minifyCssPlugin = {
     return id.endsWith(".ts") ? { code: minifyCss(code), map: null } : null;
   },
 };
+// Stale chunks (hashed names) must not pile up in the integration folder.
+const cleanChunks = {
+  name: "clean-chunks",
+  buildStart() {
+    const dir = new URL("../custom_components/laeutwerk/frontend/", import.meta.url);
+    for (const f of readdirSync(dir)) if (/^chunk-.*\.js$/.test(f)) rmSync(new URL(f, dir));
+  },
+};
 const dev = !!process.env.ROLLUP_WATCH;
 
 export default {
   input: "src/laeutwerk-card.ts",
   output: {
-    file: "../custom_components/laeutwerk/frontend/laeutwerk-card.js",
+    dir: "../custom_components/laeutwerk/frontend",
+    entryFileNames: "laeutwerk-card.js",
+    chunkFileNames: "chunk-[name]-[hash].js",
     format: "es",
     sourcemap: false,
-    inlineDynamicImports: true,
   },
   plugins: [
+    cleanChunks,
     replace({ preventAssignment: true, values: { __VERSION__: JSON.stringify(pkg.version) } }),
     nodeResolve(),
     typescript({ tsconfig: "./tsconfig.json", include: ["src/**/*.ts"] }),

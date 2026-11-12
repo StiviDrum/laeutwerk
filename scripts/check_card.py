@@ -305,6 +305,9 @@ async def main() -> None:
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
                     " c._editing = c._rules[0]; await c.updateComplete;"
+                    # 0.9.0: the editors are a lazily loaded chunk – wait for it.
+                    " for (let i = 0; i < 50 && !c.shadowRoot.querySelector("
+                    "  'laeutwerk-rule-editor'); i++) await new Promise(r => setTimeout(r, 100));"
                     " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
                     " await e.updateComplete;"
                     " e._open = new Set([1, 2, 3, 4, 5, 6, 7]); return true })()"

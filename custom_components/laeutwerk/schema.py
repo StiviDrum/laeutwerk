@@ -220,13 +220,7 @@ def _keywords(value: Any) -> dict[str, Any]:
     rows = []
     for index, raw in enumerate(data["rows"], start=1):
         row = {str(key).lower(): val for key, val in raw.items()}
-        # "color" is the keyword's own colour – unless an older table has a
-        # column of that name.
-        own = list(_ROW_KEYS)
-        if "color" not in columns:
-            own.append("color")
-        if "icon" not in columns:
-            own.append("icon")
+        own = [*_ROW_KEYS, "color", "icon"]
         if unknown := set(row) - set(columns) - set(own):
             raise vol.Invalid(
                 f"keyword row {index}: unknown column(s) {', '.join(sorted(unknown))}"

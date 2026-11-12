@@ -18,7 +18,6 @@ import {
   relativeDayTime,
   colName,
   colPlural,
-  colorNameToHex,
   signalTitle,
   stageColor,
   columnNames,
@@ -78,11 +77,9 @@ const PALETTE = [
   "#2fd4d4",
 ];
 
-/** Colour offered for a keyword: from an older colour column, else a palette. */
-function suggestColor(row: KeywordRow, index: number, columns: string[]): string {
-  const column = ["farbe", "colour"].find((c) => columns.includes(c));
-  const named = column && row[column] ? colorNameToHex(String(row[column])) : null;
-  return named ?? PALETTE[index % PALETTE.length];
+/** Colour offered for a keyword. */
+function suggestColor(index: number): string {
+  return PALETTE[index % PALETTE.length];
 }
 
 function clone<T>(value: T): T {
@@ -409,14 +406,8 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   /** Keyword colours offered as swatches in every colour popup. */
   private _kwSwatches(): { label: string; color: string }[] {
-    // Own keyword colour, else a colour from an older "farbe"/"colour" column.
-    const columns = this._rule.filter.keywords.columns ?? [];
-    const column = ["farbe", "colour"].find((c) => columns.includes(c));
     return this._rule.filter.keywords.rows
-      .map((r) => ({
-        label: String(r.match),
-        color: r.color ?? (column && r[column] ? colorNameToHex(String(r[column])) : null),
-      }))
+      .map((r) => ({ label: String(r.match), color: r.color }))
       .filter((s): s is { label: string; color: string } => !!s.color);
   }
 
@@ -433,27 +424,6 @@ export class LaeutwerkRuleEditor extends LitElement {
         if (next.mode === "contains") delete next.mode;
         return next;
       }),
-    );
-  }
-
-  /** An older text column with colour names whose rows have no colour yet. */
-  private _colorColumn(): string | undefined {
-    const names = columnNames(this._rule);
-    const column = ["farbe", "colour"].find((c) => names.includes(c));
-    if (!column) return undefined;
-    const rows = this._rule.filter.keywords.rows;
-    return rows.some((r) => !r.color && r[column] && colorNameToHex(String(r[column])))
-      ? column
-      : undefined;
-  }
-
-  private _takeColumnColors(): void {
-    const column = this._colorColumn();
-    if (!column) return;
-    this._setRows(
-      this._rule.filter.keywords.rows.map((r) =>
-        r.color || !r[column] ? r : { ...r, color: colorNameToHex(String(r[column])) ?? undefined },
-      ),
     );
   }
 
@@ -547,7 +517,7 @@ export class LaeutwerkRuleEditor extends LitElement {
         .signal=${this._signal.signal}
         .sample=${this._preview?.events[0]?.variables ?? {}}
         .ruleId=${this.rule.id}
-        .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => e.colors))]}
+        .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => (e.badges ?? []).map((b) => b.color)))]}
         @apply=${this._applySignal}
         @cancel=${() => (this._signal = undefined)}
         @delete=${this._deleteSignal}
@@ -863,12 +833,8 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   /** Round preview of a keyword's icon in its colour (with the rule as fallback). */
-  private _kwBadge(row: KeywordRow, columns: string[], size = 36): TemplateResult {
-    const named = ["farbe", "colour"].find((c) => columns.includes(c));
-    const look = badgeLook(this._rule, {
-      icon: row.icon ?? null,
-      color: row.color ?? (named && row[named] ? colorNameToHex(String(row[named])) : null),
-    });
+  private _kwBadge(row: KeywordRow, size = 36): TemplateResult {
+    const look = badgeLook(this._rule, { icon: row.icon ?? null, color: row.color ?? null });
     const color = look.color ?? "var(--lw-text-2)";
     return html`<span
       class="kwbadge"
@@ -878,7 +844,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   /** Up to three small badges of a preview hit. */
-  private _hitBadges(event: { badges?: Badge[]; colors?: string[] }): TemplateResult {
+  private _hitBadges(event: { badges?: Badge[] }): TemplateResult {
     const looks = badgeLooks(this._rule, event).slice(0, 3);
     return html`<span class="hitbadges">
       ${looks.map((look) => {
@@ -958,9 +924,9 @@ export class LaeutwerkRuleEditor extends LitElement {
                         class="lookbtn"
                         aria-label=${l.t("kw_look_edit")}
                         title=${l.t("kw_look_edit")}
-                        @click=${() => this._editLook(i, columns)}
+                        @click=${() => this._editLook(i)}
                       >
-                        ${this._kwBadge(row, columns, 38)}
+                        ${this._kwBadge(row, 38)}
                         ${
                           row.icon || row.color
                             ? nothing
@@ -1030,15 +996,6 @@ export class LaeutwerkRuleEditor extends LitElement {
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_column")}
           </button>
           ${helpTip(l, "help_plural")}
-          ${
-            this._colorColumn()
-              ? html`<button class="addbtn accent" @click=${this._takeColumnColors}>
-                  <ha-icon icon="mdi:palette-outline"></ha-icon>${l.t("colors_from_column", {
-                    column: this._colorColumn()!,
-                  })}
-                </button>`
-              : nothing
-          }
         </div>
         ${!rows.length ? html`<div class="hint">${l.t("no_keywords")}</div>` : nothing}
         ${this._suggestions()} ${this._previewList()}
@@ -1058,7 +1015,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   /** Open the icon/colour popup of keyword row `index`. */
-  private async _editLook(index: number, columns: string[]): Promise<void> {
+  private async _editLook(index: number): Promise<void> {
     const row = this._rule.filter.keywords.rows[index];
     if (!row) return;
     const result = await editKeywordLook({
@@ -1069,7 +1026,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       color: row.color ?? "",
       rule: this._rule,
       swatches: this._kwSwatches(),
-      suggest: suggestColor(row, index, columns),
+      suggest: suggestColor(index),
       dark: !!this.hass?.themes?.darkMode,
     });
     if (result === "delete") {
@@ -2077,7 +2034,7 @@ export class LaeutwerkRuleEditor extends LitElement {
         padding-bottom: 0;
         box-shadow: none;
         align-items: center;
-        gap: 0;
+        gap: 4px; /* same as .tiprow: every "?" sits equally close to its label */
       }
       .lookbtn {
         position: relative;

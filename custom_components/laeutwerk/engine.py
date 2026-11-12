@@ -595,23 +595,12 @@ class RuleRunner:
 
         Only acknowledgements by a person count: entries with just a user
         name (user without person) or by someone outside the rotation are
-        skipped. Entries from before 0.6.2 have no person entity and are
-        matched by name.
+        skipped.
         """
-        names = {
-            (
-                state.name if (state := self.hass.states.get(entity_id)) else ""
-            ): entity_id
-            for entity_id in persons
-        }
         for entry in self._history():
             if entry.get("state") != STATE_DONE:
                 continue
-            if "acknowledged_person" in entry:
-                person = entry["acknowledged_person"]
-            else:
-                person = names.get(entry.get("acknowledged_by") or "")
-            if person in persons:
+            if (person := entry.get("acknowledged_person")) in persons:
                 return person
         return None
 

@@ -80,29 +80,15 @@ class KeywordRow:
     icon: str | None = None
 
     @classmethod
-    def from_dict(
-        cls,
-        data: dict[str, Any],
-        *,
-        color_is_column: bool = False,
-        icon_is_column: bool = False,
-    ) -> KeywordRow:
-        """Create from the stored (flat) form.
-
-        ``color_is_column``: an older table has a column named "color"; then
-        "color" is that column's value, not the keyword colour.
-        """
-        own = ["match", "mode"]
-        if not color_is_column:
-            own.append("color")
-        if not icon_is_column:
-            own.append("icon")
+    def from_dict(cls, data: dict[str, Any]) -> KeywordRow:
+        """Create from the stored (flat) form."""
+        own = ("match", "mode", "color", "icon")
         return cls(
             match=data["match"],
             mode=data.get("mode", MATCH_CONTAINS),
             values={key: str(value) for key, value in data.items() if key not in own},
-            color=None if color_is_column else (data.get("color") or None),
-            icon=None if icon_is_column else (data.get("icon") or None),
+            color=data.get("color") or None,
+            icon=data.get("icon") or None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -162,14 +148,7 @@ class Filter:
         return cls(
             all_day=bool(data.get("all_day", False)),
             columns=[column_name(spec) for spec in specs],
-            rows=[
-                KeywordRow.from_dict(
-                    row,
-                    color_is_column="color" in [column_name(s) for s in specs],
-                    icon_is_column="icon" in [column_name(s) for s in specs],
-                )
-                for row in keywords.get("rows", [])
-            ],
+            rows=[KeywordRow.from_dict(row) for row in keywords.get("rows", [])],
             plurals={column_name(spec): column_plural(spec) for spec in specs},
         )
 

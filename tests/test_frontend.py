@@ -44,6 +44,10 @@ async def test_card_registered_and_served(
     assert resp.status == 200
     assert "laeutwerk" in await resp.text()
 
+    (card_bundle.parent / "chunk-editor-abc123.js").write_text("export default 1;")
+    resp = await client.get(f"{CARD_URL_BASE}/chunk-editor-abc123.js")
+    assert resp.status == 200
+
 
 async def test_missing_bundle_only_warns(
     hass: HomeAssistant,

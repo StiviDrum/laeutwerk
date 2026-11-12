@@ -40,7 +40,6 @@ from .matching import (
     Occurrence,
     build_occurrences,
     hit_badges,
-    hit_colors,
     match_event,
     render_headline,
     sample_occurrence,
@@ -674,7 +673,6 @@ class LaeutwerkManager:
         payload = reminder.to_dict()
         payload["titles"] = [event.summary for event in reminder.events]
         if rule := self.rules.get(rule_id):
-            payload["colors"] = hit_colors(rule, reminder.events)
             payload["badges"] = hit_badges(rule, reminder.events)
         if runner is not None:
             next_time = runner.next_reminder_time(reminder)
@@ -742,7 +740,6 @@ def occurrence_payload(
         "end": occurrence.end.isoformat(),
         "titles": [event.summary for event in occurrence.events],
         "days_until": (occurrence.day - today).days,
-        "colors": hit_colors(runner.rule, occurrence.events),
         "badges": hit_badges(runner.rule, occurrence.events),
         "headline": render_headline(runner.rule, occurrence.events, variables),
         "tags": runner.tag_ids(occurrence),

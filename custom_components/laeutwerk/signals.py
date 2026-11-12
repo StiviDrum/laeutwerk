@@ -322,8 +322,8 @@ def light_snapshot(state: State) -> dict[str, Any]:
 def light_colors(run: SignalRun) -> list[tuple[int, int, int]]:
     """Colours of a light signal, one per blink (they alternate).
 
-    The colours of the matching keywords, else a keyword column (older
-    tables), else the fixed colour; empty: the lamp keeps its colour.
+    The colours of the matching keywords, else a variable (``color_from``),
+    else the fixed colour; empty: the lamp keeps its colour.
     """
     config = run.signal.config
     if config.get("color_from_keyword"):

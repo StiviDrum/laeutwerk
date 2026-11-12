@@ -89,7 +89,6 @@ export interface Reminder {
   end: string;
   state: ReminderState;
   titles: string[];
-  colors?: string[];
   /** Headline rendered by the backend from the rule's headline template. */
   headline?: string | null;
   /** One badge per matching keyword row, in order. */
@@ -133,7 +132,6 @@ export interface UpcomingEvent {
   end: string;
   titles: string[];
   days_until: number;
-  colors: string[];
   headline?: string | null;
   badges?: Badge[];
   all_day: boolean;

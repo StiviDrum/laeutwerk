@@ -11,7 +11,6 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .colors import color_hex
 from .model import (
     INTERVAL_SOURCE,
     MATCH_REGEX,
@@ -282,50 +281,17 @@ def hits_of(rule: Rule, events: Iterable[CalendarEvent]) -> list[KeywordRow]:
     return hits
 
 
-COLOR_COLUMNS = ("farbe", "color", "colour")
-
-
 def keyword_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
     """Own colours (#rrggbb) of the matching keyword rows, unique, in order."""
     colors = [row.color for row in hits_of(rule, events) if row.color]
     return list(dict.fromkeys(colors))
 
 
-def hit_colors(rule: Rule, events: Iterable[CalendarEvent]) -> list[str]:
-    """Colours (#rrggbb) of the matching rows, for the dots in the card.
-
-    The keywords' own colours; for older tables the column a light signal
-    uses (``color_from``), else a column named farbe / color.
-    """
-    events = list(events)
-    if own := keyword_colors(rule, events):
-        return own
-    column = next(
-        (s.config["color_from"] for s in rule.signals if s.config.get("color_from")),
-        None,
-    ) or next((c for c in COLOR_COLUMNS if c in rule.filter.columns), None)
-    if column is None:
-        return []
-    colors = [color_hex(row.values.get(column)) for row in hits_of(rule, events)]
-    return [color for color in colors if color]
-
-
 def hit_badges(rule: Rule, events: Iterable[CalendarEvent]) -> list[dict[str, Any]]:
-    """Icon and colour per matching keyword row, identical pairs removed.
-
-    Colour: the row's own, else the legacy column colour (``color_from`` or a
-    column named farbe / color). The card adds the rule's icon / colour as the
-    fallback.
-    """
-    rows = hits_of(rule, list(events))
-    column = next(
-        (s.config["color_from"] for s in rule.signals if s.config.get("color_from")),
-        None,
-    ) or next((c for c in COLOR_COLUMNS if c in rule.filter.columns), None)
+    """Icon and colour per matching keyword row, identical pairs removed."""
     badges: list[dict[str, Any]] = []
-    for row in rows:
-        color = row.color or (color_hex(row.values.get(column)) if column else None)
-        badge = {"icon": row.icon, "color": color}
+    for row in hits_of(rule, list(events)):
+        badge = {"icon": row.icon, "color": row.color}
         if badge not in badges:
             badges.append(badge)
     return badges

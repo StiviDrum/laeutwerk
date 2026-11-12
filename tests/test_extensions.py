@@ -356,9 +356,21 @@ async def test_assignee_rotation_and_audience(
     # After the last one who did it.
     await manager.async_delete_rule("muell")
     manager.history["muell"] = [
-        {"state": "done", "acknowledged_by": "Steven"},
-        {"state": "done", "acknowledged_by": "Anna"},
-        {"state": "done", "acknowledged_by": "Steven"},
+        {
+            "state": "done",
+            "acknowledged_by": "Steven",
+            "acknowledged_person": "person.steven",
+        },
+        {
+            "state": "done",
+            "acknowledged_by": "Anna",
+            "acknowledged_person": "person.anna",
+        },
+        {
+            "state": "done",
+            "acknowledged_by": "Steven",
+            "acknowledged_person": "person.steven",
+        },
     ]
     await manager.async_create_rule(rule("after_last"))
     await hass.async_block_till_done()

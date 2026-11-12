@@ -12,7 +12,7 @@ import pytest
 
 from custom_components.laeutwerk import signals
 from custom_components.laeutwerk.compat import vol
-from custom_components.laeutwerk.matching import hit_colors, keyword_colors, parse_event
+from custom_components.laeutwerk.matching import keyword_colors, parse_event
 from custom_components.laeutwerk.model import Rule
 from custom_components.laeutwerk.schema import validate_rule
 
@@ -59,34 +59,16 @@ def test_stored_colour_and_dots() -> None:
     assert rule.filter.rows[0].color == "#0000ff"
     assert rule.to_dict()["filter"]["keywords"]["rows"] == rows
     assert keyword_colors(rule, events("Papier", "Bio")) == ["#0000ff", "#8b4513"]
-    assert hit_colors(rule, events("Bio", "Papier")) == ["#8b4513", "#0000ff"]
-    assert hit_colors(rule, events("Rest")) == []
+    assert keyword_colors(rule, events("Rest")) == []
 
 
-def test_invalid_colour_and_older_column_named_color() -> None:
+def test_invalid_colour() -> None:
     with pytest.raises(vol.Invalid, match="keyword row 1: 'blau' is not a colour"):
         validate_rule(
             muell_rule(
                 filter={"keywords": {"rows": [{"match": "Papier", "color": "blau"}]}}
             )
         )
-    # An older table with a column called "color": stays a normal column.
-    old = validate_rule(
-        muell_rule(
-            filter={
-                "keywords": {
-                    "columns": ["color"],
-                    "rows": [{"match": "Papier", "color": "blau"}],
-                }
-            }
-        )
-    )
-    rule = Rule.from_dict(old)
-    assert rule.filter.rows[0].values == {"color": "blau"}
-    assert rule.filter.rows[0].color is None
-    assert hit_colors(rule, events("Papier")) == [
-        "#0000ff"
-    ]  # via the column, as before
 
 
 @pytest.fixture(autouse=True)

@@ -36,17 +36,17 @@ def events(*titles: str):
 
 
 def rule_data(**changes: Any) -> dict[str, Any]:
-    """Bio: own icon + colour; Papier: legacy column colour only; Rest: nothing."""
+    """Bio: own icon + colour; Papier: colour only; Rest: nothing."""
     return muell_rule(
         filter={
             "all_day": True,
             "keywords": {
-                "columns": ["tonne", "farbe"],
+                "columns": ["tonne"],
                 "rows": [
                     {
                         "match": "Papier",
                         "tonne": "Papiertonne",
-                        "farbe": "blau",
+                        "color": "#0000ff",
                     },
                     {
                         "match": "Bio",
@@ -86,23 +86,6 @@ def test_empty_icon_is_omitted_and_invalid_rejected() -> None:
                 filter={"keywords": {"rows": [{"match": "Papier", "icon": "recycle"}]}}
             )
         )
-
-
-def test_legacy_icon_column_stays_a_column() -> None:
-    data = validate_rule(
-        muell_rule(
-            filter={
-                "keywords": {
-                    "columns": ["icon"],
-                    "rows": [{"match": "Papier", "icon": "zeitung"}],
-                }
-            }
-        )
-    )
-    rule = Rule.from_dict(data)
-    assert rule.filter.rows[0].values == {"icon": "zeitung"}
-    assert rule.filter.rows[0].icon is None
-    assert rule.to_dict()["filter"]["keywords"]["rows"][0]["icon"] == "zeitung"
 
 
 def test_headline_round_trip() -> None:
@@ -181,7 +164,6 @@ async def test_payloads_sensor_and_preview(
     reminder = status["reminders"][0]
     assert reminder["headline"] == "Morgen: Biotonne und Papiertonne"
     assert reminder["badges"] == expected
-    assert reminder["colors"] == ["#8b4513"]
     assert status["next_event"]["headline"] == "Morgen: Biotonne und Papiertonne"
     assert status["next_event"]["badges"] == expected
 

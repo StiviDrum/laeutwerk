@@ -80,15 +80,14 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
         attributes["next_event"] = upcoming.start.isoformat() if upcoming else None
         current = runner.current()
         if current is not None:
+            variables = runner.variables(current)
             attributes |= {
                 "reminder_id": current.id,
                 "event_title": current.events[0].summary if current.events else None,
                 "event_start": current.start.isoformat(),
                 "bundled_titles": [event.summary for event in current.events],
-                "variables": runner.variables(current),
-                "headline": render_headline(
-                    runner.rule, current.events, runner.variables(current)
-                ),
+                "variables": variables,
+                "headline": render_headline(runner.rule, current.events, variables),
                 "acknowledged_by": current.acknowledged_by,
                 "acknowledged_at": (
                     current.finished_at.isoformat()

@@ -55,13 +55,6 @@ describe("badge fallback", () => {
     expect(badgeLooks(rule, undefined)).toEqual([{ icon: "mdi:trash-can", color: "#2f6bff" }]);
     expect(badgeLooks(rule, { badges: [] })).toHaveLength(1);
   });
-
-  it("derives looks from the older colours list", () => {
-    expect(badgeLooks(rule, { colors: ["#111111", "#222222"] })).toEqual([
-      { icon: "mdi:trash-can", color: "#111111" },
-      { icon: "mdi:trash-can", color: "#222222" },
-    ]);
-  });
 });
 
 describe("headline", () => {

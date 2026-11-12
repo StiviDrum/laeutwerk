@@ -1,6 +1,6 @@
 /** Pure display logic of the card (tested with vitest). */
 import type { Localizer, StringKey } from "./localize";
-import type { Badge, ColumnSpec, PersonInfo, Reminder, Rule, Signal } from "./types";
+import type { Badge, ColumnSpec, Reminder, Rule, Signal } from "./types";
 
 const DAY_MS = 86_400_000;
 
@@ -100,17 +100,15 @@ export function badgeLook(
 }
 
 /**
- * Distinct looks of a reminder/event, in order (at least one). Without
- * badges the older `colors` list is used, else just the rule's look.
+ * Distinct looks of a reminder/event, in order (at least one); without
+ * badges just the rule's look.
  */
 export function badgeLooks(
   rule: { icon?: string | null; color?: string | null } | undefined,
-  item: { badges?: Badge[]; colors?: string[] } | undefined,
+  item: { badges?: Badge[] } | undefined,
   defaultIcon = DEFAULT_ICON,
 ): (Badge & { icon: string })[] {
-  const source: Partial<Badge>[] = item?.badges?.length
-    ? item.badges
-    : (item?.colors ?? []).map((color) => ({ icon: null, color }));
+  const source: Partial<Badge>[] = item?.badges ?? [];
   const looks: (Badge & { icon: string })[] = [];
   for (const badge of source) {
     const look = badgeLook(rule, badge, defaultIcon);
@@ -827,77 +825,6 @@ export function tasks(rules: Rule[], only?: string[]): Task[] {
       ? (t.reminder.expires_at ?? t.reminder.start)
       : (t.reminder.snoozed_until ?? t.reminder.next_reminder_at ?? t.reminder.start);
   return list.sort((a, b) => Number(b.open) - Number(a.open) || key(a).localeCompare(key(b)));
-}
-
-/** Colour names of older "farbe" columns (German / English) as #rrggbb. */
-const COLOR_NAMES: Record<string, string> = {
-  rot: "#ff0000",
-  red: "#ff0000",
-  grün: "#008000",
-  gruen: "#008000",
-  green: "#008000",
-  blau: "#0000ff",
-  blue: "#0000ff",
-  gelb: "#ffff00",
-  yellow: "#ffff00",
-  orange: "#ffa500",
-  lila: "#800080",
-  violett: "#ee82ee",
-  purple: "#800080",
-  pink: "#ff1493",
-  rosa: "#ffc0cb",
-  türkis: "#40e0d0",
-  tuerkis: "#40e0d0",
-  turquoise: "#40e0d0",
-  weiß: "#ffffff",
-  weiss: "#ffffff",
-  white: "#ffffff",
-  braun: "#8b4513",
-  brown: "#8b4513",
-  grau: "#808080",
-  grey: "#808080",
-  gray: "#808080",
-  schwarz: "#000000",
-  black: "#000000",
-};
-
-/** "blau", "#00f", "#0000ff" -> "#0000ff"; null if not understood. */
-export function colorNameToHex(value: string): string | null {
-  const text = value.trim().toLowerCase();
-  if (/^#[0-9a-f]{6}$/.test(text)) return text;
-  if (/^#[0-9a-f]{3}$/.test(text)) {
-    return `#${[...text.slice(1)].map((c) => c + c).join("")}`;
-  }
-  return COLOR_NAMES[text] ?? null;
-}
-
-/**
- * Older push signals listed notify actions; the ones of a person's phone
- * become that person (ticked). Left alone with an "only who is home" rule,
- * since a notify action was sent regardless of presence.
- * Returns the same object when nothing changes.
- */
-export function mapTargetsToPersons(signal: Signal, persons: PersonInfo[]): Signal {
-  const targets = signal.targets ?? [];
-  if (signal.type !== "notify" || !targets.length || signal.audience === "assignee") return signal;
-  if (signal.audience === "present" || signal.only_present) return signal;
-  const everyone = signal.audience === "all";
-  const ticked = new Set(everyone ? persons.map((p) => p.entity_id) : (signal.persons ?? []));
-  const rest: string[] = [];
-  for (const target of targets) {
-    const person = persons.find((p) => p.notify.includes(target));
-    if (person) ticked.add(person.entity_id);
-    else rest.push(target);
-  }
-  if (rest.length === targets.length) return signal;
-  const next: Signal = { ...signal };
-  if (rest.length) next.targets = rest;
-  else delete next.targets;
-  if (!everyone) {
-    next.audience = "persons";
-    next.persons = [...ticked];
-  }
-  return next;
 }
 
 export interface HeadlineLine {
