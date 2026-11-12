@@ -275,21 +275,27 @@ Schnittstellen (fest, Backend und Karte arbeiten parallel dagegen):
 - Haushalts-Ruhezeit: Integrations-Optionen `quiet` (Liste wie beim Signal); WebSocket `laeutwerk/settings` → `{quiet}`
 - `sensor.laeutwerk_offen`: Anzahl offener Erinnerungen, Attribut `reminders` [{rule_id, rule_name, headline, assignee_name, since}]
 
-- [ ] 1 Zuständigkeit mit Vertretung
-- [ ] 2 Nur Personen mit Companion App
-- [ ] 3 Bereiche je Schritt mit Trennstrich
-- [ ] 4 Abstand der „?“ einheitlich
-- [ ] 5 Vorausschauen (Tage) je Regel
-- [ ] 6 Quellen Kalender · Auslöser · Intervall
-- [ ] 7 Wiederholen: einmal · wiederholen
-- [ ] 8 Regel in der Übersicht ausblenden
-- [ ] 9 Bestätigung beim Erledigen
-- [ ] 10 Haushalts-Ruhezeit
-- [ ] 11 Wiederholte Pushs ersetzen (prüfen: `tag` je Erinnerung existiert)
-- [ ] 12 Gesamtsensor offene Erinnerungen
-- [ ] 13 README komplett (docs-writer)
-- [ ] 14 Code-Prüfung, Editor nachladen, Kalender-Abfragen bündeln, Altlasten raus (keine Rücksicht auf alte Regeln – Stevens Vorgabe)
-- [ ] Release v0.9.0
+- [x] 1 Zuständigkeit mit Vertretung
+- [x] 2 Nur Personen mit Companion App
+- [x] 3 Bereiche je Schritt mit Trennstrich
+- [x] 4 Abstand der „?“ einheitlich
+- [x] 5 Vorausschauen (Tage) je Regel
+- [x] 6 Quellen Kalender · Auslöser · Intervall
+- [x] 7 Wiederholen: einmal · wiederholen
+- [x] 8 Regel in der Übersicht ausblenden
+- [x] 9 Bestätigung beim Erledigen
+- [x] 10 Haushalts-Ruhezeit
+- [x] 11 Wiederholte Pushs ersetzen (prüfen: `tag` je Erinnerung existiert)
+- [x] 12 Gesamtsensor offene Erinnerungen
+- [x] 13 README komplett (docs-writer)
+- [x] 14 Code-Prüfung, Editor nachladen, Kalender-Abfragen bündeln, Altlasten raus (keine Rücksicht auf alte Regeln – Stevens Vorgabe)
+Erkenntnisse:
+- Backend schickt `start_triggers: []` bei jeder Regel → Karte darf nur `start_triggers?.length` als Auslöser werten (war ein Fehler, im echten Frontend gefunden).
+- 11: Pushs einer Erinnerung haben schon dasselbe `tag` (`notification_tag(reminder.id)`), Wiederholungen/Stufen ersetzen sich, Erledigt/Verpasst löscht sie – nichts zu tun.
+- 12: `sensor.laeutwerk_offen` zählt nur „erinnert“ (wartet auf Quittung), keine geplanten/verschobenen.
+- 14: Kalender-Zwischenspeicher bewusst nicht gebaut (Regeln aktualisieren zu eigenen Zeiten mit eigenen Fenstern → selten Treffer). Karte in Chunks: `laeutwerk-card.js` (Stub) + `chunk-laeutwerk-card` 96 954 B (31 686 B gzip -9), `chunk-editors` 100 778 B (22 503), `chunk-help-tip` 16 358 B (5 519), `chunk-card-editor-entry` 4 623 B (1 742); vorher 221 231 B in einer Datei. Ganzer `frontend/`-Ordner als statischer Pfad.
+- Testinstanz hat keine Person mit Companion App → Zuständig/Vertretung zeigen dort nur den Hinweis; mit echter App nicht gesichtet.
+- [x] Release v0.9.0
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku

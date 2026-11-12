@@ -6,6 +6,50 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-12
+
+### Added
+- Substitute for the responsible person (`assignee.substitute` with
+  `substitute_when: {entity_id, state}`): takes over at reminder time when the
+  entity has the given state; `{zustaendig}`, the push audience and the
+  statistics follow it, the card shows "Alida (substitute for Steven)".
+- Only persons with the companion app are offered anywhere in Läutwerk.
+- Trigger source: `start_triggers` starts a reminder from any Home Assistant
+  trigger; no second reminder while one is open. Action `laeutwerk.start`
+  starts one from an automation. `expire` accepts `+<duration>` (default
+  `+12h` for trigger rules).
+- `lookahead_days` per rule (default 14); checked against the earliest
+  reminder time on save.
+- `visible: false` hides a rule from the card overview.
+- Confirmation (`confirm: {message, clear_after}`): short push to whoever
+  acknowledged (else the responsible person), removed after `clear_after`
+  seconds (default 10). `on_done` actions also get `person_entity` and
+  `zustaendig_entity`.
+- Household quiet time in the integration options (one window, skip or
+  defer), used by every signal without its own quiet time; `laeutwerk/settings`
+  WebSocket command.
+- Sensor `sensor.laeutwerk_offen`: reminders waiting for acknowledgement over
+  all rules, attribute `reminders`.
+
+### Changed
+- Step 1 of the editor is "Source" with Calendar · Trigger · Interval.
+- Repeat is "once" or "repeat" (every N minutes, default 60, at most M times,
+  default 24).
+- Repeated pushes of a reminder replace each other (same tag) and are removed
+  when the reminder is done or missed.
+- Features within an editor step are separated by thin dividers; help icons
+  ("?") are consistent across the editor.
+- The editors load lazily: the overview needs 31.7 KB gzipped (96,954 bytes)
+  instead of the whole 221 KB card; the editors (22.5 KB + 5.5 KB gzipped) and
+  the visual card editor (1.7 KB gzipped) load when opened.
+
+### Removed
+- Keyword colours from `farbe` / `color` columns and the button that took
+  them over; only a keyword's own `color` / `icon` is used. `colors` in
+  payloads is gone.
+- Compatibility code for rules and history from before 0.9. Older rules may
+  need to be saved again in the editor.
+
 ## [0.8.1] - 2026-11-12
 
 ### Fixed

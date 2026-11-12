@@ -10,10 +10,12 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** early development. 0.6 contains all planned features (engine,
-> card with rule editor, templates, escalation, responsibility …); 1.0 follows
-> after real-world testing; rules can also be created with the
-> `laeutwerk.create_rule` action. See
+> **Status:** actively developed, current version **0.9.0**. All planned
+> features from the spec are in: calendar, trigger and interval sources, keyword
+> table with icons and colours, signals (push, light, announcement, own action),
+> opportunities, quiet times, escalation, responsibility with substitute,
+> templates. 1.0 follows after real-world testing; rules can also be created
+> with the `laeutwerk.create_rule` action. See
 > [docs/TASKS.md](docs/TASKS.md) for progress.
 
 A *rule* describes an occasion: which calendar, which events (keyword table),
@@ -65,10 +67,10 @@ data:
     filter:
       all_day: true
       keywords:
-        columns: [tonne, farbe]
+        columns: [tonne]
         rows:
-          - {match: Papier, tonne: Papiertonne, farbe: blau}
-          - {match: Bio, tonne: Biotonne, farbe: grün}
+          - {match: Papier, tonne: Papiertonne, color: "#2f6bff"}
+          - {match: Bio, tonne: Biotonne, color: "#43a047"}
     reminders:
       - at: "-1d 17:00"
     signals:
@@ -114,6 +116,44 @@ data:
   `button.laeutwerk_<rule>_erledigt`, the action `laeutwerk.acknowledge`, an
   NFC tag or any trigger (see below).
   A reminder can be acknowledged up to 24 h before its first reminder time.
+
+### Sources
+
+Every rule has exactly one source:
+
+- **Calendar:** `sources: [...]` – calendars, to-do lists with a due date, and
+  date / datetime entities or date helpers. `lookahead_days` (per rule, default
+  14) sets how far ahead events are read; it must cover the earliest reminder
+  time, which Läutwerk checks when you save.
+- **Trigger:** `start_triggers` – any Home Assistant trigger, written as in
+  automations, starts a reminder immediately. While a reminder is open no second
+  one starts. Trigger rules default to `expire: "+12h"`; `expire` also accepts
+  `+<duration>`. The action `laeutwerk.start` starts one from an automation.
+- **Interval:** `interval: {every: 90}` – due again 90 days after the last
+  acknowledgement (see *Responsibility, escalation and more*).
+
+Example "washing machine" (placeholder entity names – replace them with yours):
+
+```yaml
+id: waschmaschine
+name: Wäsche fertig
+start_triggers:
+  - trigger: numeric_state
+    entity_id: sensor.waschmaschine_leistung   # placeholder power sensor
+    below: 5
+    for: "00:03:00"
+signals:
+  - id: ansage
+    type: announce
+    players: [media_player.sonos_wohnzimmer]   # placeholder speaker
+    text: "{person}, die Wäsche ist fertig."
+    when:
+      opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}   # placeholder door
+acknowledge:
+  - type: trigger
+    trigger: {trigger: state, entity_id: binary_sensor.waschmaschine_tuer, to: "on"}   # placeholder door contact
+expire: "+12h"
+```
 
 ### Signals
 
@@ -171,7 +211,7 @@ fires while the reminder is open:
   - id: lampe
     type: light_signal
     entity: light.stehleuchte
-    color_from: farbe
+    color_from_keyword: true
     when:
       opportunity: {trigger: state, entity_id: light.stehleuchte, to: "on"}
       manual_only: true          # wall switch / app / dashboard, not automations
@@ -188,15 +228,21 @@ fires while the reminder is open:
 knows it. The triggers are only listened to while a reminder is open.
 
 - **Push recipients:** in the card you simply tick persons; Läutwerk sends to
-  their phones (companion app; persons without one are flagged). Optionally
-  only to those who are at home, or to the responsible person. Notify actions
-  are only needed for other devices.
+  their phones. Only persons with the companion app are offered anywhere in
+  Läutwerk. Push to explicitly ticked persons always goes to all of them;
+  anyone may acknowledge. Optionally only to those who are at home, or to the
+  responsible person. Notify actions are only needed for other devices.
+- **Repeated pushes** of one reminder replace each other (same tag) and are
+  removed when the reminder is done or missed.
+- **Household quiet time:** set once in the integration options (*Settings →
+  Devices & services → Läutwerk → Configure*): one window with *skip* or
+  *defer*. Every signal without its own quiet time uses it.
 - **Light:** every keyword can have its own colour (`color: "#2f6bff"` in
   its row, colour picker in step 2); with `color_from_keyword` the lamp
   blinks in the colours of the matched keywords (alternating when several
   match), else in the fixed colour. Colours are `#rrggbb`, `r,g,b` or German
-  and English colour names (older `color_from: <column>` still works). Lamps
-  without colour just blink. A lamp that was off is switched off again.
+  and English colour names. Lamps without colour just blink. A lamp that was
+  off is switched off again.
 - **Announcement:** played with `announce: true`, so players that support it
   lower running music and continue afterwards. `volume` is the announcement
   volume for players that support it (e.g. Sonos).
@@ -206,6 +252,9 @@ knows it. The triggers are only listened to while a reminder is open.
   `signal`, or `config` with an unsaved signal).
 
 ### Repeat, snooze and ways to acknowledge
+
+Repeat is `once` or `repeat`: every N minutes (default 60) while the reminder
+is open, at most M times (default 24).
 
 ```yaml
 repeat: {every: 1h, max: 5}      # while open: remind again every hour, 5 times
@@ -232,13 +281,9 @@ Other tags do nothing. Fixed and variable tags can be mixed.
 `laeutwerk.snooze` (or the push button) sets a reminder back to *planned*; it
 reminds again when the time is over, unless it expires first.
 
-### Extensions (0.6)
+### Responsibility, escalation and more
 
 ```yaml
-# Sources besides calendars: to-do lists (open items with a due date),
-# date / datetime entities, date helpers and timestamp or date sensors.
-sources: [calendar.abfallkalender, todo.aufgaben, input_datetime.tuev]
-
 # Due again n days after it was last acknowledged (no calendar needed).
 # In the card: step 1 → Source → Custom ("recurring after it was last done").
 # Overdue reminders (also overdue to-dos) remind daily until done.
@@ -256,6 +301,8 @@ activation:
 assignee:
   persons: [person.steven, person.anna]
   rotation: per_event            # fixed | weekly | per_event | after_last
+  substitute: person.alida       # placeholder: takes over ...
+  substitute_when: {entity_id: input_boolean.vertretung, state: "on"}   # placeholder entity
 
 # Escalation while open: stages start after a duration or at a time of day;
 # a signal with "stage: n" is active from that stage on.
@@ -263,12 +310,33 @@ escalation:
   - {after: 2h}
   - {after: "21:30", color: "#c58cff"}   # optional colour of the stage in the card
 
+# Confirmation: a short push to whoever acknowledged (else the responsible
+# person), removed again after clear_after seconds (default 10).
+confirm: {message: "Danke, Müll ist raus!", clear_after: 10}
+
 # Home Assistant actions when a reminder is acknowledged
-# (variables: person, via, titel, tonne … as in texts).
+# (variables: person, via, titel, tonne … as in texts, plus person_entity
+# and zustaendig_entity).
 on_done:
   - action: counter.increment
     target: {entity_id: counter.tonnen_rausgestellt}
+
+# Hide the rule from the card overview (it stays listed under rules with an
+# eye-off icon; signals and entities keep working).
+visible: false
 ```
+
+- **Substitute:** the substitute takes over when the entity given in
+  `substitute_when` has the given state at reminder time. Läutwerk does not
+  detect absence itself – you choose the entity (e.g. a vacation switch).
+  `{zustaendig}`, the push audience "responsible person" and the statistics
+  follow the substitute; the card shows e.g. "Alida (substitute for Steven)".
+- **Rotation:** `fixed`, `weekly`, `per_event` or `after_last` (the person who
+  acknowledged last).
+- **Open reminders overall:** the entity `sensor.laeutwerk_offen` counts the
+  reminders waiting for acknowledgement across all rules; its attribute
+  `reminders` lists them (`rule_id`, `rule_name`, `headline`, `assignee_name`,
+  `since`).
 
 **Templates:** *+* in the card offers built-in templates (bins, birthdays,
 maintenance, medication supply), your own templates (*Save as template* in
@@ -280,6 +348,7 @@ the editor) and *Import YAML*. `laeutwerk.export_rules` /
 | Entity | State |
 |---|---|
 | `sensor.laeutwerk_<rule>` | `planned` / `reminded` / `done` / `missed` / `inactive`, attributes with the event and its variables |
+| `sensor.laeutwerk_offen` | number of reminders waiting for acknowledgement over all rules (attribute `reminders`) |
 | `binary_sensor.laeutwerk_<rule>_offen` | on while a reminder waits to be acknowledged |
 | `sensor.laeutwerk_<rule>_naechster_termin` | start of the next matching event |
 | `button.laeutwerk_<rule>_erledigt` | acknowledge |
@@ -340,6 +409,7 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   titles of the calendar; text fields suggest variables as you type `{`, the
   NFC tag field suggests the tags Home Assistant knows; signals can be tested
   before saving. Explanations sit behind small **?** icons (hover or tap).
+  Features within a step are separated by thin lines.
 - **Keyword table:** tap the round icon of a keyword to set its icon and
   colour or to delete it; the keyword column stays fixed while the variable
   columns scroll sideways.
@@ -357,10 +427,11 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Colours** are picked with Läutwerk's own colour wheel (rule, keywords,
   escalation stages, light signal) with favourites, the rule's keyword colours
   and a hex field; the keyword colours can be tapped as the
-  fixed colour of a light signal. An older text column `farbe` can be turned
-  into keyword colours with one tap.
+  fixed colour of a light signal.
 
-The card bundle is 39 KB gzipped (measured with `gzip -9` on 0.7.0).
+The card loads in parts: the overview needs 31.7 KB gzipped (96,954 bytes), the
+editors (22.5 KB + 5.5 KB gzipped) and the visual card editor (1.7 KB gzipped)
+load only when opened (measured with `gzip -9` on 0.9.0).
 
 ## Troubleshooting
 
@@ -403,10 +474,13 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** frühe Entwicklung. 0.6 enthält alle geplanten Funktionen (Logik,
-> Karte mit Regel-Editor, Vorlagen, Eskalation, Zuständigkeit …); 1.0 folgt nach
-> dem Praxistest; Regeln legst du in der Karte an (*+*) oder
-> mit der Aktion `laeutwerk.create_rule` (Beispiel oben). Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
+> **Status:** in aktiver Entwicklung, aktuelle Version **0.9.0**. Alle geplanten
+> Funktionen aus der Spezifikation sind drin: Quellen Kalender, Auslöser und
+> Intervall, Stichwort-Tabelle mit Icons und Farben, Signale (Push, Licht,
+> Ansage, eigene Aktion), Gelegenheiten, Ruhezeiten, Eskalation,
+> Zuständigkeit mit Vertretung, Vorlagen. 1.0 folgt nach dem Praxistest; Regeln
+> kannst du auch mit der Aktion `laeutwerk.create_rule` anlegen (Beispiel oben).
+> Fortschritt siehe [docs/TASKS.md](docs/TASKS.md).
 
 Eine *Regel* beschreibt einen Anlass: welcher Kalender, welche Termine
 (Stichwort-Tabelle), wann erinnern, welche Signale (Push, Licht, Ansage,
@@ -417,6 +491,45 @@ bleibt, bis sie quittiert wird oder verfällt.
 
 Läutwerk holt keine Termine selbst – Waste Collection Schedule,
 Google-Kalender, CalDAV oder der lokale HA-Kalender bleiben die Quellen.
+
+## Quellen
+
+Jede Regel hat genau eine Quelle:
+
+- **Kalender:** `sources: [...]` – Kalender, To-do-Listen mit Fälligkeit sowie
+  Datums- und Datum/Zeit-Entitäten oder Datums-Helfer. `lookahead_days` (je
+  Regel, Standard 14) legt fest, wie weit voraus Termine gelesen werden; es muss
+  den frühesten Erinnerungszeitpunkt abdecken – Läutwerk prüft das beim Speichern.
+- **Auslöser:** `start_triggers` – jeder Home-Assistant-Auslöser, so geschrieben
+  wie in Automationen, startet sofort eine Erinnerung. Solange eine Erinnerung
+  offen ist, startet keine zweite. Auslöser-Regeln verwenden standardmäßig
+  `expire: "+12h"`; `expire` akzeptiert auch `+<Dauer>`. Die Aktion
+  `laeutwerk.start` startet eine Erinnerung aus einer Automation.
+- **Intervall:** `interval: {every: 90}` – fällig 90 Tage nach der letzten
+  Quittierung (siehe *Zuständigkeit, Eskalation und mehr*).
+
+Beispiel „Waschmaschine“ (Entitätsnamen sind Platzhalter – ersetze sie durch deine):
+
+```yaml
+id: waschmaschine
+name: Wäsche fertig
+start_triggers:
+  - trigger: numeric_state
+    entity_id: sensor.waschmaschine_leistung   # Platzhalter: Leistungssensor
+    below: 5
+    for: "00:03:00"
+signals:
+  - id: ansage
+    type: announce
+    players: [media_player.sonos_wohnzimmer]   # Platzhalter: Lautsprecher
+    text: "{person}, die Wäsche ist fertig."
+    when:
+      opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}   # Platzhalter: Haustür
+acknowledge:
+  - type: trigger
+    trigger: {trigger: state, entity_id: binary_sensor.waschmaschine_tuer, to: "on"}   # Platzhalter: Türkontakt
+expire: "+12h"
+```
 
 ## Variablen und Mehrzahl
 
@@ -437,7 +550,7 @@ durch“ `{` tippen und die Variable aus den Vorschlägen wählen. Bei einem Bü
 quittiert jeder der beiden Tags die ganze Erinnerung, andere Tags nichts.
 Feste und variable Tags lassen sich mischen.
 
-## Bedienung (seit 0.7)
+## Bedienung
 
 - **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
   Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
@@ -476,14 +589,47 @@ Feste und variable Tags lassen sich mischen.
   `{wann} raus: {tonnen}`, mit eigener Mehrzahl-Variante; ohne Angabe
   „Morgen: Papier + Bio“. Auch als Attribut `headline` am Regel-Sensor.
 - **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
-- **Quelle** in Schritt 1: *Kalender* oder *Benutzerdefiniert* – wiederkehrend
-  nach dem letzten Erledigen (z. B. Filter alle 90 Tage), ohne Kalender.
+- **Quelle** in Schritt 1: *Kalender*, *Auslöser* oder *Intervall* – Intervall
+  ist wiederkehrend nach dem letzten Erledigen (z. B. Filter alle 90 Tage),
+  ohne Kalender.
+- **Wiederholen:** *einmal* oder *wiederholen* – alle N Minuten (Standard 60),
+  solange die Erinnerung offen ist, höchstens M-mal (Standard 24).
 - **Farben** wählst du mit Läutwerks eigenem Farbkreis (mit Favoriten, den
   Stichwort-Farben der Regel und Hex-Feld) – für die Regel,
   jedes **Stichwort** (Schritt 2) und jede Eskalationsstufe. Ein Licht-Signal
   blinkt in der **Farbe des Stichworts** (bei mehreren abwechselnd) oder in
-  einer festen Farbe; die Stichwort-Farben lassen sich dort antippen. Eine
-  alte Spalte `farbe` wird per Knopf in Stichwort-Farben übernommen.
+  einer festen Farbe; die Stichwort-Farben lassen sich dort antippen.
+- **Zuständigkeit und Vertretung:** `assignee: {persons, rotation, substitute,
+  substitute_when}` – Rotation *fest*, *wöchentlich*, *pro Termin* oder *nach
+  letztem*. Die Vertretung übernimmt, wenn die in `substitute_when` angegebene
+  Entität zum Erinnerungszeitpunkt den angegebenen Zustand hat (Läutwerk erkennt
+  Abwesenheit nicht selbst – du wählst die Entität, z. B. einen Urlaubsschalter).
+  `{zustaendig}`, die Push-Zielgruppe „Zuständige“ und die Statistik folgen der
+  Vertretung; die Karte zeigt z. B. „Alida (Vertretung für Steven)“. Angeboten
+  werden überall nur Personen mit Companion-App.
+- **Push-Empfänger:** Personen, die du ausdrücklich anhakst, bekommen die
+  Nachricht immer alle; quittieren darf jeder. Wiederholte Pushes einer Erinnerung
+  ersetzen einander (gleicher Tag) und verschwinden, wenn sie erledigt oder
+  verpasst ist.
+- **Ruhezeit im Haushalt:** einmal in den Integrationsoptionen (*Einstellungen →
+  Geräte & Dienste → Läutwerk → Konfigurieren*): ein Zeitfenster mit *überspringen*
+  oder *verschieben*. Jedes Signal ohne eigene Ruhezeit nutzt sie.
+- **Bestätigung:** `confirm: {message, clear_after}` schickt eine kurze Nachricht
+  an die Person, die quittiert hat (sonst an die Zuständige), und entfernt sie
+  nach `clear_after` Sekunden (Standard 10). `on_done`-Aktionen bekommen zusätzlich
+  die Variablen `person_entity` und `zustaendig_entity`.
+- **Ausblenden:** `visible: false` blendet eine Regel in der Kartenübersicht aus;
+  sie bleibt unter den Regeln mit durchgestrichenem Auge sichtbar, Signale und
+  Entitäten arbeiten weiter.
+- **Sensor `sensor.laeutwerk_offen`:** Anzahl der offenen Erinnerungen über alle
+  Regeln; das Attribut `reminders` listet sie (`rule_id`, `rule_name`, `headline`,
+  `assignee_name`, `since`).
+- **Editor:** Erklärungen liegen hinter kleinen **?**-Symbolen, beim Tippen von `{`
+  gibt es Vorschläge, Funktionen innerhalb eines Schritts sind durch feine
+  Linien getrennt.
+- **Karten-Größe:** Die Übersicht lädt 31,7 KB gzipped (96.954 Bytes); die
+  Editoren (22,5 KB + 5,5 KB gzipped) und der visuelle Karten-Editor (1,7 KB
+  gzipped) laden erst beim Öffnen (gemessen mit `gzip -9` auf 0.9.0).
 - Der **Signal-Editor** ist in einklappbare Bereiche mit Zusammenfassung
   gegliedert; Push in Empfänger (Personen anhaken), Texte und Knöpfe.
   Notify-Aktionen gibst du nicht mehr an – alte werden der Person mit dem
