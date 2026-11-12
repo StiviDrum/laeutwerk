@@ -852,3 +852,42 @@ export function mapTargetsToPersons(signal: Signal, persons: PersonInfo[]): Sign
   }
   return next;
 }
+
+export interface HeadlineLine {
+  /** Rendered text, empty when no preview is possible. */
+  text: string;
+  /** Plural field empty: the singular template is used for bundles. */
+  fallback: boolean;
+}
+
+type PreviewEvent = { titles: string[]; variables?: Record<string, string> };
+
+/** Preview for the singular headline field: first event with a single match, else the first. */
+export function singularHeadlinePreview(
+  rule: { headline?: string | null },
+  events: PreviewEvent[] | undefined,
+): string {
+  const event = events?.find((e) => e.titles.length <= 1) ?? events?.[0];
+  if (!event) return "";
+  const template = rule.headline?.trim();
+  return template
+    ? renderTemplate(template, event.variables ?? {})
+    : reminderTitle({ titles: event.titles, variables: event.variables });
+}
+
+/** Preview for the plural field: real bundle > backend `plural_sample` > none. */
+export function pluralHeadlinePreview(
+  rule: { headline?: string | null; headline_plural?: string | null },
+  events: PreviewEvent[] | undefined,
+  sample?: PreviewEvent | null,
+): HeadlineLine {
+  const event =
+    events?.find((e) => e.titles.length > 1) ?? (sample?.titles?.length ? sample : undefined);
+  if (!event) return { text: "", fallback: false };
+  const own = rule.headline_plural?.trim();
+  const template = own || rule.headline?.trim();
+  const text = template
+    ? renderTemplate(template, event.variables ?? {})
+    : reminderTitle({ titles: event.titles, variables: event.variables });
+  return { text, fallback: !own };
+}

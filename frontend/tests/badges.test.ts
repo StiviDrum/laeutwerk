@@ -5,6 +5,8 @@ import {
   badgeLooks,
   filterSuggestions,
   headlinePreview,
+  pluralHeadlinePreview,
+  singularHeadlinePreview,
   insertVariable,
   reminderTitle,
   variableQuery,
@@ -117,5 +119,41 @@ describe("variable autocomplete", () => {
     // text after the cursor is untouched, a closing brace is not doubled
     expect(insertVariable("a {t} b", 4, "titel")).toEqual({ text: "a {titel} b", cursor: 9 });
     expect(insertVariable("no brace", 4, "x")).toBeNull();
+  });
+});
+
+describe("headline field previews", () => {
+  const single = { titles: ["Papier"], variables: { titel: "Papier", wann: "Morgen" } };
+  const bundle = {
+    titles: ["Papier", "Bio"],
+    variables: { titel: "Papier und Bio", wann: "Morgen" },
+  };
+  const sample = { titles: ["A", "B"], variables: { titel: "A und B", wann: "Heute" } };
+  const rule = { headline: "{wann}: {titel}", headline_plural: "Alle: {titel}" };
+
+  it("singular uses the first single-match event, else the first", () => {
+    expect(singularHeadlinePreview(rule, [bundle, single])).toBe("Morgen: Papier");
+    expect(singularHeadlinePreview(rule, [bundle])).toBe("Morgen: Papier und Bio");
+    expect(singularHeadlinePreview(rule, [])).toBe("");
+  });
+
+  it("plural prefers a real bundle over plural_sample", () => {
+    expect(pluralHeadlinePreview(rule, [single, bundle], sample)).toEqual({
+      text: "Alle: Papier und Bio",
+      fallback: false,
+    });
+    expect(pluralHeadlinePreview(rule, [single], sample).text).toBe("Alle: A und B");
+  });
+
+  it("plural has no preview without bundle or sample", () => {
+    expect(pluralHeadlinePreview(rule, [single]).text).toBe("");
+    expect(pluralHeadlinePreview(rule, [single], null).text).toBe("");
+  });
+
+  it("empty plural falls back to the singular template", () => {
+    expect(pluralHeadlinePreview({ headline: "{wann}: {titel}" }, [bundle])).toEqual({
+      text: "Morgen: Papier und Bio",
+      fallback: true,
+    });
   });
 });

@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-12
+
+### Fixed
+- Help bubbles ("?") are drawn on top of everything; in the keyword table
+  they were covered by the table rows.
+- Thin divider between the fixed keyword column and the scrolling columns.
+
+### Changed
+- Headline fields are labelled "one match" / "several matches", each with its
+  own preview directly below. The plural preview uses a real bundle or a
+  made-up one from the first two keywords (`plural_sample` in
+  `laeutwerk/preview`); an empty plural field shows the singular text.
+
 ## [0.8.0] - 2026-11-12
 
 ### Added

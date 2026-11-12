@@ -212,6 +212,31 @@ def sample_occurrence(rule: Rule) -> Occurrence:
     )
 
 
+def sample_bundle(rule: Rule) -> Occurrence | None:
+    """Made-up bundle for tomorrow from the first two non-regex keyword rows."""
+    if not rule.bundle or not rule.sources:
+        return None
+    rows = [row for row in rule.filter.rows if row.mode != MATCH_REGEX and row.match]
+    if len(rows) < 2:
+        return None
+    tz = dt_util.get_default_time_zone()
+    day = dt_util.now().date() + timedelta(days=1)
+    start = local_instant(day, 0, tz)
+    end = local_instant(day + timedelta(days=1), 0, tz)
+    events = tuple(
+        CalendarEvent(
+            calendar=rule.sources[0],
+            summary=row.match,
+            start=start,
+            end=end,
+            all_day=True,
+            day=day,
+        )
+        for row in rows[:2]
+    )
+    return Occurrence(id="sample_bundle", day=day, start=start, end=end, events=events)
+
+
 def join_words(words: Iterable[str], language: str | None) -> str:
     """Join unique, non-empty words: "a, b und c"."""
     unique = list(dict.fromkeys(word for word in words if word))

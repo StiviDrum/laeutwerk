@@ -10,7 +10,8 @@ import {
   availableVariables,
   badgeLook,
   badgeLooks,
-  headlinePreview,
+  pluralHeadlinePreview,
+  singularHeadlinePreview,
   defaultSignal,
   describeTimespec,
   formatDate,
@@ -1406,22 +1407,28 @@ export class LaeutwerkRuleEditor extends LitElement {
     );
   }
 
-  /** Live preview of the headline(s) with the next real event. */
-  private _headlinePreview(): TemplateResult | typeof nothing {
-    const event = this._preview?.events[0];
-    if (!event) return nothing;
-    const line = headlinePreview(this._rule, event);
-    const bundled = this._preview?.events.find((e) => e.titles.length > 1);
-    const plural =
-      this._rule.headline_plural?.trim() && bundled ? headlinePreview(this._rule, bundled) : "";
-    return html`${[line, plural]
-      .filter(Boolean)
-      .map(
-        (text) =>
-          html`<div class="preview">
-            <ha-icon icon="mdi:eye-outline"></ha-icon><span>${text}</span>
-          </div>`,
-      )}`;
+  private _previewLine(text: string, hint = ""): TemplateResult {
+    return html`<div class="preview">
+      <ha-icon icon="mdi:eye-outline"></ha-icon><span>${text}</span>${
+        hint ? html`<span class="muted">${hint}</span>` : nothing
+      }
+    </div>`;
+  }
+
+  private _singularPreview(): TemplateResult | typeof nothing {
+    const text = singularHeadlinePreview(this._rule, this._preview?.events);
+    return text ? this._previewLine(text) : nothing;
+  }
+
+  private _pluralPreview(): TemplateResult {
+    const l = this._l;
+    const line = pluralHeadlinePreview(
+      this._rule,
+      this._preview?.events,
+      this._preview?.plural_sample,
+    );
+    if (!line.text) return html`<div class="muted">${l.t("headline_no_preview")}</div>`;
+    return this._previewLine(line.text, line.fallback ? ` ${l.t("headline_same")}` : "");
   }
 
   private _stepDetails(): TemplateResult {
@@ -1448,6 +1455,8 @@ export class LaeutwerkRuleEditor extends LitElement {
           @value-changed=${(e: CustomEvent<{ value: string }>) =>
             this._update({ headline: e.detail.value || null })}
         ></laeutwerk-suggest>
+        ${this._singularPreview()}
+        <div class="sublabel">${l.t("headline_plural")}</div>
         <laeutwerk-suggest
           .value=${r.headline_plural ?? ""}
           .placeholder=${r.headline || l.t("headline_default")}
@@ -1455,7 +1464,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           @value-changed=${(e: CustomEvent<{ value: string }>) =>
             this._update({ headline_plural: e.detail.value || null })}
         ></laeutwerk-suggest>
-        ${this._headlinePreview()}
+        ${this._pluralPreview()}
         <div class="sublabel tiprow">${l.t("expire")}${helpTip(l, "help_expire")}</div>
         <div class="segmented">
           <button
@@ -1856,7 +1865,8 @@ export class LaeutwerkRuleEditor extends LitElement {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 2px 0 2px 6px;
+        padding: 2px 8px 2px 6px;
+        border-right: 1px solid var(--lw-border);
         /* Solid copy of the panel colour, so scrolled cells do not show through. */
         background: linear-gradient(var(--lw-surface), var(--lw-surface)), var(--lw-bg);
         box-shadow: 6px 0 6px -6px rgba(0, 0, 0, 0.35);
@@ -2011,6 +2021,11 @@ export class LaeutwerkRuleEditor extends LitElement {
         width: 28px;
         height: 28px;
         margin-right: -8px;
+      }
+      .preview .muted,
+      .muted {
+        color: var(--lw-text-2);
+        font-size: 12px;
       }
       .preview {
         display: flex;

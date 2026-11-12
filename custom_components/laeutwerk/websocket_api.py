@@ -24,7 +24,7 @@ from .manager import (
     lookahead_window,
     occurrence_payload,
 )
-from .matching import build_occurrences
+from .matching import build_occurrences, sample_bundle
 from .model import Rule
 from .signals import person_notify_targets
 from .sources import async_fetch_events
@@ -278,6 +278,7 @@ async def ws_preview(
             "events": items,
             "total_events": len(events),
             "errors": errors,
+            "plural_sample": occurrence_payload(runner, sample_bundle(rule)),
             "variables": sorted(runner.variables(occurrences[0]))
             if occurrences
             else [],

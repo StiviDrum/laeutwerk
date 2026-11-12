@@ -232,8 +232,10 @@ const en = {
   plural_off: "no plural",
   tag_variable_hint: "Only the tag of the due hit counts (resolved per event).",
   help: "Help",
-  headline: "Headline",
-  headline_plural: "Headline (several events)",
+  headline: "Headline (one match)",
+  headline_plural: "Headline (several matches)",
+  headline_same: "(same as one match)",
+  headline_no_preview: "No preview - at least two keywords needed",
   headline_default: "{wann}: {titel}",
   keywords_label: "Keywords",
   times_label: "Times",
@@ -255,7 +257,7 @@ const en = {
   help_icon_color:
     "Tap the round icon in front of a keyword to set its icon and colour (shown in the card) or to delete the keyword. Left empty they come from the rule (step 1), the colour otherwise from the theme. Each one falls back on its own: a keyword with only a colour keeps the rule's icon.",
   help_headline:
-    "Title of the reminder in the card and in notifications, e.g. {wann}: {titel}. Left empty the default is used. The plural headline is used when several events are bundled.",
+    "Title of the reminder in the card and in notifications, e.g. {wann}: {titel}. Left empty the default is used. The second field is used when several matches are bundled; left empty the first one is used.",
   help_reminders:
     'When to remind, relative to the event. "-1d 17:00" = the day before at 17:00, "-2h" = two hours before, "09:00" = on the event day at 09:00. You can add several times.',
   help_repeat:
@@ -653,8 +655,10 @@ const de: Strings = {
   plural_off: "keine Mehrzahl",
   tag_variable_hint: "Es zählt nur der Tag des fälligen Treffers (je Termin aufgelöst).",
   help: "Hilfe",
-  headline: "Überschrift",
-  headline_plural: "Überschrift (Mehrzahl)",
+  headline: "Überschrift (ein Treffer)",
+  headline_plural: "Überschrift (mehrere Treffer)",
+  headline_same: "(wie ein Treffer)",
+  headline_no_preview: "Keine Vorschau – mindestens zwei Stichwörter nötig",
   headline_default: "{wann}: {titel}",
   keywords_label: "Stichwörter",
   times_label: "Zeitpunkte",
@@ -676,7 +680,7 @@ const de: Strings = {
   help_icon_color:
     "Tippe auf das runde Icon vor einem Stichwort, um Icon und Farbe festzulegen (wie in der Karte) oder das Stichwort zu löschen. Leer übernehmen sie die Werte der Regel (Schritt 1), die Farbe sonst vom Theme. Beides fällt einzeln zurück: Ein Stichwort nur mit Farbe behält das Icon der Regel.",
   help_headline:
-    "Titel der Erinnerung in der Karte und in Mitteilungen, z. B. {wann}: {titel}. Leer gilt die Standard-Überschrift. Die Mehrzahl-Überschrift gilt, wenn mehrere Termine gebündelt sind.",
+    "Titel der Erinnerung in der Karte und in Mitteilungen, z. B. {wann}: {titel}. Leer gilt die Standard-Überschrift. Das zweite Feld gilt, wenn mehrere Treffer gebündelt sind; leer gilt das erste.",
   help_reminders:
     "Wann erinnert wird, relativ zum Termin. „-1d 17:00“ = am Vortag um 17:00, „-2h“ = zwei Stunden vorher, „09:00“ = am Tag des Termins um 09:00. Du kannst mehrere Zeitpunkte anlegen.",
   help_repeat:

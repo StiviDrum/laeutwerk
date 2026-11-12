@@ -192,9 +192,10 @@ class Cdp:
             raise RuntimeError(res["exceptionDetails"])
         return res["result"].get("value")
 
-    async def shot(self, name: str) -> None:
+    async def shot(self, name: str, *, full: bool = True) -> None:
+        # full=False keeps the viewport, so popups that close on resize stay.
         res = await self.call(
-            "Page.captureScreenshot", format="png", captureBeyondViewport=True
+            "Page.captureScreenshot", format="png", captureBeyondViewport=full
         )
         (OUT / f"real_{name}.png").write_bytes(base64.b64decode(res["data"]))
         print("screenshot", name)
@@ -322,18 +323,36 @@ async def main() -> None:
                 tip = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
                     " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const t = e.shadowRoot.querySelector('laeutwerk-help-tip');"
+                    # The tip in the keyword table header (0.8.1: must not be covered).
+                    " const t = e.shadowRoot.querySelector('.kwtable laeutwerk-help-tip')"
+                    "  || e.shadowRoot.querySelector('laeutwerk-help-tip');"
                     " if (!t) return 'no help tip'; t.scrollIntoView({block: 'center'});"
                     " const b = t.shadowRoot.querySelector('button') || t;"
                     " b.click(); await new Promise(r => setTimeout(r, 400));"
-                    " return (t.shadowRoot.textContent || '').trim().slice(0, 80) })()"
+                    # The bubble sits on <body>; it must be the topmost element.
+                    " const tip = document.body.querySelector(':scope > [role=tooltip]');"
+                    " if (!tip) return 'no bubble';"
+                    " const r = tip.getBoundingClientRect();"
+                    " tip.style.pointerEvents = 'auto';"
+                    " const top = document.elementFromPoint(r.left + 20, r.top + r.height / 2);"
+                    " tip.style.pointerEvents = 'none';"
+                    " return (top === tip ? 'on top: ' : 'COVERED: ') + tip.textContent.slice(0, 60) })()"
                 )
                 print("help tip:", tip)
-                await cdp.shot("helptip")
+                await cdp.shot("helptip", full=False)
                 await cdp.js(
                     "(() => { document.body.dispatchEvent(new PointerEvent('pointerdown',"
                     " {bubbles: true, composed: true})); document.body.click(); return true })()"
                 )
+                # Headline previews (0.8.1): one under each field.
+                previews = await cdp.js(
+                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const sec = e.shadowRoot.querySelectorAll('section')[5];"
+                    " return [...sec.querySelectorAll('.preview, .muted')]"
+                    "  .map(x => x.textContent.trim().replace(/\\s+/g, ' ')) })()"
+                )
+                print("headline previews:", previews)
                 suggest = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
                     " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"

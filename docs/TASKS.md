@@ -256,6 +256,14 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Bundle 185 443 → 210 248 Bytes (ungezippt, gemessen).
 - [x] Release v0.8.0
 
+## 0.8.1 – Fixes nach Stevens Test (12.11.2026)
+- [x] „?“-Blase als Element auf `<body>` (z-index 1010) – lag in der Stichwort-Tabelle hinter den Zeilen (Stapelkontext der sticky Spalte)
+- [x] Trennstrich rechts an der fixierten Stichwort-Spalte
+- [x] Überschrift: Felder „ein Treffer“ / „mehrere Treffer“, Vorschau je Feld darunter; `laeutwerk/preview` liefert `plural_sample` (erfundenes Bündel aus den ersten zwei Nicht-Regex-Stichwörtern, morgen) – `None` ohne Bündeln / < 2 Stichwörter
+- [x] `check_card.py`: prüft per `elementFromPoint`, dass die Blase oben liegt; `shot(full=False)` für Popups, die sich beim Größenändern schließen
+- [x] Zuständigkeit Steven erklärt: wirkt nur auf Push mit Empfänger „Zuständige“, `{zustaendig}` und Statistik; fest angehakte Personen bekommen den Push immer, quittieren darf jeder
+- [x] Release v0.8.1
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

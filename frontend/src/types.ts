@@ -223,6 +223,8 @@ export interface TitleSuggestion {
 export interface PreviewResult {
   titles?: TitleSuggestion[];
   events: UpcomingEvent[];
+  /** Sample bundle (>= 2 titles) when no real one exists; may be missing on older backends. */
+  plural_sample?: UpcomingEvent | null;
   total_events: number;
   errors: Record<string, string>;
   variables: string[];
