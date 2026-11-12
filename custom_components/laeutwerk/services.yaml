@@ -16,6 +16,14 @@ acknowledge:
       selector:
         text:
 
+start:
+  fields:
+    rule:
+      required: true
+      example: tuerklingel
+      selector:
+        text:
+
 snooze:
   fields:
     rule:

@@ -6,11 +6,12 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import LaeutwerkConfigEntry
+from .engine import RuleRunner
 from .entity import LaeutwerkEntity, async_setup_rule_entities
 from .manager import LaeutwerkManager, occurrence_payload
 from .matching import render_headline
@@ -20,6 +21,7 @@ from .model import (
     STATE_MISSED,
     STATE_PLANNED,
     STATE_REMINDED,
+    Reminder,
 )
 
 PARALLEL_UPDATES = 0
@@ -35,6 +37,7 @@ async def async_setup_entry(
     def factory(manager: LaeutwerkManager, rule_id: str) -> list[Entity]:
         return [StateSensor(manager, rule_id), NextEventSensor(manager, rule_id)]
 
+    async_add_entities([OpenTotalSensor(entry.runtime_data)])
     async_setup_rule_entities(entry, entry.runtime_data, factory, async_add_entities)
 
 
@@ -136,3 +139,65 @@ class NextEventSensor(LaeutwerkEntity, SensorEntity):
             "titles": payload["titles"],
             "days_until": payload["days_until"],
         }
+
+
+class OpenTotalSensor(SensorEntity):
+    """Number of reminders waiting for acknowledgement over all rules.
+
+    Counts reminders in state "reminded" (planned and snoozed ones are not
+    open yet); hidden rules count too.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "open_total"
+    _attr_icon = "mdi:bell-badge-outline"
+    _attr_native_unit_of_measurement = None
+    _unrecorded_attributes = frozenset({"reminders"})
+
+    def __init__(self, manager: LaeutwerkManager) -> None:
+        """Initialise the sensor."""
+        self._manager = manager
+        self._attr_unique_id = "open_total"
+        self.entity_id = "sensor.laeutwerk_offen"
+
+    def _open(self) -> list[tuple[str, Reminder, RuleRunner]]:
+        items = [
+            (rule_id, reminder, runner)
+            for rule_id, runner in self._manager.runners.items()
+            for reminder in runner.open_reminders
+        ]
+        return sorted(items, key=lambda item: item[1].start)
+
+    @property
+    def native_value(self) -> int:
+        """Count of open reminders."""
+        return len(self._open())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The open reminders."""
+        return {
+            "reminders": [
+                {
+                    "rule_id": rule_id,
+                    "rule_name": runner.rule.name,
+                    "headline": render_headline(
+                        runner.rule, reminder.events, runner.variables(reminder)
+                    ),
+                    "assignee_name": runner.assignee_name(reminder.assignee),
+                    "since": reminder.reminded_at.isoformat()
+                    if reminder.reminded_at
+                    else None,
+                }
+                for rule_id, reminder, runner in self._open()
+            ]
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Update whenever any rule changes."""
+        self.async_on_remove(self._manager.async_add_listener(self._changed))
+
+    @callback
+    def _changed(self, _event: str, _rule_id: str) -> None:
+        self.async_write_ha_state()

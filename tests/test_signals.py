@@ -651,7 +651,6 @@ async def test_persons_websocket(hass: HomeAssistant, hass_ws_client) -> None:
             "state": "not_home",
             "notify": ["notify.mobile_app_annas_iphone"],
         },
-        {"entity_id": "person.gast", "name": "Gast", "state": "home", "notify": []},
         {
             "entity_id": "person.steven",
             "name": "Steven",

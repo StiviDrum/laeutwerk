@@ -33,6 +33,8 @@ ROTATIONS = (ROTATION_FIXED, ROTATION_WEEKLY, ROTATION_PER_EVENT, ROTATION_AFTER
 
 # Pseudo source of "interval since done" rules (no calendar).
 INTERVAL_SOURCE = "interval"
+# Pseudo calendar of the synthetic event of "start trigger" rules.
+TRIGGER_SOURCE = "trigger"
 
 EFFECT_BLINK = "blink"
 EFFECT_PULSE = "pulse"
@@ -266,6 +268,19 @@ class Rule:
     assignee: dict[str, Any] | None = None
     # 0.6: escalation stages [{after}] – signals with "stage: n" start then.
     escalation: list[dict[str, Any]] = field(default_factory=list)
+    # 0.9: days the calendars are read ahead for this rule.
+    lookahead_days: int = 14
+    # 0.9: shown in the card overview (entities and signals are unaffected).
+    visible: bool = True
+    # 0.9: Home Assistant triggers that start a reminder (instead of a calendar).
+    start_triggers: list[dict[str, Any]] = field(default_factory=list)
+    # 0.9: {message, clear_after} – confirmation to whoever acknowledged.
+    confirm: dict[str, Any] | None = None
+
+    @property
+    def trigger_mode(self) -> bool:
+        """Whether reminders are started by triggers."""
+        return bool(self.start_triggers)
 
     @property
     def repeat_every(self) -> int | None:
@@ -286,7 +301,7 @@ class Rule:
             id=data["id"],
             name=data["name"],
             sources=list(data["sources"]),
-            reminders=[item["at"] for item in data["reminders"]],
+            reminders=[item["at"] for item in data.get("reminders", [])],
             icon=data.get("icon"),
             color=data.get("color"),
             headline=data.get("headline") or None,
@@ -304,6 +319,10 @@ class Rule:
             on_done=list(data.get("on_done") or []),
             assignee=data.get("assignee"),
             escalation=list(data.get("escalation") or []),
+            lookahead_days=int(data.get("lookahead_days", 14)),
+            visible=bool(data.get("visible", True)),
+            start_triggers=list(data.get("start_triggers") or []),
+            confirm=data.get("confirm"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -330,6 +349,10 @@ class Rule:
             "on_done": list(self.on_done),
             "assignee": self.assignee,
             "escalation": list(self.escalation),
+            "lookahead_days": self.lookahead_days,
+            "visible": self.visible,
+            "start_triggers": list(self.start_triggers),
+            "confirm": self.confirm,
         }
 
 
@@ -412,6 +435,10 @@ class Reminder:
     stage: int = 0
     # Responsible person (entity id), fixed when the reminder is created.
     assignee: str | None = None
+    # Original person if a substitute took over at the first reminder.
+    substitute_for: str | None = None
+    # Name of whoever caused a trigger-started reminder ({person}).
+    trigger_person: str = ""
 
     @property
     def is_open(self) -> bool:
@@ -448,6 +475,8 @@ class Reminder:
             last_reminded=_parse_opt(data.get("last_reminded")),
             stage=int(data.get("stage", 0)),
             assignee=data.get("assignee"),
+            substitute_for=data.get("substitute_for"),
+            trigger_person=data.get("trigger_person", ""),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -478,6 +507,8 @@ class Reminder:
             "last_reminded": _format_opt(self.last_reminded),
             "stage": self.stage,
             "assignee": self.assignee,
+            "substitute_for": self.substitute_for,
+            "trigger_person": self.trigger_person,
         }
 
 

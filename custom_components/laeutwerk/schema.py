@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 import re
 from typing import Any
 
@@ -50,7 +50,7 @@ from .model import (
     column_spec,
 )
 from .sources import SOURCE_DOMAINS
-from .timespec import KIND_EVENT_END, KIND_EVENT_START, parse_timespec
+from .timespec import KIND_EVENT_END, KIND_EVENT_START, KIND_WALL, parse_timespec
 from .triggers import as_trigger_list, async_validate_triggers
 
 _COLUMN = re.compile(r"^[^\W\d][\w]*$")
@@ -547,6 +547,28 @@ _ASSIGNEE_SCHEMA = vol.Schema(
             cv.ensure_list, [_domain_entity("person")], vol.Length(min=1), vol.Unique()
         ),
         vol.Optional("rotation", default=ROTATION_FIXED): vol.In(ROTATIONS),
+        vol.Inclusive("substitute", "substitute"): _domain_entity("person"),
+        vol.Inclusive("substitute_when", "substitute"): vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+                vol.Required("state"): _non_empty,
+            }
+        ),
+    }
+)
+
+
+def _start_triggers(value: Any) -> list[dict[str, Any]]:
+    """Triggers that start a reminder; empty means the rule has none."""
+    return as_trigger_list(value) if value else []
+
+
+_CONFIRM_SCHEMA = vol.Schema(
+    {
+        vol.Required("message"): _non_empty,
+        vol.Optional("clear_after", default=10): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=3600)
+        ),
     }
 )
 
@@ -563,21 +585,25 @@ RULE_SCHEMA = vol.Schema(
             cv.ensure_list, [_source_entity], vol.Unique()
         ),
         vol.Optional("filter", default=dict): _FILTER_SCHEMA,
-        vol.Required("reminders"): vol.All(
-            cv.ensure_list,
-            [vol.Schema({vol.Required("at"): _reminder_time})],
-            vol.Length(min=1),
+        vol.Optional("reminders", default=list): vol.All(
+            cv.ensure_list, [vol.Schema({vol.Required("at"): _reminder_time})]
         ),
+        vol.Optional("start_triggers", default=list): _start_triggers,
+        vol.Optional("confirm", default=None): vol.Any(None, _CONFIRM_SCHEMA),
         vol.Optional("signals", default=list): _signals,
         vol.Optional("acknowledge", default=list): [_ack],
         vol.Optional("ack_label", default=None): vol.Any(None, _text),
         vol.Optional("repeat", default=REPEAT_NONE): _REPEAT_SCHEMA,
         vol.Optional("bundle", default=True): cv.boolean,
-        vol.Optional("expire", default=DEFAULT_EXPIRE): _expire_time,
+        vol.Optional("expire"): _expire_time,
         vol.Optional("interval", default=None): vol.Any(None, _INTERVAL_SCHEMA),
         vol.Optional("activation", default=None): vol.Any(None, _ACTIVATION_SCHEMA),
         vol.Optional("on_done", default=list): _actions_or_empty,
         vol.Optional("assignee", default=None): vol.Any(None, _ASSIGNEE_SCHEMA),
+        vol.Optional("lookahead_days", default=14): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=365)
+        ),
+        vol.Optional("visible", default=True): cv.boolean,
         vol.Optional("escalation", default=list): [
             vol.Schema(
                 {
@@ -589,6 +615,14 @@ RULE_SCHEMA = vol.Schema(
         ],
     }
 )
+
+
+def _days_ahead_needed(at: str) -> int:
+    """Days the calendar must be read ahead so that a reminder time is reached."""
+    spec = parse_timespec(at)
+    if spec.kind == KIND_WALL:
+        return max(0, 1 - spec.days)
+    return max(0, 1 + (-spec.offset) // timedelta(days=1))
 
 
 def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
@@ -615,8 +649,25 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
                 f"tag_id (columns of the keyword table: "
                 f"{', '.join(columns) or 'none'})"
             )
-    if not rule["sources"] and not rule["interval"]:
-        raise vol.Invalid("a rule needs at least one source or an 'interval'")
+    used = [key for key in ("sources", "start_triggers", "interval") if rule[key]]
+    if len(used) != 1:
+        raise vol.Invalid(
+            "a rule needs exactly one source: 'sources' (calendars), "
+            f"'start_triggers' or 'interval' (found: {', '.join(used) or 'none'})"
+        )
+    trigger_mode = bool(rule["start_triggers"])
+    if "expire" not in rule:
+        rule["expire"] = "+12h" if trigger_mode else DEFAULT_EXPIRE
+    elif trigger_mode and parse_timespec(rule["expire"]).kind in (
+        KIND_EVENT_START,
+        KIND_EVENT_END,
+    ):
+        raise vol.Invalid(
+            "'expire' cannot be event_start / event_end for a rule with "
+            "'start_triggers'; use '+<duration>' (e.g. '+12h') or 'event_day 12:00'"
+        )
+    if not trigger_mode and not rule["reminders"]:
+        raise vol.Invalid("reminders: at least one reminder time is required")
     stages = len(rule["escalation"])
     for signal in rule["signals"]:
         if signal.get("stage", 0) > stages:
@@ -630,6 +681,13 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
                 "(responsible persons) in the rule"
             )
     ats = [item["at"] for item in rule["reminders"]]
+    for at in [] if trigger_mode else ats:
+        needed = _days_ahead_needed(at)
+        if rule["lookahead_days"] < needed:
+            raise vol.Invalid(
+                f"lookahead_days ({rule['lookahead_days']}) is too small for the "
+                f"reminder '{at}': at least {needed} days are needed"
+            )
     if len(set(ats)) != len(ats):
         raise vol.Invalid("reminder times must be unique")
     return rule
@@ -645,6 +703,11 @@ async def async_validate_rule(
     changed; stored rules are loaded with ``validate_rule``.
     """
     rule = validate_rule(data)
+    if rule["start_triggers"]:
+        try:
+            await async_validate_triggers(hass, rule["start_triggers"])
+        except (vol.Invalid, HomeAssistantError) as err:
+            raise vol.Invalid(f"start_triggers: {err}") from err
     for signal in rule["signals"]:
         try:
             if conditions := signal.get("conditions"):

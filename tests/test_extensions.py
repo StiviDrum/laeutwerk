@@ -11,6 +11,7 @@ import pytest
 
 from custom_components.laeutwerk.compat import vol
 from custom_components.laeutwerk.manager import LaeutwerkManager
+from custom_components.laeutwerk.model import Reminder, Rule
 from custom_components.laeutwerk.schema import validate_rule
 
 from .common import PHONE, WASTE, FakeCalendars, at, muell_rule, setup_integration, tick
@@ -165,7 +166,7 @@ def test_source_validation() -> None:
     validate_rule(simple_rule(sources=["todo.x", "date.y", "sensor.z", "calendar.a"]))
     with pytest.raises(vol.Invalid, match="cannot be a source"):
         validate_rule(simple_rule(sources=["light.lampe"]))
-    with pytest.raises(vol.Invalid, match="source or an 'interval'"):
+    with pytest.raises(vol.Invalid, match="exactly one source"):
         validate_rule(simple_rule())
 
 
@@ -451,3 +452,95 @@ def test_escalation_stage_colors() -> None:
     ]
     with pytest.raises(vol.Invalid, match="not a colour"):
         validate_rule(muell_rule(escalation=[{"after": "2h", "color": "orange"}]))
+
+
+# ------------------------------------------------------- 0.9: substitute etc.
+
+
+async def test_substitute_on_remind(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, pushes: list[ServiceCall]
+) -> None:
+    hass.states.async_set("person.steven", "home", {"friendly_name": "Steven"})
+    hass.states.async_set("person.anna", "home", {"friendly_name": "Anna"})
+    hass.states.async_set("input_boolean.urlaub", "on")
+    calendars = FakeCalendars(hass, WASTE)
+    calendars.add_all_day(WASTE, "Papier", TUE)
+    calendars.add_all_day(WASTE, "Bio", date(2026, 11, 24))
+    rule = muell_rule(
+        assignee={
+            "persons": ["person.steven"],
+            "substitute": "person.anna",
+            "substitute_when": {"entity_id": "input_boolean.urlaub", "state": "on"},
+        },
+        signals=[push(message="{zustaendig}", targets=[PHONE], audience="assignee")],
+    )
+    manager = await start(hass, freezer, at(MON, 9), rule)
+    first = sorted(manager.reminders["muell"].values(), key=lambda r: r.start)[0]
+    assert first.assignee == "person.steven"  # decided at remind time only
+    hass.states.async_set("input_boolean.urlaub", "off")
+    hass.states.async_set("input_boolean.urlaub", "on")
+    await tick(hass, freezer, at(MON, 17, 0))
+    assert (first.assignee, first.substitute_for) == ("person.anna", "person.steven")
+    assert messages(pushes) == ["Anna"]
+    payload = manager.status("muell")["reminders"][0]
+    assert (payload["assignee_name"], payload["substitute_for_name"]) == (
+        "Anna",
+        "Steven",
+    )
+    assert Reminder.from_dict(first.to_dict()).substitute_for == "person.steven"
+
+    # No match: unchanged.
+    hass.states.async_set("input_boolean.urlaub", "off")
+    await tick(hass, freezer, at(date(2026, 11, 23), 17, 0))
+    second = next(
+        r for r in manager.reminders["muell"].values() if r.day == date(2026, 11, 24)
+    )
+    assert (second.assignee, second.substitute_for) == ("person.steven", None)
+
+    with pytest.raises(vol.Invalid):
+        validate_rule(
+            muell_rule(assignee={"persons": ["person.a"], "substitute": "person.b"})
+        )
+
+
+def test_lookahead_and_visible_validation() -> None:
+    rule = validate_rule(muell_rule())
+    assert (rule["lookahead_days"], rule["visible"]) == (14, True)
+    assert Rule.from_dict(rule).to_dict()["visible"] is True
+    for days in (0, 366):
+        with pytest.raises(vol.Invalid):
+            validate_rule(muell_rule(lookahead_days=days))
+    early = muell_rule(reminders=[{"at": "-7d 09:00"}])
+    validate_rule({**early, "lookahead_days": 8})
+    with pytest.raises(vol.Invalid, match="at least 8"):
+        validate_rule({**early, "lookahead_days": 7})
+    validate_rule(muell_rule(visible=False))
+
+
+async def test_lookahead_limits_fetch(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    calendars = FakeCalendars(hass, WASTE)
+    calendars.add_all_day(WASTE, "Papier", date(2026, 12, 1))
+    manager = await start(hass, freezer, at(MON, 9), muell_rule(lookahead_days=5))
+    assert not manager.reminders.get("muell")
+    await manager.async_update_rule("muell", muell_rule(lookahead_days=30))
+    await hass.async_block_till_done()
+    assert len(manager.reminders["muell"]) == 1
+
+
+async def test_total_sensor(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    calendars = FakeCalendars(hass, WASTE)
+    calendars.add_all_day(WASTE, "Papier", TUE)
+    manager = await start(hass, freezer, at(MON, 9), muell_rule(visible=False))
+    assert hass.states.get("sensor.laeutwerk_offen").state == "0"
+    await tick(hass, freezer, at(MON, 17, 0))
+    state = hass.states.get("sensor.laeutwerk_offen")
+    assert state.state == "1"
+    assert state.attributes["reminders"][0]["rule_id"] == "muell"
+    assert state.attributes["reminders"][0]["since"]
+    await manager.async_acknowledge("muell", by="Steven", via="tag")
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.laeutwerk_offen").state == "0"

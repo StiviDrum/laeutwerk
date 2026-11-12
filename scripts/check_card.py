@@ -327,6 +327,7 @@ async def main() -> None:
                     " const t = e.shadowRoot.querySelector('.kwtable laeutwerk-help-tip')"
                     "  || e.shadowRoot.querySelector('laeutwerk-help-tip');"
                     " if (!t) return 'no help tip'; t.scrollIntoView({block: 'center'});"
+                    " await new Promise(r => setTimeout(r, 400));"
                     " const b = t.shadowRoot.querySelector('button') || t;"
                     " b.click(); await new Promise(r => setTimeout(r, 400));"
                     # The bubble sits on <body>; it must be the topmost element.
@@ -503,6 +504,17 @@ async def main() -> None:
                 )
                 print("advanced step fields:", advanced)
                 await cdp.shot("advanced")
+                # Trigger source (0.9.0): step 1 in trigger mode, all steps open.
+                mode = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " e._setMode('trigger'); e._open = new Set([1, 2, 3, 4, 5, 6, 7]);"
+                    " await e.updateComplete; await new Promise(r => setTimeout(r, 2000));"
+                    " window.scrollTo(0, 0);"
+                    " return [e._mode, e._rule.expire] })()"
+                )
+                print("trigger mode:", mode)
+                await cdp.shot("trigger")
         finally:
             proc.terminate()
 

@@ -563,3 +563,49 @@ describe("colour names", () => {
     expect(colorNameToHex("irgendwas")).toBeNull();
   });
 });
+
+describe("hidden rules", () => {
+  it("skips visible=false rules in the overview", () => {
+    const mk = (id: string, visible?: boolean) => ({
+      ...emptyRule(),
+      id,
+      visible,
+      status: {
+        reminders: [{ id, state: "reminded", start: "2026-01-01T10:00:00Z", titles: ["x"] }],
+      },
+    });
+    const rules = [mk("a"), mk("b", false), mk("c", true)] as never;
+    const o = buildOverview(rules, new Date("2026-01-01T09:00:00Z"));
+    expect(o.open.map((i) => i.rule.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("source modes and substitute", () => {
+  it("keeps exactly one source", async () => {
+    const { keepOnlySource, sourceModeOf, assigneeText } = await import("../src/format");
+    const base = {
+      ...emptyRule(),
+      sources: ["calendar.a"],
+      interval: { every: 30 },
+      start_triggers: [{ trigger: "state" }],
+    };
+    const cal = keepOnlySource(base, "calendar");
+    expect(cal.sources).toEqual(["calendar.a"]);
+    expect(cal.interval).toBeNull();
+    expect(cal.start_triggers).toBeUndefined();
+    const trig = keepOnlySource(base, "trigger");
+    expect(trig.sources).toEqual([]);
+    expect(trig.interval).toBeNull();
+    expect(trig.expire).toBe("+12h");
+    expect(sourceModeOf(trig)).toBe("trigger");
+    const iv = keepOnlySource(base, "interval");
+    expect(iv.sources).toEqual([]);
+    expect(iv.start_triggers).toBeUndefined();
+    expect(iv.interval).toEqual({ every: 30 });
+    expect(sourceModeOf(iv)).toBe("interval");
+    const loaded = { ...emptyRule(), sources: ["calendar.a"], start_triggers: [] };
+    expect(sourceModeOf(loaded)).toBe("calendar");
+    expect(assigneeText(de, "Alida", "Steven")).toBe("Alida (Vertretung für Steven)");
+    expect(assigneeText(en, "Alida")).toBe("Alida");
+  });
+});

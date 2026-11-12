@@ -34,6 +34,7 @@ SERVICE_ACKNOWLEDGE = "acknowledge"
 SERVICE_SNOOZE = "snooze"
 SERVICE_REOPEN = "reopen"
 SERVICE_TRIGGER = "trigger"
+SERVICE_START = "start"
 SERVICE_TEST_SIGNAL = "test_signal"
 SERVICE_GET_RULES = "get_rules"
 SERVICE_CREATE_RULE = "create_rule"
@@ -156,6 +157,27 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 translation_placeholders={"reminder": call.data["reminder_id"]},
             )
         return {"reopened": reminder.id} if call.return_response else None
+
+    async def start(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        rule_id = call.data[ATTR_RULE]
+        _check_rule(manager, rule_id)
+        placeholders = {"rule": rule_id}
+        if not manager.get_rule(rule_id).trigger_mode:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_trigger_rule",
+                translation_placeholders=placeholders,
+            )
+        runner = manager.runners.get(rule_id)
+        if runner is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="rule_disabled",
+                translation_placeholders=placeholders,
+            )
+        name, _person = await async_who(hass, call.context)
+        await runner.async_start_now(name or "")
 
     async def trigger(call: ServiceCall) -> None:
         manager = get_manager(hass)
@@ -302,6 +324,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
     register(DOMAIN, SERVICE_TRIGGER, trigger, _RULE_SCHEMA)
+    register(DOMAIN, SERVICE_START, start, _RULE_SCHEMA)
     register(
         DOMAIN,
         SERVICE_TEST_SIGNAL,

@@ -200,7 +200,7 @@ def sample_occurrence(rule: Rule) -> Occurrence:
     if rule.filter.rows and rule.filter.rows[0].mode == MATCH_REGEX:
         title = rule.name
     event = CalendarEvent(
-        calendar=rule.sources[0],
+        calendar=(rule.sources or [rule.id])[0],
         summary=title,
         start=local_instant(day, 0, tz),
         end=local_instant(day + timedelta(days=1), 0, tz),

@@ -210,7 +210,7 @@ export function buildOverview(
 ): Overview {
   const result: Overview = { open: [], upcoming: [], done: [] };
   for (const rule of rules) {
-    if (only?.length && !only.includes(rule.id ?? "")) continue;
+    if (rule.visible === false || (only?.length && !only.includes(rule.id ?? ""))) continue;
     for (const reminder of rule.status?.reminders ?? []) {
       const item = { rule, reminder };
       if (reminder.state === "reminded") result.open.push(item);
@@ -259,7 +259,7 @@ export function isAhead(reminder: Reminder, now: Date): boolean {
 export function doneTasks(rules: Rule[], now: Date, only?: string[]): Task[] {
   const list: Task[] = [];
   for (const rule of rules) {
-    if (only?.length && !only.includes(rule.id ?? "")) continue;
+    if (rule.visible === false || (only?.length && !only.includes(rule.id ?? ""))) continue;
     for (const reminder of rule.status?.reminders ?? []) {
       if (canReopen(reminder, now)) list.push({ rule, reminder, open: false });
     }
@@ -500,6 +500,8 @@ export function emptyRule(): Rule {
     icon: null,
     color: null,
     enabled: true,
+    visible: true,
+    lookahead_days: 14,
     sources: [],
     filter: { all_day: false, keywords: { columns: [], rows: [] } },
     reminders: [{ at: "-1d 17:00" }],
@@ -538,7 +540,42 @@ export function ruleFromTemplate(template: { rule: Partial<Rule> }): Rule {
 
 /** Whether a rule can be saved (name, a time, and a source or an interval). */
 export function ruleComplete(rule: Rule): boolean {
+  if (rule.start_triggers) return !!(rule.name.trim() && rule.start_triggers.length);
   return !!(rule.name.trim() && rule.reminders.length && (rule.sources.length || rule.interval));
+}
+
+export type SourceMode = "calendar" | "trigger" | "interval";
+
+/** Source mode of a stored rule (exactly one source is ever kept). */
+export function sourceModeOf(rule: Rule): SourceMode {
+  if (rule.start_triggers?.length) return "trigger";
+  if (rule.interval && !rule.sources.length) return "interval";
+  return "calendar";
+}
+
+/** The rule reduced to the source of the chosen mode; the other two are cleared. */
+export function keepOnlySource(rule: Rule, mode: SourceMode): Rule {
+  const next: Rule = { ...rule };
+  if (mode !== "calendar") {
+    next.sources = [];
+    next.filter = { all_day: false, keywords: { columns: [], rows: [] } };
+  }
+  if (mode === "trigger") {
+    next.start_triggers = rule.start_triggers ?? [];
+    next.interval = null;
+    if (!/^\+\d+h$/.test(next.expire.trim())) next.expire = "+12h";
+  } else {
+    delete next.start_triggers;
+    if (mode === "interval") next.interval = rule.interval ?? { every: 90 };
+    else next.interval = null;
+    if (/^\+\d+h$/.test(next.expire.trim())) next.expire = "event_day 12:00";
+  }
+  return next;
+}
+
+/** "Alida (Vertretung für Steven)" or just the name. */
+export function assigneeText(l: Localizer, name: string, substituteFor?: string | null): string {
+  return substituteFor ? l.t("substitute_for", { name, for: substituteFor }) : name;
 }
 
 /** Rename a keyword column in the table and wherever signals refer to it. */
@@ -647,7 +684,11 @@ export interface Problem {
 export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
   const problems: Problem[] = [];
   if (!rule.name.trim()) problems.push({ step: 1, text: l.t("err_name") });
-  if (!rule.sources.length && !rule.interval) problems.push({ step: 1, text: l.t("err_source") });
+  if (rule.start_triggers) {
+    if (!rule.start_triggers.length) problems.push({ step: 1, text: l.t("err_trigger") });
+  } else if (!rule.sources.length && !rule.interval) {
+    problems.push({ step: 1, text: l.t("err_source") });
+  }
   if (rule.filter.keywords.rows.some((r) => !r.match.trim())) {
     problems.push({ step: 2, text: l.t("err_keyword_empty") });
   }
@@ -655,7 +696,9 @@ export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
   if (names.some((n) => !n) || new Set(names).size !== names.length) {
     problems.push({ step: 2, text: l.t("err_columns") });
   }
-  if (!rule.reminders.length) problems.push({ step: 3, text: l.t("err_time") });
+  if (!rule.reminders.length && !rule.start_triggers) {
+    problems.push({ step: 3, text: l.t("err_time") });
+  }
   rule.signals.forEach((s) => {
     const label = l.t(`type_${s.type}` as StringKey);
     if (s.type === "notify" && !s.targets?.length && !s.audience) {
@@ -680,6 +723,10 @@ export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
   const season = rule.activation?.season;
   if (season && (!season.from || !season.to)) {
     problems.push({ step: 7, text: l.t("err_season") });
+  }
+  const who = rule.assignee;
+  if (who && !!who.substitute !== !!who.substitute_when?.entity_id) {
+    problems.push({ step: 7, text: l.t("err_substitute") });
   }
   if ((rule.escalation ?? []).some((e) => !e.after.trim())) {
     problems.push({ step: 7, text: l.t("err_stage") });
@@ -769,7 +816,7 @@ export interface Task {
 export function tasks(rules: Rule[], only?: string[]): Task[] {
   const list: Task[] = [];
   for (const rule of rules) {
-    if (only?.length && !only.includes(rule.id ?? "")) continue;
+    if (rule.visible === false || (only?.length && !only.includes(rule.id ?? ""))) continue;
     for (const reminder of rule.status?.reminders ?? []) {
       if (reminder.state === "reminded") list.push({ rule, reminder, open: true });
       else if (reminder.state === "planned") list.push({ rule, reminder, open: false });

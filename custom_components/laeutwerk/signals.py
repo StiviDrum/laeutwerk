@@ -118,12 +118,18 @@ def _parse_time(value: str) -> time:
 
 
 def quiet_until(
-    signal: Signal, now: datetime, tz: tzinfo
+    signal: Signal,
+    now: datetime,
+    tz: tzinfo,
+    household: list[dict[str, str]] | None = None,
 ) -> tuple[str, datetime] | None:
-    """Return (mode, end as UTC) of the quiet time that covers ``now``."""
+    """Return (mode, end as UTC) of the quiet time that covers ``now``.
+
+    A signal without its own quiet times follows the household's.
+    """
     local = now.astimezone(tz)
     current = local.time().replace(second=0, microsecond=0)
-    for window in signal.config.get("quiet", []):
+    for window in signal.config.get("quiet") or household or []:
         start, end = _parse_time(window["from"]), _parse_time(window["to"])
         if start == end:
             continue
@@ -200,6 +206,17 @@ def person_notify_targets(hass: HomeAssistant, person: State) -> list[str]:
         if target not in targets:
             targets.append(target)
     return targets
+
+
+async def async_notify_person(
+    hass: HomeAssistant, person: State, payload: dict[str, Any], context: Context
+) -> bool:
+    """Send a notification to the mobile app devices of one person."""
+    sent = False
+    for target in person_notify_targets(hass, person):
+        domain, _, service = target.partition(".")
+        sent = await _async_call(hass, domain, service, payload, context) or sent
+    return sent
 
 
 def notify_targets(

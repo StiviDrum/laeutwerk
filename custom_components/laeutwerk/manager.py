@@ -266,9 +266,15 @@ class LaeutwerkManager:
             on_reopened=lambda reminder, rule_id=rule.id: self._drop_history(
                 rule_id, reminder.id
             ),
+            household_quiet=self.household_quiet,
         )
         self.runners[rule.id] = runner
         await runner.async_start()
+
+    def household_quiet(self) -> list[dict[str, str]]:
+        """Quiet times of the whole household (integration options)."""
+        entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        return list(entry.options.get("quiet", [])) if entry else []
 
     @callback
     def _add_history(self, rule_id: str, reminder: Reminder) -> None:
@@ -308,7 +314,7 @@ class LaeutwerkManager:
         and whether the keyword table already matches it.
         """
         rule = draft_rule(rule_data)
-        start, _end = lookahead_window()
+        start, _end = lookahead_window(rule)
         events, _errors = await async_fetch_events(
             self.hass, rule.sources, start, dt_util.utcnow() + timedelta(days=days)
         )
@@ -588,7 +594,7 @@ class LaeutwerkManager:
                 self.hass, rule, {}, on_update=lambda _r: None, on_changed=lambda: None
             )
             events, _errors = await async_fetch_events(
-                self.hass, rule.sources, *lookahead_window()
+                self.hass, rule.sources, *lookahead_window(rule)
             )
             now = dt_util.utcnow()
             occurrences = sorted(build_occurrences(rule, events), key=lambda o: o.start)
@@ -679,6 +685,9 @@ class LaeutwerkManager:
             payload["expires_at"] = runner.expire_at(reminder).isoformat()
             payload["next_reminder_at"] = next_time.isoformat() if next_time else None
             payload["assignee_name"] = runner.assignee_name(reminder.assignee)
+            payload["substitute_for_name"] = runner.assignee_name(
+                reminder.substitute_for
+            )
             payload["tags"] = runner.tag_ids(reminder)
         return payload
 
@@ -769,9 +778,9 @@ def draft_rule(data: dict[str, Any]) -> Rule:
     return Rule.from_dict(validate_rule(data))
 
 
-def lookahead_window() -> tuple[datetime, datetime]:
-    """Start of today until the calendar look-ahead (UTC)."""
+def lookahead_window(rule: Rule | None = None) -> tuple[datetime, datetime]:
+    """Start of today until the rule's calendar look-ahead (UTC)."""
     now = dt_util.utcnow()
     tz = dt_util.get_default_time_zone()
     start = local_instant(now.astimezone(tz).date(), 0, tz)
-    return start, now + timedelta(days=LOOKAHEAD_DAYS)
+    return start, now + timedelta(days=rule.lookahead_days if rule else LOOKAHEAD_DAYS)

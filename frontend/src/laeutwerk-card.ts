@@ -6,6 +6,7 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { property, state } from "lit/decorators.js";
 import {
   badgeLook,
+  assigneeText,
   badgeLooks,
   buildOverview,
   doneLabel,
@@ -483,7 +484,11 @@ export class LaeutwerkCard extends LitElement {
     if (reminder.next_reminder_at) rows.push([l.t("d_next"), at(reminder.next_reminder_at)]);
     if (reminder.snoozed_until) rows.push([l.t("later"), at(reminder.snoozed_until)]);
     if (reminder.expires_at) rows.push([l.t("d_expires"), at(reminder.expires_at)]);
-    if (reminder.assignee_name) rows.push([l.t("d_assignee"), reminder.assignee_name]);
+    if (reminder.assignee_name)
+      rows.push([
+        l.t("d_assignee"),
+        assigneeText(l, reminder.assignee_name, reminder.substitute_for_name),
+      ]);
     if (reminder.stage) rows.push([l.t("d_stage"), String(reminder.stage)]);
     rows.push([
       l.t("d_signals"),
@@ -557,7 +562,10 @@ export class LaeutwerkCard extends LitElement {
             ${rule.name} ·
             ${relativeDay(reminder.start, this._now, l, tz)}${
               reminder.assignee_name
-                ? html` · ${l.t("responsible", { name: reminder.assignee_name })}`
+                ? html` ·
+                  ${l.t("responsible", {
+                    name: assigneeText(l, reminder.assignee_name, reminder.substitute_for_name),
+                  })}`
                 : nothing
             }
           </div>
@@ -726,7 +734,9 @@ export class LaeutwerkCard extends LitElement {
             <button class="rulebtn grow" @click=${() => (this._editing = rule)}>
               ${this._icon(rule, true)}
               <span class="grow text">
-                <span class="name">${rule.name}</span>
+                <span class="name"
+                  >${rule.name}${rule.visible === false ? html` <ha-icon class="hidden-icon" icon="mdi:eye-off-outline" title=${l.t("visible")}></ha-icon>` : nothing}</span
+                >
                 <span class="sub ${errors ? "bad" : ""}">
                   ${
                     errors
@@ -868,6 +878,11 @@ export class LaeutwerkCard extends LitElement {
         background: var(--lw-bg);
         border-radius: var(--lw-radius-card);
         box-sizing: border-box;
+      }
+      .hidden-icon {
+        --mdc-icon-size: 14px;
+        color: var(--lw-text-2);
+        vertical-align: -2px;
       }
       ha-card.compact {
         padding: 8px 10px;

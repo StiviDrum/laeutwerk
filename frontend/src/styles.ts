@@ -49,6 +49,16 @@ export const tokens = css`
 
 /** Shared pieces of the card and its editor pages. */
 export const shared = css`
+  /* Block heading + divider between independent features of one step. */
+  .sublabel.head {
+    font-size: 14px;
+    color: var(--lw-text);
+  }
+  .sep {
+    border: 0;
+    border-top: 1px solid var(--lw-border);
+    margin: 8px 0 4px;
+  }
   .separator {
     display: flex;
     align-items: center;

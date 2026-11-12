@@ -58,6 +58,8 @@ export class LaeutwerkSignalEditor extends LitElement {
   @state() private _testState?: string;
   /** Persons with their phones (laeutwerk/persons), loaded once. */
   @state() private _persons?: PersonInfo[];
+  /** Household quiet time (laeutwerk/settings), loaded once. */
+  @state() private _householdQuiet: QuietTime[] | null = null;
   /** Open sections (collapsible like the steps of the rule editor). */
   @state() private _openSec = new Set<string>(["what", "texts"]);
 
@@ -68,6 +70,12 @@ export class LaeutwerkSignalEditor extends LitElement {
         .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
         .then((res) => (this._persons = res.persons))
         .catch(() => (this._persons = []));
+    }
+    if (this.hass) {
+      this.hass
+        .callWS<{ quiet: QuietTime[] | null }>({ type: "laeutwerk/settings" })
+        .then((res) => (this._householdQuiet = res.quiet?.length ? res.quiet : null))
+        .catch(() => undefined);
     }
   }
 
@@ -822,7 +830,8 @@ export class LaeutwerkSignalEditor extends LitElement {
         </label>
         ${helpTip(l, "help_limits")}
       </div>
-      <div class="sublabel tiprow">${l.t("quiet_times")}${helpTip(l, "help_quiet")}</div>
+      <hr class="sep" />
+      <div class="sublabel head tiprow">${l.t("quiet_times")}${helpTip(l, "help_quiet")}</div>
       <div class="divided">
         ${quiet.map(
           (q, i) =>
@@ -860,6 +869,21 @@ export class LaeutwerkSignalEditor extends LitElement {
           <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_quiet")}
         </button>
       </div>
+      ${
+        !quiet.length && this._householdQuiet
+          ? html`<div class="hint">
+              ${this._householdQuiet
+                .map((q) =>
+                  l.t("household_quiet", {
+                    from: q.from,
+                    to: q.to,
+                    mode: l.t(q.mode === "defer" ? "quiet_defer" : "quiet_skip"),
+                  }),
+                )
+                .join(" ")}
+            </div>`
+          : nothing
+      }
     `;
   }
 

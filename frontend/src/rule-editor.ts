@@ -34,6 +34,9 @@ import {
   templateVariables,
   validTagAcks,
   signalSummary,
+  keepOnlySource,
+  sourceModeOf,
+  type SourceMode,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
 import { helpTip } from "./help-tip";
@@ -108,7 +111,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   /** Steps that are open; new rules are filled in step by step (guided). */
   @state() private _open = new Set<number>();
   @state() private _guided = false;
-  @state() private _mode: "calendar" | "custom" = "calendar";
+  @state() private _mode: SourceMode = "calendar";
   /** Persons with their phones (to show push targets by person). */
   @state() private _persons: PersonInfo[] = [];
   @state() private _problems: Problem[] = [];
@@ -130,7 +133,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       this._rule = copy;
       this._initial = JSON.stringify(copy);
       this._guided = !copy.id;
-      this._mode = copy.interval && !copy.sources.length ? "custom" : "calendar";
+      this._mode = sourceModeOf(copy);
       this._open = new Set(copy.id ? [] : [1]);
       this._draft = this._readDraft();
       this._schedulePreview(0);
@@ -218,27 +221,27 @@ export class LaeutwerkRuleEditor extends LitElement {
     );
   };
 
-  /** Source mode: calendar (default) or custom (recurring after done). */
+  /** Source mode other than calendar (no keyword table, no lookahead). */
   private get _custom(): boolean {
-    return this._mode === "custom";
+    return this._mode !== "calendar";
   }
 
-  private _setCustom(custom: boolean): void {
-    this._mode = custom ? "custom" : "calendar";
-    // Nothing is lost when switching back and forth; saving keeps the mode.
-    if (custom && !this._rule.interval) this._update({ interval: { every: 90 } });
-    else this._update({}, true);
+  private get _trigger(): boolean {
+    return this._mode === "trigger";
+  }
+
+  /** Switching keeps exactly one source; the other two are cleared. */
+  private _setMode(mode: SourceMode): void {
+    if (mode === this._mode) return;
+    this._mode = mode;
+    const base: Rule = { ...this._rule, sources: [], interval: null, start_triggers: undefined };
+    this._rule = { ...keepOnlySource(base, mode), filter: this._rule.filter };
+    this._update({}, true);
   }
 
   /** The rule as it is saved: only the part of the chosen source mode. */
   private _forSaving(rule: Rule): Rule {
-    if (this._custom)
-      return {
-        ...rule,
-        sources: [],
-        filter: { all_day: false, keywords: { columns: [], rows: [] } },
-      };
-    return { ...rule, interval: null };
+    return keepOnlySource(rule, this._mode);
   }
 
   private _toggleStep(num: number): void {
@@ -268,7 +271,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   private _update(changes: Partial<Rule>, preview = false): void {
     this._rule = { ...this._rule, ...changes };
     this._confirmCancel = false;
-    if (this._problems.length) this._problems = ruleProblems(this._rule, this._l);
+    if (this._problems.length) this._problems = ruleProblems(this._forSaving(this._rule), this._l);
     this._storeDraft();
     if (preview) this._schedulePreview(500);
   }
@@ -551,7 +554,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       ></laeutwerk-signal-editor>`;
     }
     const l = this._l;
-    const valid = ruleComplete(this._rule);
+    const valid = ruleComplete(this._forSaving(this._rule));
     return html`<div class="page">
       <div class="separator">
         ${this._rule.id ? l.t("edit_rule") : l.t("new_rule")}<span class="line"></span>
@@ -741,14 +744,26 @@ export class LaeutwerkRuleEditor extends LitElement {
         </div>
         <div class="sublabel tiprow">${l.t("source_mode")}${helpTip(l, "help_step_calendar")}</div>
         <div class="segmented">
-          <button aria-pressed=${!this._custom} @click=${() => this._setCustom(false)}>
-            ${l.t("source_calendar")}
-          </button>
-          <button aria-pressed=${this._custom} @click=${() => this._setCustom(true)}>
-            ${l.t("source_custom")}
-          </button>
+          ${(
+            [
+              ["calendar", "source_calendar"],
+              ["trigger", "source_trigger"],
+              ["interval", "source_custom"],
+            ] as const
+          ).map(
+            ([mode, key]) =>
+              html`<button aria-pressed=${this._mode === mode} @click=${() => this._setMode(mode)}>
+                ${l.t(key)}
+              </button>`,
+          )}
         </div>
-        ${this._custom ? this._intervalFields() : this._sourceFields()}
+        ${
+          this._trigger
+            ? this._triggerFields()
+            : this._custom
+              ? this._intervalFields()
+              : this._sourceFields()
+        }
       `,
     );
   }
@@ -774,10 +789,45 @@ export class LaeutwerkRuleEditor extends LitElement {
           this._update({ sources: Array.isArray(value) ? value : value ? [value] : [] }, true);
         }}
       ></laeutwerk-field>
+      ${
+        r.sources.some((id) => id.startsWith("calendar."))
+          ? html`<label class="field">
+              <span class="tiprow">${l.t("lookahead")}${helpTip(l, "help_lookahead")}</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                .value=${String(r.lookahead_days ?? 14)}
+                @change=${(e: Event) => {
+                  const n = Math.round(Number((e.target as HTMLInputElement).value));
+                  this._update({ lookahead_days: Math.min(365, Math.max(1, n || 14)) });
+                }}
+              />
+            </label>`
+          : nothing
+      }
     `;
   }
 
-  /** Custom mode: due again n days after it was last done. */
+  /** Trigger mode: the reminder starts when one of the triggers fires. */
+  private _triggerFields(): TemplateResult {
+    const l = this._l;
+    return html`
+      <div class="sublabel">${l.t("trigger_start")}</div>
+      <laeutwerk-field
+        .hass=${this.hass}
+        .localize=${l}
+        .selector=${{ trigger: {} }}
+        .value=${this._rule.start_triggers ?? EMPTY}
+        @value-changed=${(e: CustomEvent<{ value: HaConfig[] | HaConfig | undefined }>) => {
+          const v = e.detail.value;
+          this._update({ start_triggers: Array.isArray(v) ? v : v ? [v] : [] });
+        }}
+      ></laeutwerk-field>
+    `;
+  }
+
+  /** Interval mode: due again n days after it was last done. */
   private _intervalFields(): TemplateResult {
     const l = this._l;
     const interval = this._rule.interval ?? { every: 90 };
@@ -1100,92 +1150,98 @@ export class LaeutwerkRuleEditor extends LitElement {
   private _stepWhen(): TemplateResult {
     const l = this._l;
     const r = this._rule;
-    const repeat =
-      r.repeat === "none" ? "none" : Number(r.repeat.every) === 60 ? "hourly" : "custom";
+    const repeat = r.repeat === "none" ? "none" : "repeat";
     const first = this._preview?.events[0]?.reminder_times?.[0];
     const now = new Date();
     return this._step(
       3,
       "step_when",
       html`
-        <div class="sublabel tiprow">${l.t("times_label")}${helpTip(l, "help_reminders")}</div>
-        <div class="wrap">
-          ${r.reminders.map(
-            (item, i) =>
-              html`<span class="chip accent">
-                ${describeTimespec(item.at, l)}
-                <button
-                  class="x small"
-                  aria-label=${l.t("remove")}
-                  @click=${() => this._update({ reminders: r.reminders.filter((_, j) => j !== i) })}
-                >
-                  <ha-icon icon="mdi:close"></ha-icon>
-                </button>
-              </span>`,
-          )}
-        </div>
-        <div class="row addtime">
-          <select
-            @change=${(e: Event) => (this._timeKind = (e.target as HTMLSelectElement).value as TimeKind)}
-          >
-            ${(
-              [
-                ["days", "time_days_before"],
-                ["same", "time_same_day"],
-                ["hours", "time_hours_before"],
-                ["minutes", "time_minutes_before"],
-                ["custom", "time_custom"],
-              ] as const
-            ).map(
-              ([kind, key]) =>
-                html`<option value=${kind} ?selected=${this._timeKind === kind}>
-                  ${l.t(key)}
-                </option>`,
-            )}
-          </select>
-          ${
-            this._timeKind === "days"
-              ? html`<input
-                  type="number"
-                  min="1"
-                  .value=${String(this._timeDays)}
-                  @input=${(e: Event) => (this._timeDays = Number((e.target as HTMLInputElement).value))}
-                />`
-              : nothing
-          }
-          ${
-            this._timeKind === "days" || this._timeKind === "same"
-              ? html`<input
-                  type="time"
-                  .value=${this._timeClock}
-                  @input=${(e: Event) => (this._timeClock = (e.target as HTMLInputElement).value)}
-                />`
-              : this._timeKind === "custom"
-                ? html`<input
-                    class="grow"
-                    placeholder="-1d 17:00"
-                    .value=${this._timeCustom}
-                    @input=${(e: Event) => (this._timeCustom = (e.target as HTMLInputElement).value)}
-                  />`
-                : html`<input
-                    type="number"
-                    min="1"
-                    .value=${String(this._timeAmount)}
-                    @input=${(e: Event) => (this._timeAmount = Number((e.target as HTMLInputElement).value))}
-                  />`
-          }
-          <button class="chip dashed" @click=${this._addTime}>
-            <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_time")}
-          </button>
-        </div>
         ${
-          first
-            ? html`<div class="hint">
-                ${l.t("reminder_at", { when: relativeDayTime(first, now, l, this.hass?.config?.time_zone) })}
-              </div>`
-            : nothing
+          this._trigger
+            ? nothing
+            : html`<div class="sublabel head tiprow">
+                  ${l.t("times_label")}${helpTip(l, "help_reminders")}
+                </div>
+                <div class="wrap">
+                  ${r.reminders.map(
+                    (item, i) =>
+                      html`<span class="chip accent">
+                        ${describeTimespec(item.at, l)}
+                        <button
+                          class="x small"
+                          aria-label=${l.t("remove")}
+                          @click=${() => this._update({ reminders: r.reminders.filter((_, j) => j !== i) })}
+                        >
+                          <ha-icon icon="mdi:close"></ha-icon>
+                        </button>
+                      </span>`,
+                  )}
+                </div>
+                <div class="row addtime">
+                  <select
+                    @change=${(e: Event) => (this._timeKind = (e.target as HTMLSelectElement).value as TimeKind)}
+                  >
+                    ${(
+                      [
+                        ["days", "time_days_before"],
+                        ["same", "time_same_day"],
+                        ["hours", "time_hours_before"],
+                        ["minutes", "time_minutes_before"],
+                        ["custom", "time_custom"],
+                      ] as const
+                    ).map(
+                      ([kind, key]) =>
+                        html`<option value=${kind} ?selected=${this._timeKind === kind}>
+                          ${l.t(key)}
+                        </option>`,
+                    )}
+                  </select>
+                  ${
+                    this._timeKind === "days"
+                      ? html`<input
+                          type="number"
+                          min="1"
+                          .value=${String(this._timeDays)}
+                          @input=${(e: Event) => (this._timeDays = Number((e.target as HTMLInputElement).value))}
+                        />`
+                      : nothing
+                  }
+                  ${
+                    this._timeKind === "days" || this._timeKind === "same"
+                      ? html`<input
+                          type="time"
+                          .value=${this._timeClock}
+                          @input=${(e: Event) => (this._timeClock = (e.target as HTMLInputElement).value)}
+                        />`
+                      : this._timeKind === "custom"
+                        ? html`<input
+                            class="grow"
+                            placeholder="-1d 17:00"
+                            .value=${this._timeCustom}
+                            @input=${(e: Event) => (this._timeCustom = (e.target as HTMLInputElement).value)}
+                          />`
+                        : html`<input
+                            type="number"
+                            min="1"
+                            .value=${String(this._timeAmount)}
+                            @input=${(e: Event) => (this._timeAmount = Number((e.target as HTMLInputElement).value))}
+                          />`
+                  }
+                  <button class="chip dashed" @click=${this._addTime}>
+                    <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_time")}
+                  </button>
+                </div>
+                ${
+                  first
+                    ? html`<div class="hint">
+                        ${l.t("reminder_at", { when: relativeDayTime(first, now, l, this.hass?.config?.time_zone) })}
+                      </div>`
+                    : nothing
+                }
+                <hr class="sep" />`
         }
-        <div class="sublabel tiprow">${l.t("repeat")}${helpTip(l, "help_repeat")}</div>
+        <div class="sublabel head tiprow">${l.t("repeat")}${helpTip(l, "help_repeat")}</div>
         <div class="segmented">
           <button
             aria-pressed=${repeat === "none"}
@@ -1194,16 +1250,10 @@ export class LaeutwerkRuleEditor extends LitElement {
             ${l.t("repeat_once")}
           </button>
           <button
-            aria-pressed=${repeat === "hourly"}
-            @click=${() => this._update({ repeat: { every: 60, max: 24 } })}
+            aria-pressed=${repeat === "repeat"}
+            @click=${() => repeat !== "repeat" && this._update({ repeat: { every: 60, max: 24 } })}
           >
-            ${l.t("repeat_hourly")}
-          </button>
-          <button
-            aria-pressed=${repeat === "custom"}
-            @click=${() => repeat !== "custom" && this._update({ repeat: { every: 30, max: 10 } })}
-          >
-            ${l.t("repeat_custom")}
+            ${l.t("repeat_repeat")}
           </button>
         </div>
         ${
@@ -1441,13 +1491,25 @@ export class LaeutwerkRuleEditor extends LitElement {
       6,
       "step_details",
       html`
+        ${
+          this._trigger
+            ? nothing
+            : this._toggle(
+                l.t("bundle"),
+                r.bundle,
+                (v) => this._update({ bundle: v }, true),
+                "help_bundle",
+              )
+        }
         ${this._toggle(
-          l.t("bundle"),
-          r.bundle,
-          (v) => this._update({ bundle: v }, true),
-          "help_bundle",
+          l.t("visible"),
+          r.visible !== false,
+          (v) => this._update({ visible: v }),
+          "help_visible",
         )}
-        <div class="sublabel tiprow">${l.t("headline")}${helpTip(l, "help_headline")}</div>
+        <hr class="sep" />
+        <div class="sublabel head tiprow">${l.t("headline")}${helpTip(l, "help_headline")}</div>
+        ${this._trigger ? nothing : html`<div class="sublabel">${l.t("headline_one")}</div>`}
         <laeutwerk-suggest
           .value=${r.headline ?? ""}
           .placeholder=${l.t("headline_default")}
@@ -1456,53 +1518,126 @@ export class LaeutwerkRuleEditor extends LitElement {
             this._update({ headline: e.detail.value || null })}
         ></laeutwerk-suggest>
         ${this._singularPreview()}
-        <div class="sublabel">${l.t("headline_plural")}</div>
-        <laeutwerk-suggest
-          .value=${r.headline_plural ?? ""}
-          .placeholder=${r.headline || l.t("headline_default")}
-          .variables=${availableVariables(r)}
-          @value-changed=${(e: CustomEvent<{ value: string }>) =>
-            this._update({ headline_plural: e.detail.value || null })}
-        ></laeutwerk-suggest>
-        ${this._pluralPreview()}
-        <div class="sublabel tiprow">${l.t("expire")}${helpTip(l, "help_expire")}</div>
-        <div class="segmented">
-          <button
-            aria-pressed=${kind === "end"}
-            @click=${() => this._update({ expire: "event_end" })}
-          >
-            ${l.t("expire_event_end")}
-          </button>
-          <button
-            aria-pressed=${kind === "day"}
-            @click=${() => kind !== "day" && this._update({ expire: "event_day 12:00" })}
-          >
-            ${l.t("expire_event_day")}
-          </button>
-          <button
-            aria-pressed=${kind === "custom"}
-            @click=${() => kind !== "custom" && this._update({ expire: "+1d 12:00" })}
-          >
-            ${l.t("expire_custom")}
-          </button>
-        </div>
         ${
-          kind === "day"
-            ? html`<input
-                type="time"
-                .value=${dayMatch![1].padStart(5, "0")}
-                @change=${(e: Event) =>
-                  this._update({ expire: `event_day ${(e.target as HTMLInputElement).value}` })}
-              />`
-            : kind === "custom"
+          this._trigger
+            ? nothing
+            : html`<div class="sublabel">${l.t("headline_plural")}</div>
+                <laeutwerk-suggest
+                  .value=${r.headline_plural ?? ""}
+                  .placeholder=${r.headline || l.t("headline_default")}
+                  .variables=${availableVariables(r)}
+                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                    this._update({ headline_plural: e.detail.value || null })}
+                ></laeutwerk-suggest>
+                ${this._pluralPreview()}`
+        }
+        <hr class="sep" />
+        <div class="sublabel head tiprow">${l.t("expire")}${helpTip(l, "help_expire")}</div>
+        ${
+          this._trigger
+            ? html`<label class="field"
+                >${l.t("expire_hours_n")}
+                <input
+                  type="number"
+                  min="1"
+                  .value=${/^\+(\d+)h$/.exec(expire)?.[1] ?? "12"}
+                  @change=${(e: Event) =>
+                    this._update({
+                      expire: `+${Math.max(1, Math.round(Number((e.target as HTMLInputElement).value)) || 12)}h`,
+                    })}
+                />
+              </label>`
+            : html`<div class="segmented">
+                <button
+                  aria-pressed=${kind === "end"}
+                  @click=${() => this._update({ expire: "event_end" })}
+                >
+                  ${l.t("expire_event_end")}
+                </button>
+                <button
+                  aria-pressed=${kind === "day"}
+                  @click=${() => kind !== "day" && this._update({ expire: "event_day 12:00" })}
+                >
+                  ${l.t("expire_event_day")}
+                </button>
+                <button
+                  aria-pressed=${kind === "custom"}
+                  @click=${() => kind !== "custom" && this._update({ expire: "+1d 12:00" })}
+                >
+                  ${l.t("expire_custom")}
+                </button>
+              </div>`
+        }
+        ${
+          this._trigger
+            ? nothing
+            : kind === "day"
               ? html`<input
-                  .value=${expire}
-                  @change=${(e: Event) => this._update({ expire: (e.target as HTMLInputElement).value })}
+                  type="time"
+                  .value=${dayMatch![1].padStart(5, "0")}
+                  @change=${(e: Event) =>
+                    this._update({ expire: `event_day ${(e.target as HTMLInputElement).value}` })}
                 />`
-              : nothing
+              : kind === "custom"
+                ? html`<input
+                    .value=${expire}
+                    @change=${(e: Event) => this._update({ expire: (e.target as HTMLInputElement).value })}
+                  />`
+                : nothing
         }
       `,
     );
+  }
+
+  private _setSubstituteWhen(changes: { entity_id?: string; state?: string }): void {
+    const assignee = this._rule.assignee;
+    if (!assignee) return;
+    const when = { entity_id: "", state: "", ...assignee.substitute_when, ...changes };
+    const next = { ...assignee };
+    if (when.entity_id || when.state) next.substitute_when = when;
+    else delete next.substitute_when;
+    this._update({ assignee: next });
+  }
+
+  /** Person chips; `single` picks at most one. */
+  private _personChips(
+    selected: string[],
+    single: boolean,
+    onChange: (ids: string[]) => void,
+  ): TemplateResult {
+    if (!this._persons.length) {
+      return html`<div class="hint">${this._l.t("no_companion_persons")}</div>`;
+    }
+    return html`<div class="wrap">
+      ${this._persons.map((p) => {
+        const on = selected.includes(p.entity_id);
+        return html`<button
+          class="chip ${on ? "accent" : ""}"
+          aria-pressed=${on}
+          @click=${() =>
+            onChange(
+              on
+                ? selected.filter((id) => id !== p.entity_id)
+                : single
+                  ? [p.entity_id]
+                  : [...selected, p.entity_id],
+            )}
+        >
+          ${p.name}
+        </button>`;
+      })}
+    </div>`;
+  }
+
+  /** Known states of an entity: the current one plus the usual ones of its domain. */
+  private _stateOptions(entityId: string): string[] {
+    const domain = entityId.split(".")[0];
+    const usual =
+      domain === "person" || domain === "device_tracker"
+        ? ["home", "not_home"]
+        : ["on", "off"].filter(() => !["sensor", "select", "input_select"].includes(domain));
+    const now = this.hass?.states[entityId]?.state;
+    return [...new Set([...(now ? [now] : []), ...usual])];
   }
 
   private _stepAdvanced(): TemplateResult {
@@ -1525,22 +1660,14 @@ export class LaeutwerkRuleEditor extends LitElement {
       7,
       "step_advanced",
       html`
-        <div class="sublabel tiprow">${l.t("assignee")}${helpTip(l, "assignee_hint")}</div>
-        <laeutwerk-field
-          .hass=${this.hass}
-          .localize=${l}
-          .selector=${{ entity: { domain: "person", multiple: true } }}
-          .value=${assignee?.persons ?? EMPTY}
-          @value-changed=${(e: CustomEvent<{ value: string[] | string }>) => {
-            const value = e.detail.value;
-            const persons = Array.isArray(value) ? value : value ? [value] : [];
-            this._update({
-              assignee: persons.length
-                ? { persons, rotation: assignee?.rotation ?? "fixed" }
-                : null,
-            });
-          }}
-        ></laeutwerk-field>
+        <div class="sublabel head tiprow">${l.t("assignee")}${helpTip(l, "assignee_hint")}</div>
+        ${this._personChips(assignee?.persons ?? [], false, (persons) =>
+          this._update({
+            assignee: persons.length
+              ? { ...assignee, persons, rotation: assignee?.rotation ?? "fixed" }
+              : null,
+          }),
+        )}
         ${
           assignee
             ? html`<label class="field"
@@ -1566,6 +1693,45 @@ export class LaeutwerkRuleEditor extends LitElement {
                   </select>
                 </label>
 
+                <div class="sublabel tiprow">
+                  ${l.t("substitute")}${helpTip(l, "help_substitute")}
+                </div>
+                ${this._personChips(
+                  assignee.substitute ? [assignee.substitute] : [],
+                  true,
+                  (ids) => {
+                    const next = { ...assignee };
+                    if (ids[0]) next.substitute = ids[0];
+                    else delete next.substitute;
+                    this._update({ assignee: next });
+                  },
+                )}
+                <div class="sublabel">${l.t("substitute_when")}</div>
+                <div class="row">
+                  <laeutwerk-field
+                    class="grow"
+                    .hass=${this.hass}
+                    .localize=${l}
+                    .selector=${{ entity: {} }}
+                    .value=${assignee.substitute_when?.entity_id ?? ""}
+                    @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                      this._setSubstituteWhen({ entity_id: e.detail.value || "" })}
+                  ></laeutwerk-field>
+                  <label class="field grow"
+                    >${l.t("substitute_state")}
+                    <input
+                      list="lw-states"
+                      .value=${assignee.substitute_when?.state ?? ""}
+                      @change=${(e: Event) =>
+                        this._setSubstituteWhen({ state: (e.target as HTMLInputElement).value })}
+                    />
+                    <datalist id="lw-states">
+                      ${this._stateOptions(assignee.substitute_when?.entity_id ?? "").map(
+                        (st) => html`<option value=${st}></option>`,
+                      )}
+                    </datalist>
+                  </label>
+                </div>
                 ${
                   stats.length
                     ? html`<div class="wrap">
@@ -1576,9 +1742,9 @@ export class LaeutwerkRuleEditor extends LitElement {
                 }`
             : nothing
         }
-
+        <hr class="sep" />
         <div class="row">
-          <div class="sublabel grow">${l.t("activation")}</div>
+          <div class="sublabel head grow">${l.t("activation")}</div>
           ${
             activation
               ? html`<div class="segmented small">
@@ -1606,7 +1772,8 @@ export class LaeutwerkRuleEditor extends LitElement {
             else setActivation({ conditions });
           }}
         ></laeutwerk-field>
-        <div class="sublabel">${l.t("season")}</div>
+        <hr class="sep" />
+        <div class="sublabel head">${l.t("season")}</div>
         <div class="row season">
           ${this._monthDay(activation?.season?.from ?? "", l.t("season_from"), (from) => {
             const to = activation?.season?.to ?? "";
@@ -1620,8 +1787,8 @@ export class LaeutwerkRuleEditor extends LitElement {
             else setActivation({ season: from || to ? { from, to } : undefined });
           })}
         </div>
-
-        <div class="sublabel tiprow">${l.t("escalation")}${helpTip(l, "escalation_hint")}</div>
+        <hr class="sep" />
+        <div class="sublabel head tiprow">${l.t("escalation")}${helpTip(l, "escalation_hint")}</div>
         <div class="divided">
           ${stages.map(
             (stage, i) =>
@@ -1678,8 +1845,42 @@ export class LaeutwerkRuleEditor extends LitElement {
             <ha-icon icon="mdi:plus"></ha-icon>${l.t("add_stage")}
           </button>
         </div>
-
-        <div class="sublabel tiprow">${l.t("on_done")}${helpTip(l, "on_done_hint")}</div>
+        <hr class="sep" />
+        <div class="sublabel head tiprow">${l.t("on_done")}${helpTip(l, "on_done_hint")}</div>
+        ${this._toggle(l.t("confirm_send"), !!r.confirm, (v) =>
+          this._update({
+            confirm: v ? { message: l.t("confirm_default"), clear_after: 10 } : null,
+          }),
+        )}
+        ${
+          r.confirm
+            ? html`<laeutwerk-suggest
+                  .label=${l.t("confirm_message")}
+                  .value=${r.confirm.message}
+                  .variables=${availableVariables(r)}
+                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
+                    this._update({ confirm: { ...r.confirm!, message: e.detail.value } })}
+                ></laeutwerk-suggest>
+                <label class="field"
+                  >${l.t("confirm_clear")}
+                  <input
+                    type="number"
+                    min="0"
+                    .value=${String(r.confirm.clear_after)}
+                    @change=${(e: Event) =>
+                      this._update({
+                        confirm: {
+                          ...r.confirm!,
+                          clear_after: Math.max(
+                            0,
+                            Number((e.target as HTMLInputElement).value) || 0,
+                          ),
+                        },
+                      })}
+                  />
+                </label>`
+            : nothing
+        }
         <laeutwerk-field
           .hass=${this.hass}
           .localize=${l}
@@ -1944,9 +2145,6 @@ export class LaeutwerkRuleEditor extends LitElement {
         display: flex;
         align-items: center;
         gap: 4px;
-      }
-      .hcell.tiprow {
-        gap: 0;
       }
       .vhead {
         display: flex;

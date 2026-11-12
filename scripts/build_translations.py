@@ -9,7 +9,7 @@ import json
 import pathlib
 
 RULE_EN = (
-    "Rule object. Required: name, reminders (list of objects with 'at') and sources (entity ids: calendar.*, todo.* lists with due dates, date.*, datetime.*, input_datetime.*, timestamp/date sensor.*) or interval. "
+    "Rule object. Required: name, reminders (list of objects with 'at'; not needed for start_triggers rules) and exactly one source: sources (entity ids: calendar.*, todo.* lists with due dates, date.*, datetime.*, input_datetime.*, timestamp/date sensor.*) or interval. "
     "Optional: id, icon, color, headline and headline_plural (editable card headline with variables in curly braces, plural variant used for several hits), enabled, filter (all_day, keywords with columns = list of variable names and rows = list of objects with match, mode contains/startswith/regex, optional own color (#rrggbb) and icon (e.g. mdi:recycle) and one value per column), "
     "signals (list). Every signal: id, type, enabled, when ('now' = at the reminder time, or an object with opportunity = Home Assistant trigger(s) as in automations and manual_only = only real operation, not automations; an opportunity signal fires whenever the trigger fires while the reminder is open), conditions (Home Assistant conditions, 'only if') with conditions_match all/any, limit (per_reminder = maximum sends per reminder, min_interval = minutes between sends), quiet (list of objects with from, to as HH:MM and mode skip or defer = send when the quiet time ends). "
     "type notify: targets = list of notify.xxx actions and/or audience all/present/persons/assignee (with persons = list of person entities; uses their mobile app devices), title, title_plural, message, message_plural, actions = push buttons, list of objects with label and either ack: true or snooze: duration such as 3h, data. "
@@ -20,14 +20,16 @@ RULE_EN = (
     "repeat ('none' or an object with every = minutes or a duration such as 1h, and max = number of repetitions), "
     "interval (every = days such as 90 or '12w', start = first due date: due again that many days after the last acknowledgement; overdue = reminds daily), "
     "activation (conditions, match all/any, season with from/to as MM-DD: the rule is only active then), on_done (Home Assistant actions run when acknowledged, variables plus person and via), "
-    "assignee (persons = person entities, rotation fixed/weekly/per_event/after_last; text variable zustaendig, push audience 'assignee'), "
+    "assignee (persons = person entities, rotation fixed/weekly/per_event/after_last, substitute = person that takes over at the first reminder if substitute_when {entity_id, state} holds; text variable zustaendig, push audience 'assignee'), "
     "escalation (list of stages with after = duration such as 2h or time of day such as 21:30, counted from the first reminder, and optional color = #rrggbb shown in the card; a signal with stage n starts with that stage), "
+    "start_triggers (list of Home Assistant triggers as in automations; instead of calendars the rule starts a reminder whenever one fires and none is open; reminders and filter are ignored, expire defaults to '+12h' and must not be event_start/event_end; start it by hand with the start action), confirm (object with message and clear_after seconds 0-3600, default 10: confirmation push to whoever acknowledged, else the assignee), expire also accepts '+<duration>' such as '+12h' (after the start), "
+    "lookahead_days (1-365, default 14, days the calendars are read ahead, must exceed the earliest reminder offset), visible (default true; false hides the rule in the card overview), "
     "ack_label, bundle (events of the same day become one reminder, default true), expire (default event_end). "
     "Times: '-1d 17:00' (day before at 17:00), '09:00' (event day), '-2h' (before the start), 'event_day 12:00', 'event_end'. "
     "Text variables, written in curly braces in the texts: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, one per keyword column and its plural with an appended n (e.g. tonne / tonnen)."
 )
 RULE_DE = (
-    "Regel-Objekt. Pflicht: name, reminders (Liste von Objekten mit 'at') und sources (Entitäten: calendar.*, todo.*-Listen mit Fälligkeit, date.*, datetime.*, input_datetime.*, Zeitstempel-/Datums-sensor.*) oder interval. "
+    "Regel-Objekt. Pflicht: name, reminders (Liste von Objekten mit 'at'; bei start_triggers-Regeln nicht nötig) und genau eine Quelle: sources (Entitäten: calendar.*, todo.*-Listen mit Fälligkeit, date.*, datetime.*, input_datetime.*, Zeitstempel-/Datums-sensor.*) oder interval. "
     "Optional: id, icon, color, headline und headline_plural (bearbeitbare Überschrift der Karte mit Variablen in geschweiften Klammern, Mehrzahl-Variante bei mehreren Treffern), enabled, filter (all_day, keywords mit columns = Liste der Variablennamen und rows = Liste von Objekten mit match, mode contains/startswith/regex, optional eigener color (#rrggbb) und icon (z. B. mdi:recycle) und einem Wert je Spalte), "
     "signals (Liste). Jedes Signal: id, type, enabled, when ('now' = zum Erinnerungszeitpunkt, oder ein Objekt mit opportunity = Home-Assistant-Trigger wie in Automationen und manual_only = nur echte Bedienung, keine Automationen; ein Gelegenheits-Signal feuert immer dann, wenn der Trigger auslöst, solange die Erinnerung offen ist), conditions (Home-Assistant-Bedingungen, „nur wenn“) mit conditions_match all/any, limit (per_reminder = höchstens so oft pro Erinnerung, min_interval = Minuten Mindestabstand), quiet (Liste von Objekten mit from, to als HH:MM und mode skip oder defer = nachholen, sobald die Ruhezeit endet). "
     "type notify: targets = Liste von notify.xxx-Aktionen und/oder audience all/present/persons/assignee (mit persons = Liste von Personen-Entitäten; nutzt deren Mobile-App-Geräte), title, title_plural, message, message_plural, actions = Push-Knöpfe, Liste von Objekten mit label und entweder ack: true oder snooze: Dauer wie 3h, data. "
@@ -38,8 +40,10 @@ RULE_DE = (
     "repeat ('none' oder ein Objekt mit every = Minuten oder Dauer wie 1h, und max = Anzahl Wiederholungen), "
     "interval (every = Tage wie 90 oder '12w', start = erste Fälligkeit: wieder fällig so viele Tage nach dem letzten Quittieren; überfällig = täglich erinnern), "
     "activation (conditions, match all/any, season mit from/to als MM-TT: Regel nur dann aktiv), on_done (Home-Assistant-Aktionen beim Quittieren, Variablen plus person und via), "
-    "assignee (persons = Personen-Entitäten, rotation fixed/weekly/per_event/after_last; Textvariable zustaendig, Push-Zielgruppe 'assignee'), "
+    "assignee (persons = Personen-Entitäten, rotation fixed/weekly/per_event/after_last, substitute = Vertretung, die bei der ersten Erinnerung übernimmt, wenn substitute_when {entity_id, state} zutrifft; Textvariable zustaendig, Push-Zielgruppe 'assignee'), "
     "escalation (Liste von Stufen mit after = Dauer wie 2h oder Uhrzeit wie 21:30, gezählt ab der ersten Erinnerung, und optional color = #rrggbb für die Karte; ein Signal mit stage n startet mit dieser Stufe), "
+    "start_triggers (Liste von Home-Assistant-Triggern wie in Automationen; statt Kalendern startet die Regel eine Erinnerung, sobald einer auslöst und keine offen ist; reminders und filter werden ignoriert, expire ist standardmäßig '+12h' und darf nicht event_start/event_end sein; von Hand mit der Aktion start), confirm (Objekt mit message und clear_after Sekunden 0-3600, Standard 10: Bestätigungs-Push an die erledigende Person, sonst an die Zuständigen), expire kennt auch '+<Dauer>' wie '+12h' (nach dem Start), "
+    "lookahead_days (1-365, Standard 14, Tage, die der Kalender vorausgelesen wird, muss größer als die früheste Erinnerung sein), visible (Standard true; false blendet die Regel in der Kartenübersicht aus), "
     "ack_label, bundle (Termine desselben Tages werden eine Erinnerung, Standard true), expire (Standard event_end). "
     "Zeiten: '-1d 17:00' (Vortag 17:00), '09:00' (am Termintag), '-2h' (vor Beginn), 'event_day 12:00', 'event_end'. "
     "Textvariablen, in den Texten in geschweiften Klammern: titel, rest, beschreibung, ort, kalender, wann, datum, uhrzeit, je Stichwort-Spalte eine und ihre Mehrzahl mit angehängtem n (z. B. tonne / tonnen)."
@@ -64,6 +68,26 @@ en = {
         },
         "abort": {"single_instance_allowed": "Läutwerk is already set up."},
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Household quiet time",
+                "description": "Signals without their own quiet time follow this one. Leave both times empty for none.",
+                "data": {
+                    "from": "From",
+                    "to": "To",
+                    "mode": "Signals in the quiet time",
+                },
+                "data_description": {
+                    "mode": "Skip them, or send them when the quiet time ends."
+                },
+            }
+        },
+        "error": {"incomplete": "Enter both times or none."},
+    },
+    "selector": {
+        "quiet_mode": {"options": {"skip": "Skip", "defer": "Send when it ends"}}
+    },
     "entity": {
         "sensor": {
             "state": {
@@ -76,6 +100,7 @@ en = {
                 }
             },
             "next_event": {"name": "Next event"},
+            "open_total": {"name": "Open reminders"},
         },
         "binary_sensor": {"open": {"name": "Open"}},
         "button": {"done": {"name": "Done"}},
@@ -114,6 +139,11 @@ en = {
         "trigger": svc(
             "Trigger",
             "Reminds now: sends the immediate signals of the rule for its open or next planned reminder, regardless of the reminder times.",
+            rule=("Rule", "Rule id."),
+        ),
+        "start": svc(
+            "Start",
+            "Starts a reminder of a rule that is driven by start_triggers, exactly as if a trigger had fired: nothing happens while a reminder of the rule is open. Fails for rules without start_triggers.",
             rule=("Rule", "Rule id."),
         ),
         "test_signal": svc(
@@ -182,6 +212,7 @@ en = {
         "not_loaded": {"message": "Läutwerk is not set up."},
         "unknown_rule": {"message": "Unknown rule: {rule}"},
         "rule_disabled": {"message": "Rule {rule} is switched off."},
+        "not_trigger_rule": {"message": "Rule {rule} has no start_triggers."},
         "no_upcoming_event": {
             "message": "Rule {rule} has no upcoming event to remind of."
         },
@@ -211,6 +242,24 @@ de = {
         },
         "abort": {"single_instance_allowed": "Läutwerk ist bereits eingerichtet."},
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Ruhezeit des Haushalts",
+                "description": "Signale ohne eigene Ruhezeit richten sich danach. Beide Zeiten leer lassen für keine.",
+                "data": {"from": "Von", "to": "Bis", "mode": "Signale in der Ruhezeit"},
+                "data_description": {
+                    "mode": "Auslassen oder senden, sobald die Ruhezeit endet."
+                },
+            }
+        },
+        "error": {"incomplete": "Beide Zeiten angeben oder keine."},
+    },
+    "selector": {
+        "quiet_mode": {
+            "options": {"skip": "Auslassen", "defer": "Senden, wenn sie endet"}
+        }
+    },
     "entity": {
         "sensor": {
             "state": {
@@ -223,6 +272,7 @@ de = {
                 }
             },
             "next_event": {"name": "Nächster Termin"},
+            "open_total": {"name": "Offene Erinnerungen"},
         },
         "binary_sensor": {"open": {"name": "Offen"}},
         "button": {"done": {"name": "Erledigt"}},
@@ -267,6 +317,11 @@ de = {
         "trigger": svc(
             "Auslösen",
             "Erinnert sofort: sendet die Sofort-Signale der Regel für ihre offene oder nächste geplante Erinnerung, unabhängig von den Erinnerungszeitpunkten.",
+            rule=("Regel", "Regel-ID."),
+        ),
+        "start": svc(
+            "Starten",
+            "Startet eine Erinnerung einer Regel mit start_triggers, genau als hätte ein Trigger ausgelöst: solange eine Erinnerung der Regel offen ist, passiert nichts. Fehler bei Regeln ohne start_triggers.",
             rule=("Regel", "Regel-ID."),
         ),
         "test_signal": svc(
@@ -336,6 +391,7 @@ de = {
         "not_loaded": {"message": "Läutwerk ist nicht eingerichtet."},
         "unknown_rule": {"message": "Unbekannte Regel: {rule}"},
         "rule_disabled": {"message": "Die Regel {rule} ist ausgeschaltet."},
+        "not_trigger_rule": {"message": "Die Regel {rule} hat keine start_triggers."},
         "no_upcoming_event": {
             "message": "Die Regel {rule} hat keinen anstehenden Termin, an den erinnert werden könnte."
         },

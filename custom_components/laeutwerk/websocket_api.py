@@ -259,7 +259,9 @@ async def ws_preview(
         raise vol.Invalid("rule_id or rule is required")
 
     now = dt_util.utcnow()
-    events, errors = await async_fetch_events(hass, rule.sources, *lookahead_window())
+    events, errors = await async_fetch_events(
+        hass, rule.sources, *lookahead_window(rule)
+    )
     runner = RuleRunner(
         hass, rule, {}, on_update=lambda _runner: None, on_changed=lambda: None
     )
@@ -477,11 +479,25 @@ def ws_persons(
             "entity_id": state.entity_id,
             "name": state.name,
             "state": state.state,
-            "notify": person_notify_targets(hass, state),
+            "notify": notify,
         }
         for state in sorted(hass.states.async_all("person"), key=lambda s: s.name)
+        if (notify := person_notify_targets(hass, state))
     ]
     connection.send_result(msg["id"], {"persons": persons})
+
+
+@websocket_api.websocket_command({vol.Required("type"): "laeutwerk/settings"})
+@websocket_api.async_response
+@_with_manager
+async def ws_settings(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Integration settings (read-only): the household quiet time."""
+    connection.send_result(msg["id"], {"quiet": manager.household_quiet() or None})
 
 
 @callback
@@ -489,6 +505,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
     for command in (
         ws_list,
+        ws_settings,
         ws_get,
         ws_create,
         ws_update,

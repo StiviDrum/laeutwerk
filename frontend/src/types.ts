@@ -103,6 +103,8 @@ export interface Reminder {
   next_reminder_at?: string | null;
   assignee?: string | null;
   assignee_name?: string | null;
+  /** Name of the person the substitute stands in for. */
+  substitute_for_name?: string | null;
   stage?: number;
   signals_sent?: Record<string, number>;
   signal_last?: Record<string, string>;
@@ -170,14 +172,27 @@ export interface Rule {
   repeat: "none" | { every: number | string; max?: number };
   bundle: boolean;
   expire: string;
+  /** Days of calendar to look ahead (1-365, default 14). */
+  lookahead_days?: number;
+  /** false = hidden in overview, upcoming, done and compact card. */
+  visible?: boolean;
   interval?: { every: number | string; start?: string } | null;
+  /** Source "trigger": the reminder starts when one of these fires. */
+  start_triggers?: HaConfig[] | null;
+  /** Short confirmation to the person who finished the task. */
+  confirm?: { message: string; clear_after: number } | null;
   activation?: {
     conditions: HaConfig[];
     match?: "all" | "any";
     season?: { from: string; to: string };
   } | null;
   on_done?: HaConfig[];
-  assignee?: { persons: string[]; rotation?: Rotation } | null;
+  assignee?: {
+    persons: string[];
+    rotation?: Rotation;
+    substitute?: string;
+    substitute_when?: { entity_id: string; state: string };
+  } | null;
   escalation?: { after: string; color?: string }[];
   status?: RuleStatus;
 }
