@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-11-12
+
+### Added
+- Brand icon and logo (by Steven Glab): shipped in
+  `custom_components/laeutwerk/brand/` (Home Assistant shows the local
+  branding of custom integrations) and as README header (light and dark).
+
 ## [0.7.6] - 2026-11-12
 
 ### Changed

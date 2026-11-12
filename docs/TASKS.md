@@ -237,8 +237,14 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
   - Im echten Frontend geprüft (`check_card.py` öffnet den Farbkreis an der Regelfarbe und in der Stichwort-Tabelle, tippt den Rand an → Rot). Bundle 176 307 → 185 319 Bytes (gemessen vor der kleinen Nachbesserung).
 - [x] Release v0.7.6
 
+## 0.7.7 – Logo und Icon (12.11.2026)
+- [x] Stevens Icon/Logo (SVG in `docs/brand/`) als PNGs: `custom_components/laeutwerk/brand/` (icon 256/512 aus der transparenten Variante, logo/dark_logo 360×128 und 720×256) und README-Kopf `docs/brand/readme-logo-{light,dark}.png` (1440×512)
+  - Gerendert mit Playwrights headless Chromium und Inter Bold (eingebettet, nicht im Repo); `laeutwerk-logo-light.svg` = Logo mit dunkler Schrift (#141417) für helle Themes.
+  - Brands-Repo nimmt keine Custom Integrations mehr an (seit HA 2026.3) – lokaler `brand/`-Ordner genügt, wie bei Zeitwerk.
+- [x] Release v0.7.7
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
-- [ ] Logo/Brand-Assets (Steven fragen)
+- [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut
 - [ ] HACS-Standardliste (vorher Steven fragen)
 - [ ] Release v1.0.0

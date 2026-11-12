@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-logo-dark.png">
+    <img src="docs/brand/readme-logo-light.png" alt="Läutwerk" width="420">
+  </picture>
+</p>
+
 # Läutwerk
 
 Reminders for Home Assistant that turn **calendar events** into signals which
