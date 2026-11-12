@@ -3,6 +3,7 @@
  * (horizontally scrollable) with live preview, reminder times and repeat,
  * signals, acknowledgement, details. Opens the signal editor as a sub page.
  */
+import { pickColor } from "./color-picker";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
@@ -1835,9 +1836,14 @@ export class LaeutwerkRuleEditor extends LitElement {
             (stage, i) =>
               html`<div class="stage-item">
                 <div class="row stage-row">
-                  <span class="chip stagechip-big" style="--stage: ${stageColor(r, i + 1)}"
-                    >${l.t("stage_n", { n: i + 1 })}</span
+                  <button
+                    class="chip stagechip-big"
+                    style="--stage: ${stageColor(r, i + 1)}"
+                    aria-label=${l.t("stage_color_of", { n: i + 1 })}
+                    @click=${() => this._pickStageColor(i)}
                   >
+                    ${l.t("stage_n", { n: i + 1 })}<ha-icon icon="mdi:palette"></ha-icon>
+                  </button>
                   ${this._stageInput(
                     stage.after,
                     (after) =>
@@ -1867,20 +1873,6 @@ export class LaeutwerkRuleEditor extends LitElement {
                     <ha-icon icon="mdi:close"></ha-icon>
                   </button>
                 </div>
-                <laeutwerk-field
-                  .hass=${this.hass}
-                  .localize=${l}
-                  .label=${`${l.t("stage_n", { n: i + 1 })} · ${l.t("stage_color")}`}
-                  .selector=${{ color_rgb: {} }}
-                  .swatches=${this._kwSwatches()}
-                  .value=${stageColor(r, i + 1) ?? ""}
-                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                    this._update({
-                      escalation: stages.map((x, j) =>
-                        j === i ? { ...x, color: e.detail.value || undefined } : x,
-                      ),
-                    })}
-                ></laeutwerk-field>
               </div>`,
           )}
         </div>
@@ -1973,6 +1965,31 @@ export class LaeutwerkRuleEditor extends LitElement {
         )}
       </select>
     </span>`;
+  }
+
+  private async _pickStageColor(i: number): Promise<void> {
+    const l = this.localize;
+    const stages = this._rule.escalation ?? [];
+    const result = await pickColor({
+      title: l.t("stage_color_of", { n: i + 1 }),
+      value: stageColor(this._rule, i + 1) ?? "",
+      swatches: this._kwSwatches(),
+      allowClear: true,
+      dark: !!this.hass?.themes?.darkMode,
+      labels: {
+        favorites: l.t("favorites"),
+        keywordColors: l.t("keyword_colors"),
+        cancel: l.t("cancel"),
+        apply: l.t("apply"),
+        remove: l.t("remove_color"),
+        hexInvalid: l.t("hex_invalid"),
+        wheel: l.t("color_wheel"),
+      },
+    });
+    if (result === null) return;
+    this._update({
+      escalation: stages.map((x, j) => (j === i ? { ...x, color: result || undefined } : x)),
+    });
   }
 
   /** Escalation stage: after a number of minutes / hours, or at a time of day. */
@@ -2411,27 +2428,16 @@ export class LaeutwerkRuleEditor extends LitElement {
       .stagechip-big {
         background: color-mix(in srgb, var(--stage) 30%, transparent);
         border: 2px solid var(--stage);
-        min-height: 32px;
-        flex-shrink: 0;
-      }
-      .stagecolor {
-        position: relative;
-        display: inline-flex;
+        min-height: 44px;
         flex-shrink: 0;
         cursor: pointer;
+        color: inherit;
+        font: inherit;
+        gap: 4px;
       }
-      .stagecolor .chip {
-        background: color-mix(in srgb, var(--stage) 30%, transparent);
-        border: 2px solid var(--stage);
-        min-height: 32px;
-      }
-      .stagecolor input[type="color"] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        width: 100%;
-        height: 100%;
-        cursor: pointer;
+      .stagechip-big ha-icon {
+        --mdc-icon-size: 14px;
+        opacity: 0.6;
       }
       .monthday {
         display: inline-flex;

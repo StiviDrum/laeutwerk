@@ -479,7 +479,7 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Visual editor:** all options can be set in the dashboard's card editor.
 - **Signal list:** each signal shows what it reaches ("Light · Stehleuchte",
   "Push · Steven, Anna"); signals of an escalation stage are marked in the
-  stage's colour (set per stage in step 7). Lists have thin dividers.
+  stage's colour (tap the stage button in step 7). Lists have thin dividers.
 - **Signal editor:** type, *immediately / on opportunity* with Home
   Assistant's trigger editor, *only if* with the condition editor, the fields
   of the type with variable suggestions and a text preview, limits and quiet times,
@@ -684,7 +684,7 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
   brauchen eine Bestätigung und bleiben als Entwurf im Browser.
 - **Signale** zeigen, wen oder was sie erreichen („Licht · Stehleuchte“,
   „Push · Steven, Anna“); Signale einer Eskalationsstufe sind in deren Farbe
-  markiert – die Farben legst du in Schritt 7 je Stufe fest. Listen haben
+  markiert – die Farbe wählst du in Schritt 7 per Tipp auf den Stufen-Knopf. Listen haben
   feine Trennlinien.
 - **Stichwörter** werden aus den Termintiteln des Kalenders vorgeschlagen.
   Textfelder schlagen beim Tippen von `{` die Variablen vor, das NFC-Feld die

@@ -281,6 +281,7 @@ export interface HomeAssistant {
   themes?: { darkMode?: boolean };
   user?: { is_admin?: boolean; name?: string };
   connection: HassConnection;
+  loadFragmentTranslation?(fragment: string): Promise<unknown>;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   callService(
     domain: string,

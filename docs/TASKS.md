@@ -370,6 +370,13 @@ Schnittstelle:
 - [x] Hilfe „Kommt bei“: Durchlauf erklärt, gekürzt
 - [x] Release v0.11.1
 
+## 0.11.2 – Texte der HA-Editoren, Stufenfarbe (12.11.2026)
+- [x] Auslöser/Bedingung/Aktion zeigten nur „+“ und ein Auswahlfenster fast ohne Text
+  - Ursache: HA lädt die Übersetzungen des Automations-Editors (Fragment „config“) erst beim Öffnen der Einstellungen. Auf Dashboards fehlen sie → `hass.loadFragmentTranslation("config")` einmal in `ha-field.ts` (nur für trigger/condition/action).
+  - Betraf große und kleine Karte gleichermaßen (Steven hatte in der großen vermutlich vorher die Einstellungen offen). `check_card.py` prüft den Text; Gegenprobe ohne Fix schlägt an.
+- [x] Eskalationsstufe doppelt (Einstellungen + Farbzeile mit wirkungslosem ×) → Farbe über Antippen des Stufen-Knopfs, Farbzeile entfernt; echter Klick geprüft
+- [x] Release v0.11.2
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

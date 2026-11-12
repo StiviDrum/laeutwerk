@@ -41,6 +41,24 @@ export function ensureHaSelector(): Promise<boolean> {
   return loading;
 }
 
+const AUTOMATION_KINDS = ["trigger", "condition", "action"];
+let configFragment: Promise<unknown> | undefined;
+
+/**
+ * HA loads its "config" translation fragment only with the Settings panel; the
+ * embedded automation editors need it. Request it once per page.
+ */
+export function ensureConfigTranslations(
+  hass: HomeAssistant | undefined,
+  kind: string,
+): Promise<unknown> | undefined {
+  if (!AUTOMATION_KINDS.includes(kind) || !hass?.loadFragmentTranslation) return undefined;
+  configFragment ??= Promise.resolve()
+    .then(() => hass.loadFragmentTranslation?.("config"))
+    .catch(() => undefined);
+  return configFragment;
+}
+
 /** Selector kinds whose fallback is a comma separated text field. */
 const LIST_KINDS = ["entity"];
 const TEXT_KINDS = ["icon", "text"];
@@ -70,6 +88,7 @@ export class LaeutwerkField extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("hass")) void ensureConfigTranslations(this.hass, this._kind);
     if (changed.has("value") && !this._error) this._text = this._toText(this.value);
   }
 

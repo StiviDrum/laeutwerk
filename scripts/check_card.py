@@ -596,7 +596,10 @@ async def main() -> None:
                     " const trg = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
                     "  .find(f => f.selector && f.selector.trigger);"
                     " const trigger = !!(trg && window.__find(trg.shadowRoot, 'ha-automation-trigger'));"
-                    " return JSON.stringify({picker, trigger, switches, rules: card._rules.length}) })()"
+                    # 0.11.2: HA's automation editor texts ("config" fragment) are loaded.
+                    " const texts = !!(trg && trg.hass.localize("
+                    "  'ui.panel.config.automation.editor.triggers.add'));"
+                    " return JSON.stringify({picker, trigger, texts, switches, rules: card._rules.length}) })()"
                 )
                 print("compact dialog editor:", compact)
                 await cdp.shot("compact_dialog", full=False)
@@ -609,6 +612,10 @@ async def main() -> None:
                     " return true })()"
                 )
                 info = json.loads(compact) if compact.startswith("{") else {}
+                if not info.get("texts"):
+                    raise SystemExit(
+                        "compact dialog: HA automation editor texts missing"
+                    )
                 if info.get("switches", 0) < info.get("rules", 1):
                     raise SystemExit("compact dialog: rule switches missing")
                 if '"picker":true' not in str(compact):

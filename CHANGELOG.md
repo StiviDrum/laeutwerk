@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-11-12
+
+### Fixed
+- Trigger, condition and action editors showed only "+" and an add dialog
+  without most texts on dashboards, unless the Settings panel had been opened
+  before: Läutwerk now loads Home Assistant's automation editor texts itself.
+
+### Changed
+- Escalation stages: the separate colour row is gone; tap the stage button
+  ("Stufe 1") to pick its colour.
+
 ## [0.11.1] - 2026-11-12
 
 ### Added
