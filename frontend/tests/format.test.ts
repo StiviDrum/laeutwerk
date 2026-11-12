@@ -653,3 +653,21 @@ describe("overlay host and trigger summaries", () => {
     expect(stepSummary(r, 6, de)).toBe("Verfällt: Terminende");
   });
 });
+
+describe("compactRows", () => {
+  it("returns all open tasks, else the first planned one", async () => {
+    const { compactRows } = await import("../src/format");
+    const t = (id: string, open: boolean) => ({ rule: {}, reminder: { id }, open }) as never;
+    expect(
+      compactRows([t("a", true), t("b", true), t("c", false)]).map(
+        (x: { reminder: { id: string } }) => x.reminder.id,
+      ),
+    ).toEqual(["a", "b"]);
+    expect(
+      compactRows([t("c", false), t("d", false)]).map(
+        (x: { reminder: { id: string } }) => x.reminder.id,
+      ),
+    ).toEqual(["c"]);
+    expect(compactRows([])).toEqual([]);
+  });
+});

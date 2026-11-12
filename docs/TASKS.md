@@ -377,6 +377,13 @@ Schnittstelle:
 - [x] Eskalationsstufe doppelt (Einstellungen + Farbzeile mit wirkungslosem ×) → Farbe über Antippen des Stufen-Knopfs, Farbzeile entfernt; echter Klick geprüft
 - [x] Release v0.11.2
 
+## 0.11.3 – Kompakte Karte mehrzeilig (12.11.2026)
+- [x] Eine Zeile je offener Aufgabe (`compactRows`), `getGridOptions` rows auto; Antippen öffnet das Fenster auf dieser Aufgabe (`select(id)`)
+  - Geprüft in der Testinstanz: zwei Auslöser-Regeln gestartet → zwei Zeilen, Klick auf die zweite öffnet „Trockner ausräumen“
+- [x] Fenster: „Offene Aufgaben“-Label → echter Status
+- [ ] Offen (Code-Prüfung): Regel-Sensor zeigt bei aktiven Auslöser-Regeln ohne offene Erinnerung „inactive“ – irreführend
+- [x] Release v0.11.3
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

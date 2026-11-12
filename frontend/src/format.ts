@@ -880,6 +880,12 @@ export function tasks(rules: Rule[], only?: string[]): Task[] {
   return list.sort((a, b) => Number(b.open) - Number(a.open) || key(a).localeCompare(key(b)));
 }
 
+/** Rows of the compact card: every open task, else the next planned one. */
+export function compactRows(all: Task[]): Task[] {
+  const open = all.filter((t) => t.open);
+  return open.length ? open : all.slice(0, 1);
+}
+
 type PreviewEvent = { titles: string[]; variables?: Record<string, string> };
 
 /** Preview for the singular headline field: first event with a single match, else the first. */

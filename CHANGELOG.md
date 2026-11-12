@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-11-12
+
+### Changed
+- Compact card: one line per open task (icon, title, status) instead of only
+  the first one with a counter; the card grows with the number of open tasks.
+  Tapping a line opens the dialog on that task.
+
+### Fixed
+- Compact card dialog: other open tasks show their status ("erinnert 19:42")
+  instead of the label "Offene Aufgaben".
+
 ## [0.11.2] - 2026-11-12
 
 ### Fixed

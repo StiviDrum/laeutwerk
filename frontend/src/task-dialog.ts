@@ -36,6 +36,9 @@ export class LaeutwerkTaskDialog extends LitElement {
   @property({ attribute: false }) public only: string[] = [];
   /** Reminder the dialog asks about (default: the next task). */
   @state() private _selected?: string;
+  public select(id: string): void {
+    this._selected = id;
+  }
   @state() private _page: "task" | "pick" | "edit" = "task";
   @state() private _editing?: Rule;
   @state() private _busy = false;
@@ -276,7 +279,13 @@ export class LaeutwerkTaskDialog extends LitElement {
                           >${reminderTitle(t.reminder)}</span
                         >
                       </span>
-                      ${t.open ? html`<span class="when">${l.t("open_tasks")}</span>` : nothing}
+                      ${
+                        t.open
+                          ? html`<span class="when"
+                              >${openStatus(t.reminder, now, l, tz) || l.t("open_tasks")}</span
+                            >`
+                          : nothing
+                      }
                     </button>`,
                 )}
               </div>`

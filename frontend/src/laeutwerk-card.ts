@@ -15,6 +15,7 @@ import {
   formatDate,
   isAhead,
   openStatus,
+  compactRows,
   relativeDay,
   relativeDayTime,
   reminderTitle,
@@ -93,12 +94,13 @@ export class LaeutwerkCard extends LitElement {
   }
 
   public getCardSize(): number {
-    if (this._config?.compact) return 1;
+    if (this._config?.compact)
+      return Math.max(1, compactRows(tasks(this._rules ?? [], this._config?.rules)).length);
     return 3 + (this._rules?.length ?? 0);
   }
 
   public getGridOptions() {
-    if (this._config?.compact) return { columns: 12, min_columns: 6, rows: 1, min_rows: 1 };
+    if (this._config?.compact) return { columns: 12, min_columns: 6, rows: "auto", min_rows: 1 };
     return { columns: 12, min_columns: 6, rows: "auto" };
   }
 
@@ -839,51 +841,52 @@ export class LaeutwerkCard extends LitElement {
       }`;
   }
 
-  /** Compact: the next task in one line; tapping opens the task dialog. */
+  /** Compact: every open task as a row (else the next planned one); tap opens the dialog. */
   private _renderCompact(): TemplateResult {
     const l = this._l;
-    const all = tasks(this._rules ?? [], this._config?.rules);
-    const task = all[0];
-    const openCount = all.filter((t) => t.open).length;
-    const clickable = !!task || this._isAdmin;
-    let line: TemplateResult;
-    if (!task) {
-      line = html`<span class="icon small"><ha-icon icon="mdi:calendar-check"></ha-icon></span>
-        <span class="grow oneline dim">${l.t("no_tasks")}</span>`;
-    } else {
-      // Planned tasks already say when in their title ("Am Freitag: …").
-      const when = task.open ? openStatus(task.reminder, this._now, l, this._tz) : "";
-      line = html`<span class="badge-wrap">
-          ${this._icon(task.rule, true, task.reminder)}
-          ${openCount ? html`<span class="badge">${openCount}</span>` : nothing}
-        </span>
-        <span class="grow oneline ${task.open ? "" : "dim"}">
-          <span class="name">${reminderTitle(task.reminder)}</span>
-          ${when ? html`<span class="when"> · ${when}</span>` : nothing}
-        </span>`;
-    }
-    return html`<ha-card
-      class="compact ${task?.open ? "due" : ""}"
-      role=${clickable ? "button" : nothing}
-      tabindex=${clickable ? "0" : nothing}
-      aria-label=${task ? reminderTitle(task.reminder) : l.t("no_tasks")}
-      @click=${() => clickable && this._openDialog()}
-      @keydown=${(e: KeyboardEvent) => {
-        if (clickable && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          this._openDialog();
-        }
-      }}
-    >
-      <div class="row">
-        ${line}
-        ${clickable ? html`<ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>` : nothing}
-      </div>
-    </ha-card>`;
+    const rows = compactRows(tasks(this._rules ?? [], this._config?.rules));
+    const anyOpen = rows.some((t) => t.open);
+    const keydown = (e: KeyboardEvent, id?: string) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        void this._openDialog(id);
+      }
+    };
+    const body = rows.length
+      ? rows.map((task) => {
+          // Planned tasks already say when in their title ("Am Freitag: …").
+          const when = task.open ? openStatus(task.reminder, this._now, l, this._tz) : "";
+          return html`<div
+            class="row crow"
+            role="button"
+            tabindex="0"
+            @click=${() => this._openDialog(task.reminder.id)}
+            @keydown=${(e: KeyboardEvent) => keydown(e, task.reminder.id)}
+          >
+            ${this._icon(task.rule, true, task.reminder)}
+            <span class="grow cname ${task.open ? "" : "dim"}">
+              <span class="name">${reminderTitle(task.reminder)}</span>
+              ${when ? html`<span class="when"> · ${when}</span>` : nothing}
+            </span>
+            <ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>
+          </div>`;
+        })
+      : html`<div
+          class="row crow"
+          role=${this._isAdmin ? "button" : nothing}
+          tabindex=${this._isAdmin ? "0" : nothing}
+          @click=${() => this._isAdmin && this._openDialog()}
+          @keydown=${(e: KeyboardEvent) => this._isAdmin && keydown(e)}
+        >
+          <span class="icon small"><ha-icon icon="mdi:calendar-check"></ha-icon></span>
+          <span class="grow cname dim">${l.t("no_tasks")}</span>
+          ${this._isAdmin ? html`<ha-icon class="chev" icon="mdi:chevron-right"></ha-icon>` : nothing}
+        </div>`;
+    return html`<ha-card class="compact ${anyOpen ? "due" : ""}">${body}</ha-card>`;
   }
 
   /** The task dialog lives at <body> level (not clipped by the grid cell). */
-  private async _openDialog(): Promise<void> {
+  private async _openDialog(selectId?: string): Promise<void> {
     if (this._dialog || this._dialogLoading) return;
     this._dialogLoading = true;
     try {
@@ -900,6 +903,7 @@ export class LaeutwerkCard extends LitElement {
     dialog.toggleAttribute("dark", !!this.hass?.themes?.darkMode);
     dialog.addEventListener("closed", () => (this._dialog = undefined));
     overlayHost().appendChild(dialog);
+    if (selectId) dialog.select(selectId);
     this._dialog = dialog;
   }
 
@@ -1104,8 +1108,7 @@ export class LaeutwerkCard extends LitElement {
         min-height: 32px;
       }
       ha-card.compact {
-        cursor: pointer;
-        min-height: 56px;
+        gap: 0;
       }
       ha-card.compact.due {
         border: 1px solid color-mix(in srgb, var(--lw-accent) 55%, transparent);
@@ -1114,20 +1117,33 @@ export class LaeutwerkCard extends LitElement {
         outline: 2px solid var(--lw-accent);
         outline-offset: 2px;
       }
-      .oneline {
-        white-space: nowrap;
+      .cname {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         overflow: hidden;
-        text-overflow: ellipsis;
         font-size: 15px;
       }
-      .oneline .name {
+      .cname .name {
         font-weight: 600;
       }
-      .oneline .when {
+      .cname .when {
         color: var(--lw-text-2);
         font-size: 13px;
       }
-      .oneline.dim .name {
+      .crow {
+        cursor: pointer;
+        min-height: 56px;
+        padding: 4px 0;
+      }
+      .crow + .crow {
+        border-top: 1px solid var(--lw-border);
+      }
+      .crow:focus-visible {
+        outline: 2px solid var(--lw-accent);
+        outline-offset: -2px;
+      }
+      .cname.dim .name {
         font-weight: 500;
         color: var(--lw-text-2);
       }

@@ -445,9 +445,10 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
 - **Rule editor** (administrators, *+* or tap a rule): calendar, keyword table
   with free columns (scrolls sideways), live preview of the next matches,
   reminder times, repeat, signals, ways to acknowledge, bundling and expiry.
-- **Compact** (`compact: true`): always the next task in one line (open ones
-  first, the one that expires first on top, then planned ones) with the rule's
-  icon and the number of open tasks. Tapping opens a dialog: confirm *done*
+- **Compact** (`compact: true`): one line per open task with its icon and
+  status ("Trockner ausräumen · erinnert 19:42"), the one that expires first on
+  top – the card grows with the number of open tasks. Nothing open: the next
+  planned task in one dim line. Tapping a line opens a dialog for it: confirm *done*
   (also ahead of time for planned tasks, if the rule allows it), *Later*, pick another task, reopen
   a task under *Done already*, or edit, create and switch rules on/off (administrators).
 - **Confirmation:** marking a task as done and reopening one ask first – in
@@ -660,8 +661,10 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
 
 ## Bedienung
 
-- **Kompakte Karte** (`compact: true`): immer die nächste Aufgabe in einer
-  Zeile mit Symbol und Zahl der offenen. Antippen öffnet ein Fenster: mit
+- **Kompakte Karte** (`compact: true`): eine Zeile je offener Aufgabe mit
+  Symbol und Status („Trockner ausräumen · erinnert 19:42“), die Karte wächst
+  mit. Ist nichts offen, steht dort die nächste geplante Aufgabe. Antippen einer
+  Zeile öffnet das Fenster zu dieser Aufgabe: mit
   Nachfrage als erledigt markieren (geplante auch schon vorab, wenn die Regel
   es erlaubt), „Später“,
   eine andere Aufgabe wählen, unter „Schon erledigt“ eine Aufgabe wieder
