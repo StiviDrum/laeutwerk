@@ -33,3 +33,6 @@ combine-as-imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# Load HA's test plugin first: it aliases httpx and fails if another plugin
+# imported httpx before it (plugin order on CI runners is not stable).
+addopts = "-p pytest_homeassistant"
