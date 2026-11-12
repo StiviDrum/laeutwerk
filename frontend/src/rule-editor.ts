@@ -394,6 +394,19 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   // --- keyword table ----------------------------------------------------------
 
+  /** Keyword colours offered as swatches in every colour popup. */
+  private _kwSwatches(): { label: string; color: string }[] {
+    // Own keyword colour, else a colour from an older "farbe"/"colour" column.
+    const columns = this._rule.filter.keywords.columns ?? [];
+    const column = ["farbe", "colour"].find((c) => columns.includes(c));
+    return this._rule.filter.keywords.rows
+      .map((r) => ({
+        label: String(r.match),
+        color: r.color ?? (column && r[column] ? colorNameToHex(String(r[column])) : null),
+      }))
+      .filter((s): s is { label: string; color: string } => !!s.color);
+  }
+
   private _setRows(rows: KeywordRow[]): void {
     const keywords = { ...this._rule.filter.keywords, rows };
     this._update({ filter: { ...this._rule.filter, keywords } }, true);
@@ -715,6 +728,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             .localize=${l}
             .label=${l.t("color")}
             .selector=${{ color_rgb: {} }}
+            .swatches=${this._kwSwatches()}
             .value=${r.color ?? ""}
             @value-changed=${(e: CustomEvent<{ value: string }>) =>
               this._update({ color: e.detail.value || null })}
@@ -879,6 +893,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                           .hass=${this.hass}
                           .localize=${l}
                           .selector=${{ color_rgb: {} }}
+                          .swatches=${this._kwSwatches()}
                           .suggest=${suggestColor(row, i, columns)}
                           .value=${row.color ?? ""}
                           @value-changed=${(e: CustomEvent<{ value: string }>) =>
@@ -1567,6 +1582,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                   .localize=${l}
                   .label=${`${l.t("stage_n", { n: i + 1 })} · ${l.t("stage_color")}`}
                   .selector=${{ color_rgb: {} }}
+                  .swatches=${this._kwSwatches()}
                   .value=${stageColor(r, i + 1) ?? ""}
                   @value-changed=${(e: CustomEvent<{ value: string }>) =>
                     this._update({

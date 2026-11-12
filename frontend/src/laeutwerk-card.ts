@@ -18,6 +18,7 @@ import {
   tasks,
 } from "./format";
 import { LaeutwerkCardEditor } from "./card-editor";
+import { LaeutwerkColorPopup } from "./color-picker";
 import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
 import { LaeutwerkField } from "./ha-field";
 import { localizer, type Localizer, type StringKey } from "./localize";
@@ -1100,6 +1101,7 @@ void defineElements([
   ["laeutwerk-template-picker", LaeutwerkTemplatePicker],
   ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
   ["laeutwerk-confirm", LaeutwerkConfirm],
+  ["laeutwerk-color-popup", LaeutwerkColorPopup],
 ]);
 
 declare global {

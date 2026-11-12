@@ -628,6 +628,7 @@ export class LaeutwerkSignalEditor extends LitElement {
               .localize=${l}
               .label=${l.t("color_fixed_pick")}
               .selector=${{ color_rgb: {} }}
+              .swatches=${keywordColors.map((k) => ({ label: k.match, color: k.color }))}
               .suggest=${keywordColors[0]?.color ?? ""}
               .value=${s.color ? (colorNameToHex(s.color) ?? s.color) : ""}
               @value-changed=${(e: CustomEvent<{ value: string }>) =>

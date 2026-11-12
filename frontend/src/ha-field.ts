@@ -7,6 +7,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { Localizer } from "./localize";
 import { shared, tokens } from "./styles";
+import { pickColor } from "./color-picker";
 import type { HomeAssistant } from "./types";
 
 declare global {
@@ -53,6 +54,8 @@ export class LaeutwerkField extends LitElement {
   @property() public label = "";
   /** Colour fields: colour offered by "choose a colour" (#rrggbb). */
   @property({ attribute: false }) public suggest = "";
+  /** Colour fields: keyword colours offered in the popup. */
+  @property({ attribute: false }) public swatches: { label: string; color: string }[] = [];
   @state() private _native?: boolean;
   @state() private _text = "";
   @state() private _error?: string;
@@ -83,27 +86,59 @@ export class LaeutwerkField extends LitElement {
     this.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
   }
 
-  /**
-   * Colour: the value is "#rrggbb" for Läutwerk, HA's colour selector works
-   * with [r, g, b]; without HA's elements a plain colour input.
-   */
+  private async _openPicker(current: string): Promise<void> {
+    const l = this.localize;
+    const result = await pickColor({
+      title: this.label || l.t("pick_color"),
+      value: current,
+      swatches: this.swatches,
+      allowClear: true,
+      dark: !!this.hass?.themes?.darkMode,
+      labels: {
+        favorites: l.t("favorites"),
+        keywordColors: l.t("keyword_colors"),
+        cancel: l.t("cancel"),
+        apply: l.t("apply"),
+        remove: l.t("remove_color"),
+        hexInvalid: l.t("hex_invalid"),
+        wheel: l.t("color_wheel"),
+      },
+    });
+    if (result !== null) this._emit(result);
+  }
+
+  /** Colour: value is "#rrggbb" (empty = none); opens our own picker popup. */
   private _renderColor() {
     const hex = typeof this.value === "string" && this.value ? this.value : "";
+    const label = this.label || this.localize.t("pick_color");
     if (!hex) {
-      // An empty picker would show black: offer "choose a colour" instead.
-      const label = this.label || this.localize.t("pick_color");
+      // Dashed chip; the popup is prefilled with the suggested colour.
       return html`<button
         class="chip dashed pick"
         aria-label=${label}
         title=${label}
-        @click=${() => this._emit(this.suggest || "#8a8a94")}
+        @click=${() => this._openPicker(this.suggest || "#8a8a94")}
       >
         <ha-icon icon="mdi:palette-outline"></ha-icon
         >${this.label ? html`<span>${this.label}</span>` : nothing}
       </button>`;
     }
     return html`<div class="colorrow">
-      ${this._colorPicker(hex)}
+      <button
+        class="colorbtn"
+        aria-label=${`${label} ${hex}`}
+        title=${`${label} ${hex}`}
+        @click=${() => this._openPicker(hex)}
+      >
+        <span class="dot" style="background:${hex}"></span>
+        ${
+          this.label
+            ? html`<span class="ctext"
+                ><span>${this.label}</span><span class="hex">${hex}</span></span
+              >`
+            : nothing
+        }
+      </button>
       <button
         class="mini"
         aria-label=${this.localize.t("no_color")}
@@ -113,32 +148,6 @@ export class LaeutwerkField extends LitElement {
         <ha-icon icon="mdi:close"></ha-icon>
       </button>
     </div>`;
-  }
-
-  private _colorPicker(hex: string) {
-    if (this._native && this.hass) {
-      return html`<ha-selector
-        .hass=${this.hass}
-        .selector=${this.selector}
-        .value=${hexToRgb(hex)}
-        .label=${this.label}
-        .required=${false}
-        @value-changed=${(ev: CustomEvent<{ value: number[] | undefined }>) => {
-          ev.stopPropagation();
-          const rgb = ev.detail.value;
-          this._emit(Array.isArray(rgb) && rgb.length === 3 ? rgbToHex(rgb) : "");
-        }}
-      ></ha-selector>`;
-    }
-    return html`<label class="field">
-      <span>${this.label}</span>
-      <input
-        type="color"
-        class="color"
-        .value=${hex}
-        @change=${(ev: Event) => this._emit((ev.target as HTMLInputElement).value)}
-      />
-    </label>`;
   }
 
   private _onSelector(ev: CustomEvent<{ value: unknown }>): void {
@@ -231,9 +240,32 @@ export class LaeutwerkField extends LitElement {
       .pick {
         min-height: 40px;
       }
-      input.color {
-        width: 64px;
-        padding: 4px;
+      .colorbtn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0 6px;
+        text-align: left;
+      }
+      .dot {
+        width: 32px;
+        height: 32px;
+        flex: none;
+        border-radius: 50%;
+        box-sizing: border-box;
+        border: 1px solid var(--lw-border);
+      }
+      .ctext {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        font-size: 14px;
+      }
+      .hex {
+        font-size: 12px;
+        color: var(--lw-text-2);
       }
       .err {
         color: var(--lw-danger);

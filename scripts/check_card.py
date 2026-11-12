@@ -268,6 +268,44 @@ async def main() -> None:
                 )
                 await asyncio.sleep(4)
                 await cdp.shot("editor")
+                # Own colour picker (0.7.6): open it from the rule colour,
+                # tap the wheel, check the value, then cancel.
+                picked = await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const f = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(x => x.selector && x.selector.color_rgb);"
+                    " f.scrollIntoView();"
+                    " f.shadowRoot.querySelector('.colorbtn, .pick').click();"
+                    " await new Promise(r => setTimeout(r, 500));"
+                    " const p = document.querySelector('laeutwerk-color-popup');"
+                    " if (!p) return 'no popup';"
+                    " const w = p.shadowRoot.querySelector('.wheel').getBoundingClientRect();"
+                    " const opts = {bubbles: true, pointerId: 1, clientX: w.right - 4,"
+                    "  clientY: w.top + w.height / 2};"
+                    " p.shadowRoot.querySelector('.wheel').dispatchEvent(new PointerEvent('pointerdown', opts));"
+                    " await p.updateComplete; return p._hex })()"
+                )
+                print("colour picker, right edge of the wheel:", picked)
+                await cdp.shot("colorpicker")
+                await cdp.js(
+                    "(() => { const p = document.querySelector('laeutwerk-color-popup');"
+                    " p.shadowRoot.querySelector('.pill.outline').click(); return true })()"
+                )
+                # Keyword table cell: the popup must not be clipped by the table.
+                await cdp.js(
+                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
+                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " const cell = e.shadowRoot.querySelector('.kcolor laeutwerk-field');"
+                    " if (!cell) return false; cell.scrollIntoView();"
+                    " cell.shadowRoot.querySelector('.colorbtn, .pick').click(); return true })()"
+                )
+                await asyncio.sleep(1)
+                await cdp.shot("colorpicker_keyword")
+                await cdp.js(
+                    "(() => { const p = document.querySelector('laeutwerk-color-popup');"
+                    " if (p) p.shadowRoot.querySelector('.pill.outline').click(); return true })()"
+                )
                 # Open the second signal (opportunity trigger) in the signal editor.
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"

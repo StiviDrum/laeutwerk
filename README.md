@@ -337,8 +337,9 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   of the type with variable chips and a text preview, limits and quiet times,
   *Test* and *Edit as YAML*. Every part is collapsible with a short summary;
   a push is split into recipients (tick persons), texts and buttons.
-- **Colours** are picked with Home Assistant's colour picker (rule, keywords,
-  escalation stages, light signal); the keyword colours can be tapped as the
+- **Colours** are picked with Läutwerk's own colour wheel (rule, keywords,
+  escalation stages, light signal) with favourites, the rule's keyword colours
+  and a hex field; the keyword colours can be tapped as the
   fixed colour of a light signal. An older text column `farbe` can be turned
   into keyword colours with one tap.
 
@@ -451,7 +452,8 @@ Feste und variable Tags lassen sich mischen.
 - **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
 - **Quelle** in Schritt 1: *Kalender* oder *Benutzerdefiniert* – wiederkehrend
   nach dem letzten Erledigen (z. B. Filter alle 90 Tage), ohne Kalender.
-- **Farben** wählst du mit dem Farbwähler von Home Assistant – für die Regel,
+- **Farben** wählst du mit Läutwerks eigenem Farbkreis (mit Favoriten, den
+  Stichwort-Farben der Regel und Hex-Feld) – für die Regel,
   jedes **Stichwort** (Schritt 2) und jede Eskalationsstufe. Ein Licht-Signal
   blinkt in der **Farbe des Stichworts** (bei mehreren abwechselnd) oder in
   einer festen Farbe; die Stichwort-Farben lassen sich dort antippen. Eine

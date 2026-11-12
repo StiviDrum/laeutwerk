@@ -228,6 +228,15 @@ Tick boxes as you go (`- [x]`), short findings below the task. A new session rea
 - [x] Release v0.7.5
   - Im echten Frontend geprüft (Schritt 1 + 2 mit Farbwählern, Push- und Licht-Signal); `check_card.py` öffnet die Bereiche jetzt selbst.
 
+## 0.7.6 – Eigener Farbkreis (12.11.2026)
+- [x] Eigener Farbwähler `laeutwerk-color-popup` (`color-picker.ts`) statt HA-`color_rgb`-Selektor
+  - Warum: HAs `ha-hs-color-picker` (Lampen-Dialog) ist intern und wird erst mit einem Lampen-Dialog geladen; der allgemeine Selektor öffnet nur den Browser-Dialog.
+  - Feld: Farbfläche + Name/Hex, Antippen klappt darunter einen Bereich auf: Farbkreis (Farbton/Sättigung, Canvas, Markierung ziehbar per Pointer-Events, Tastatur), Favoriten-Kreise (feste Palette), Stichwort-Farben der Regel als Kreise, Hex-Eingabe, ✕ entfernt die Farbe. Gespeichert wird weiter `#rrggbb`.
+  - Überall gleich: Regelfarbe, Stichwort-Farben, Stufenfarben, feste Lichtfarbe.
+  - Als Popup auf `<body>` (wie `confirm-dialog.ts`), Abbrechen/Übernehmen; dunkle Farben behalten ihren Hex-Wert, bis man den Kreis berührt. Stichwort-Farben greifen auf eine alte `farbe`-Spalte zurück.
+  - Im echten Frontend geprüft (`check_card.py` öffnet den Farbkreis an der Regelfarbe und in der Stichwort-Tabelle, tippt den Rand an → Rot). Bundle 176 307 → 185 319 Bytes (gemessen vor der kleinen Nachbesserung).
+- [x] Release v0.7.6
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [ ] Logo/Brand-Assets (Steven fragen)

@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-11-12
+
+### Changed
+- Own colour picker for all colour fields (rule, keywords, escalation stages,
+  fixed light colour): a hue/saturation wheel with a draggable marker,
+  favourite colours, the rule's keyword colours, a hex field and "Remove
+  colour". It opens as a popup, so it is not clipped by the keyword table, and
+  no longer depends on Home Assistant's internal elements or the browser's
+  colour dialog. Keyword colours from an older colour-name column are offered
+  too.
+
 ## [0.7.5] - 2026-11-11
 
 ### Added
