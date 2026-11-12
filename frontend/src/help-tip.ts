@@ -1,7 +1,7 @@
 /**
  * Small "?" icon with an explanation. Hover/focus shows the text, a click
  * or tap keeps it open; outside click or Escape closes it.
- * The bubble is a body-level element, so neither scroll containers nor
+ * The bubble is a body-level popover (top layer), so neither scroll containers nor
  * stacking contexts (sticky cells) can clip or cover it.
  */
 import { LitElement, css, html, type TemplateResult } from "lit";
@@ -61,7 +61,13 @@ export class LaeutwerkHelpTip extends LitElement {
   }
 
   private _hide(): void {
-    this._bubble?.remove();
+    const b = this._bubble as (HTMLElement & { hidePopover?: () => void }) | undefined;
+    try {
+      b?.hidePopover?.();
+    } catch {
+      /* not shown as popover */
+    }
+    b?.remove();
     this._bubble = undefined;
   }
 
@@ -81,14 +87,24 @@ export class LaeutwerkHelpTip extends LitElement {
     el.setAttribute("role", "tooltip");
     el.textContent = this.text;
     el.style.cssText =
-      `position:fixed;z-index:1010;box-sizing:border-box;left:${left}px;top:${rect.bottom - 6}px;` +
+      `position:fixed;inset:auto;margin:0;overflow:visible;z-index:1010;box-sizing:border-box;left:${left}px;top:${rect.bottom - 6}px;` +
       `width:${width}px;padding:10px 12px;border-radius:16px;` +
       `border:1px solid ${v("--lw-border", "rgba(127,127,127,0.35)")};` +
       `background:${v("--lw-bg", "var(--card-background-color, #fff)")};` +
       `color:${v("--lw-text", "var(--primary-text-color, #111)")};` +
       "box-shadow:0 8px 24px rgba(0,0,0,0.35);font:400 13px/1.45 system-ui,sans-serif;" +
       "white-space:pre-line;pointer-events:none";
+    // Popover API: top layer, so it also sits above HA's dialogs.
+    const pop = el as HTMLElement & { showPopover?: () => void };
+    if (typeof pop.showPopover === "function") el.setAttribute("popover", "manual");
     document.body.appendChild(el);
+    if (el.hasAttribute("popover")) {
+      try {
+        pop.showPopover?.();
+      } catch {
+        /* falls back to the plain body element */
+      }
+    }
     this._bubble = el;
   }
 

@@ -47,11 +47,14 @@ export interface Signal {
   audience?: "all" | "present" | "persons" | "assignee";
   only_present?: boolean;
   stage?: number;
+  every_stage?: boolean;
   persons?: string[];
   title?: string;
   title_plural?: string;
   message?: string;
   message_plural?: string;
+  title_repeat?: string;
+  message_repeat?: string;
   actions?: PushButton[] | HaConfig[];
   data?: HaConfig;
   // light_signal
@@ -67,6 +70,7 @@ export interface Signal {
   players?: string[];
   text?: string;
   text_plural?: string;
+  text_repeat?: string;
   volume?: number;
   tts?: string;
   language?: string;
@@ -193,13 +197,15 @@ export interface Rule {
     season?: { from: string; to: string };
   } | null;
   on_done?: HaConfig[];
+  on_missed?: HaConfig[];
+  on_reminded?: HaConfig[];
   assignee?: {
     persons: string[];
     rotation?: Rotation;
     substitute?: string;
     substitute_when?: { entity_id: string; state: string };
   } | null;
-  escalation?: { after: string; color?: string }[];
+  escalation?: { after: string; min_age?: string; color?: string }[];
   status?: RuleStatus;
 }
 

@@ -156,6 +156,12 @@ def _escalation_after(value: Any) -> str:
     return text.lstrip("+")
 
 
+def _min_age(value: Any) -> str:
+    text = str(value).strip().lower().lstrip("+")
+    duration_minutes(text)
+    return text
+
+
 def _notify_target(value: Any) -> str:
     target = _non_empty(value).lower()
     if not re.fullmatch(r"notify\.[a-z0-9_]+", target):
@@ -366,6 +372,8 @@ _SIGNAL_BASE = {
     vol.Optional("quiet"): [_QUIET_SCHEMA],
     # Escalation stage from which the signal is active (0 = from the start).
     vol.Optional("stage"): vol.All(vol.Coerce(int), vol.Range(min=0, max=10)),
+    # Also send at every reached escalation stage (not combined with "stage").
+    vol.Optional("every_stage"): cv.boolean,
 }
 
 _SIGNAL_SCHEMAS = {
@@ -381,6 +389,8 @@ _SIGNAL_SCHEMAS = {
             vol.Optional("only_present"): cv.boolean,
             vol.Optional("title"): _text,
             vol.Optional("title_plural"): _text,
+            vol.Optional("title_repeat"): _text,
+            vol.Optional("message_repeat"): _text,
             vol.Required("message"): _non_empty,
             vol.Optional("message_plural"): _text,
             vol.Optional("actions", default=list): [_NOTIFY_ACTION_SCHEMA],
@@ -423,6 +433,7 @@ _SIGNAL_SCHEMAS = {
             ),
             vol.Required("text"): _non_empty,
             vol.Optional("text_plural"): _text,
+            vol.Optional("text_repeat"): _text,
             vol.Optional("volume"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
             vol.Optional("tts"): _domain_entity("tts"),
             vol.Optional("language"): _text,
@@ -604,6 +615,8 @@ RULE_SCHEMA = vol.Schema(
         vol.Optional("interval", default=None): vol.Any(None, _INTERVAL_SCHEMA),
         vol.Optional("activation", default=None): vol.Any(None, _ACTIVATION_SCHEMA),
         vol.Optional("on_done", default=list): _actions_or_empty,
+        vol.Optional("on_missed", default=list): _actions_or_empty,
+        vol.Optional("on_reminded", default=list): _actions_or_empty,
         vol.Optional("assignee", default=None): vol.Any(None, _ASSIGNEE_SCHEMA),
         vol.Optional("lookahead_days", default=14): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=365)
@@ -613,6 +626,8 @@ RULE_SCHEMA = vol.Schema(
             vol.Schema(
                 {
                     vol.Required("after"): _escalation_after,
+                    # Stage is skipped if it is closer than this to the first remind.
+                    vol.Optional("min_age"): _min_age,
                     # Colour of the stage in the card (signals of this stage).
                     vol.Optional("color"): _hex_color,
                 }
@@ -680,6 +695,11 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
                 f"signal '{signal['id']}': stage {signal['stage']} does not exist "
                 f"(the rule has {stages} escalation stage(s))"
             )
+        if signal.get("every_stage") and signal.get("stage"):
+            raise vol.Invalid(
+                f"signal '{signal['id']}': 'every_stage' cannot be combined "
+                "with 'stage'"
+            )
         if signal.get("audience") == AUDIENCE_ASSIGNEE and not rule["assignee"]:
             raise vol.Invalid(
                 f"signal '{signal['id']}': audience 'assignee' needs 'assignee' "
@@ -734,13 +754,14 @@ async def async_validate_rule(
             )
     except (vol.Invalid, HomeAssistantError) as err:
         raise vol.Invalid(f"activation: {err}") from err
-    try:
-        if rule["on_done"]:
-            await script_helper.async_validate_actions_config(
-                hass, cv.SCRIPT_SCHEMA(rule["on_done"])
-            )
-    except (vol.Invalid, HomeAssistantError) as err:
-        raise vol.Invalid(f"on_done: {err}") from err
+    for key in ("on_done", "on_missed", "on_reminded"):
+        try:
+            if rule[key]:
+                await script_helper.async_validate_actions_config(
+                    hass, cv.SCRIPT_SCHEMA(rule[key])
+                )
+        except (vol.Invalid, HomeAssistantError) as err:
+            raise vol.Invalid(f"{key}: {err}") from err
     for index, ack in enumerate(rule["acknowledge"], start=1):
         if ack["type"] != ACK_TRIGGER:
             continue

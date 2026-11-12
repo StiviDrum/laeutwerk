@@ -301,6 +301,38 @@ export function renderTemplate(
   return capitalizeFirst && template.startsWith("{") ? capitalize(text) : text;
 }
 
+/** Sample values for the time variables (preview only; `nr` 2 for repeat texts). */
+export function timeSamples(l: Localizer, nr = 1): Record<string, string> {
+  return { seit: l.t("sample_since"), seit_min: "25", erinnert_um: "19:42", nr: String(nr) };
+}
+
+/** Preview of a repeat text: the repeat variant (nr = 2) if set, else the normal text. */
+export function repeatPreview(
+  repeat: string | undefined,
+  normal: string | undefined,
+  sample: Record<string, string>,
+  l: Localizer,
+): string {
+  return renderTemplate(repeat?.trim() ? repeat : normal, { ...sample, ...timeSamples(l, 2) });
+}
+
+/** Stage of a signal: a number, or "every" (every_stage, stage cleared); they exclude each other. */
+export function withSignalStage(signal: Signal, stage: number | "every"): Signal {
+  const rest = { ...signal };
+  delete rest.stage;
+  delete rest.every_stage;
+  if (stage === "every") return { ...rest, every_stage: true };
+  return stage ? { ...rest, stage } : rest;
+}
+
+/** Stage with a new `min_age` (empty = removed). */
+export function withMinAge<T extends { min_age?: string }>(stage: T, minAge: string): T {
+  const next = { ...stage };
+  if (minAge.trim()) next.min_age = minAge.trim();
+  else delete next.min_age;
+  return next;
+}
+
 /** Names of the {variables} used in a text. */
 export function templateVariables(template: string | undefined): string[] {
   return [...(template ?? "").matchAll(/(?<!\{)\{([^\W\d]\w*)\}(?!\})/gu)].map((m) => m[1]);
@@ -309,7 +341,10 @@ export function templateVariables(template: string | undefined): string[] {
 /** Variables a tag id may use: keyword columns (and plurals) plus the event ones. */
 export function tagVariables(rule: Rule): string[] {
   return availableVariables(rule).filter(
-    (name) => !["wann", "datum", "uhrzeit", "zustaendig"].includes(name),
+    (name) =>
+      !["wann", "datum", "uhrzeit", "seit", "seit_min", "erinnert_um", "nr", "zustaendig"].includes(
+        name,
+      ),
   );
 }
 
@@ -356,7 +391,20 @@ export function setColumnPlural(rule: Rule, index: number, on: boolean): Rule {
 
 /** All variables a rule offers: fixed ones plus columns and their plurals. */
 export function availableVariables(rule: Rule, opportunity = false): string[] {
-  const fixed = ["wann", "titel", "rest", "datum", "uhrzeit", "ort", "beschreibung", "kalender"];
+  const fixed = [
+    "wann",
+    "titel",
+    "rest",
+    "datum",
+    "uhrzeit",
+    "seit",
+    "seit_min",
+    "erinnert_um",
+    "nr",
+    "ort",
+    "beschreibung",
+    "kalender",
+  ];
   const columns = rule.filter.keywords.columns.flatMap((c) => {
     const plural = colPlural(c);
     return plural ? [colName(c), plural] : [colName(c)];
@@ -440,6 +488,7 @@ export function signalSummary(signal: Signal, l: Localizer): string {
       `${l.t(signal.pattern?.effect === "pulse" ? "effect_pulse" : "effect_blink")} ${signal.pattern?.count ?? 3}×`,
     );
   }
+  if (signal.every_stage) bits.push(l.t("every_reminder"));
   if (signal.limit?.per_reminder) bits.push(l.t("s_max", { n: signal.limit.per_reminder }));
   for (const quiet of signal.quiet ?? []) {
     bits.push(l.t("s_quiet", { from: shortClock(quiet.from), to: shortClock(quiet.to) }));

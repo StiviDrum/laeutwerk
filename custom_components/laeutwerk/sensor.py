@@ -35,7 +35,11 @@ async def async_setup_entry(
     """Set up rule sensors."""
 
     def factory(manager: LaeutwerkManager, rule_id: str) -> list[Entity]:
-        return [StateSensor(manager, rule_id), NextEventSensor(manager, rule_id)]
+        return [
+            StateSensor(manager, rule_id),
+            NextEventSensor(manager, rule_id),
+            WaitingSinceSensor(manager, rule_id),
+        ]
 
     async_add_entities([OpenTotalSensor(entry.runtime_data)])
     async_setup_rule_entities(entry, entry.runtime_data, factory, async_add_entities)
@@ -88,6 +92,10 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
                 "bundled_titles": [event.summary for event in current.events],
                 "variables": variables,
                 "headline": render_headline(runner.rule, current.events, variables),
+                "reminded_at": _iso(current.reminded_at),
+                "last_reminded_at": _iso(current.last_reminded),
+                "repeats": current.repeats,
+                "finished_at": _iso(current.finished_at),
                 "acknowledged_by": current.acknowledged_by,
                 "acknowledged_at": (
                     current.finished_at.isoformat()
@@ -100,6 +108,36 @@ class StateSensor(LaeutwerkEntity, SensorEntity):
         if runner.errors:
             attributes["errors"] = dict(runner.errors)
         return attributes
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+class WaitingSinceSensor(LaeutwerkEntity, SensorEntity):
+    """Since when the current reminder is waiting (reminded or snoozed)."""
+
+    _attr_translation_key = "waiting_since"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, manager: LaeutwerkManager, rule_id: str) -> None:
+        """Initialise the sensor."""
+        super().__init__(
+            manager, rule_id, "waiting_since", f"sensor.laeutwerk_{rule_id}_wartet_seit"
+        )
+
+    @property
+    def native_value(self) -> datetime | None:
+        """First reminder time of the open reminder that has reminded."""
+        if (runner := self.runner) is None:
+            return None
+        waiting = [
+            r
+            for r in runner.reminders.values()
+            if r.is_open and r.reminded_at is not None
+        ]
+        return min((r.reminded_at for r in waiting), default=None)
 
 
 class NextEventSensor(LaeutwerkEntity, SensorEntity):

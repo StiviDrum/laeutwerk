@@ -80,8 +80,18 @@ class SignalRun:
     def text(self, key: str) -> str:
         """Render a text field, using its plural variant if it applies."""
         config = self.signal.config
+        if (repeat := config.get(f"{key}_repeat")) and _number(self.variables) >= 2:
+            return render(repeat, self.variables)
         template = (self.plural and config.get(f"{key}_plural")) or config.get(key)
         return render(template, self.variables)
+
+
+def _number(variables: dict[str, str]) -> int:
+    """Return the number of the reminder (``nr``), 1 if unknown."""
+    try:
+        return int(variables.get("nr", "1"))
+    except ValueError:
+        return 1
 
 
 async def _sleep(seconds: float) -> None:

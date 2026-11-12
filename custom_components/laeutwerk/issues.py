@@ -49,6 +49,8 @@ def rule_entity_refs(rule: Rule) -> set[str]:
         _walk(ack.get("trigger"), found)
     _walk((rule.activation or {}).get("conditions"), found)
     _walk(rule.on_done, found)
+    _walk(rule.on_missed, found)
+    _walk(rule.on_reminded, found)
     found.update((rule.assignee or {}).get("persons", []))
     return found
 

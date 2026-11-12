@@ -359,6 +359,31 @@ def build_variables(
     return variables
 
 
+def describe_since(minutes: int, language: str | None) -> str:
+    """Return a waiting time as text, e.g. "seit 25 Minuten" or "for 2 h"."""
+    de = (language or "en").startswith("de")
+    days, rest = divmod(minutes, 1440)
+    hours, mins = divmod(rest, 60)
+    if minutes < 1:
+        return "seit weniger als einer Minute" if de else "for less than a minute"
+    if days:
+        if de:
+            text = f"{days} {'Tag' if days == 1 else 'Tagen'}"
+        else:
+            text = f"{days} {'day' if days == 1 else 'days'}"
+        return f"{'seit' if de else 'for'} {text}" + (
+            f" {hours} {'Std.' if de else 'h'}" if hours else ""
+        )
+    if hours:
+        text = f"{hours} {'Std.' if de else 'h'}"
+        if mins:
+            text += f" {mins} {'Min.' if de else 'min'}"
+        return f"{'seit' if de else 'for'} {text}"
+    if de:
+        return f"seit {mins} {'Minute' if mins == 1 else 'Minuten'}"
+    return f"for {mins} {'minute' if mins == 1 else 'minutes'}"
+
+
 def render(
     template: str | None, variables: Mapping[str, str], *, capitalize: bool = True
 ) -> str:

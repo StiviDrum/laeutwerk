@@ -186,6 +186,11 @@ class Signal:
         return int(self.config.get("stage", 0))
 
     @property
+    def every_stage(self) -> bool:
+        """Also sent at every reached escalation stage."""
+        return bool(self.config.get("every_stage", False))
+
+    @property
     def manual_only(self) -> bool:
         """Only real operation counts as opportunity (no automations)."""
         return isinstance(self.when, dict) and bool(self.when.get("manual_only"))
@@ -243,6 +248,9 @@ class Rule:
     activation: dict[str, Any] | None = None
     # 0.6: Home Assistant actions run when a reminder is acknowledged.
     on_done: list[dict[str, Any]] = field(default_factory=list)
+    # 0.10: actions run when a reminder becomes missed / after every remind.
+    on_missed: list[dict[str, Any]] = field(default_factory=list)
+    on_reminded: list[dict[str, Any]] = field(default_factory=list)
     # 0.6: {persons, rotation} – who is responsible ({zustaendig}).
     assignee: dict[str, Any] | None = None
     # 0.6: escalation stages [{after}] – signals with "stage: n" start then.
@@ -302,6 +310,8 @@ class Rule:
             interval=data.get("interval"),
             activation=data.get("activation"),
             on_done=list(data.get("on_done") or []),
+            on_missed=list(data.get("on_missed") or []),
+            on_reminded=list(data.get("on_reminded") or []),
             assignee=data.get("assignee"),
             escalation=list(data.get("escalation") or []),
             lookahead_days=int(data.get("lookahead_days", 14)),
@@ -334,6 +344,8 @@ class Rule:
             "interval": self.interval,
             "activation": self.activation,
             "on_done": list(self.on_done),
+            "on_missed": list(self.on_missed),
+            "on_reminded": list(self.on_reminded),
             "assignee": self.assignee,
             "escalation": list(self.escalation),
             "lookahead_days": self.lookahead_days,
@@ -422,6 +434,8 @@ class Reminder:
     last_reminded: datetime | None = None
     # Escalation stage reached (0 = the reminder itself).
     stage: int = 0
+    # Number of reminders sent (first remind = 1, then repeats, stages, snooze).
+    nr: int = 0
     # Responsible person (entity id), fixed when the reminder is created.
     assignee: str | None = None
     # Original person if a substitute took over at the first reminder.
@@ -463,6 +477,7 @@ class Reminder:
             repeats=int(data.get("repeats", 0)),
             last_reminded=_parse_opt(data.get("last_reminded")),
             stage=int(data.get("stage", 0)),
+            nr=int(data.get("nr", 0)),
             assignee=data.get("assignee"),
             substitute_for=data.get("substitute_for"),
             trigger_person=data.get("trigger_person", ""),
@@ -495,6 +510,7 @@ class Reminder:
             "repeats": self.repeats,
             "last_reminded": _format_opt(self.last_reminded),
             "stage": self.stage,
+            "nr": self.nr,
             "assignee": self.assignee,
             "substitute_for": self.substitute_for,
             "trigger_person": self.trigger_person,

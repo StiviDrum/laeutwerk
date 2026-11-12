@@ -179,6 +179,7 @@ def test_reminder_round_trip() -> None:
         "repeats": 2,
         "last_reminded": "2026-11-16T18:00:00+00:00",
         "stage": 1,
+        "nr": 0,
         "assignee": "person.steven",
         "substitute_for": None,
         "trigger_person": "",

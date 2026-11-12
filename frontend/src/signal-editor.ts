@@ -8,6 +8,8 @@ import { property, state } from "lit/decorators.js";
 import {
   SIGNAL_ICONS,
   availableVariables,
+  repeatPreview,
+  withSignalStage,
   columnNames,
   defaultSignal,
   renderTemplate,
@@ -410,6 +412,16 @@ export class LaeutwerkSignalEditor extends LitElement {
         true,
       )}
       ${this._section(
+        "texts_repeat",
+        l.t("repeat_texts"),
+        s.title_repeat || s.message_repeat || "",
+        () =>
+          html`<div class="sublabel tiprow">${helpTip(l, "help_repeat_text")}</div>
+            ${this._repeatText("title_repeat", "title", l.t("push_title"))}
+            ${this._repeatText("message_repeat", "message", l.t("push_message"), true)}`,
+        true,
+      )}
+      ${this._section(
         "buttons",
         l.t("sec_buttons"),
         buttons.map((b) => b.label).join(" · "),
@@ -726,7 +738,41 @@ export class LaeutwerkSignalEditor extends LitElement {
         ></laeutwerk-field>
       </div>
       ${this._text("text", l.t("spoken_text"), true)}
+      ${this._section(
+        "text_repeat",
+        l.t("repeat_texts"),
+        s.text_repeat ?? "",
+        () =>
+          html`<div class="sublabel tiprow">${helpTip(l, "help_repeat_text")}</div>
+            ${this._repeatText("text_repeat", "text", l.t("spoken_text"), true)}`,
+        true,
+      )}
     `;
+  }
+
+  /** Repeat variant of a text (from the 2nd reminder on) with a preview for nr = 2. */
+  private _repeatText(
+    key: "title_repeat" | "message_repeat" | "text_repeat",
+    base: "title" | "message" | "text",
+    label: string,
+    multiline = false,
+  ): TemplateResult {
+    const s = this._sig;
+    const preview = repeatPreview(s[key], s[base], this.sample, this._l);
+    return html`<laeutwerk-suggest
+        .label=${label}
+        .multiline=${multiline}
+        .variables=${this._variableNames()}
+        .value=${String(s[key] ?? "")}
+        @value-changed=${(e: CustomEvent<{ value: string }>) => this._set({ [key]: e.detail.value })}
+      ></laeutwerk-suggest>
+      ${
+        preview && Object.keys(this.sample).length
+          ? html`<div class="preview">
+              <ha-icon icon="mdi:eye-outline"></ha-icon><span>${preview}</span>
+            </div>`
+          : nothing
+      }`;
   }
 
   /** Text field with its plural variant and a live preview. */
@@ -772,16 +818,22 @@ export class LaeutwerkSignalEditor extends LitElement {
       >${l.t("stage")}
       <select
         @change=${(e: Event) => {
-          const stage = Number((e.target as HTMLSelectElement).value);
-          this._set({ stage: stage || undefined });
+          const v = (e.target as HTMLSelectElement).value;
+          this._sig = withSignalStage(this._sig, v === "every" ? "every" : Number(v));
         }}
       >
         ${Array.from({ length: stages + 1 }, (_, n) => n).map(
           (n) =>
-            html`<option value=${n} ?selected=${(this._sig.stage ?? 0) === n}>
+            html`<option
+              value=${n}
+              ?selected=${!this._sig.every_stage && (this._sig.stage ?? 0) === n}
+            >
               ${n ? `${l.t("stage_n", { n })} · ${this.rule.escalation![n - 1].after}` : l.t("stage_0")}
             </option>`,
         )}
+        <option value="every" ?selected=${!!this._sig.every_stage}>
+          ${l.t("every_reminder_opt")}
+        </option>
       </select>
     </label>`;
   }

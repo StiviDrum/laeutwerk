@@ -318,14 +318,21 @@ Schnittstelle:
 - Stufe: `min_age` (Dauer, z. B. "8h") – Stufe entfällt, wenn ihr Zeitpunkt näher an der ersten Erinnerung liegt. „um HH:MM“ = nächstes HH:MM **nach** der ersten Erinnerung (bisher: derselbe Tag → feuerte bei Auslöser-Regeln sofort).
 - Regel-Sensor-Attribute `reminded_at`, `last_reminded_at`, `repeats`, `finished_at`; neuer Sensor `sensor.laeutwerk_<regel>_wartet_seit` (timestamp, standardmäßig deaktiviert).
 - Karte: „+ Regel“ im Bereich „Regeln“, „+“ im Kopf entfällt; Hilfe-Blase per Popover (top layer).
-- [ ] 1 „+ Regel“ im Bereich Regeln
-- [ ] 2 Hilfe-Blase über HA-Dialogen
-- [ ] 3 Zeit-Variablen
-- [ ] 4 Text bei Wiederholung
-- [ ] 5 on_missed / on_reminded
-- [ ] 6 Attribute + Sensor „Wartet seit“
-- [ ] 7 Stufen: min_age, „um“ = nächstes, every_stage
-- [ ] 8 Doku, Prüfung, Release v0.10.0
+- [x] 1 „+ Regel“ im Bereich Regeln
+- [x] 2 Hilfe-Blase über HA-Dialogen
+- [x] 3 Zeit-Variablen
+- [x] 4 Text bei Wiederholung
+- [x] 5 on_missed / on_reminded
+- [x] 6 Attribute + Sensor „Wartet seit“
+- [x] 7 Stufen: min_age, „um“ = nächstes, every_stage
+- [x] 8 Doku, Prüfung, Release v0.10.0
+
+Erkenntnisse:
+- Stufe „um HH:MM“ zählte vom selben Tag wie die erste Erinnerung → bei Auslöser-Regeln (19:42, Stufe 10:00) feuerte sie sofort. Jetzt: nächstes HH:MM danach.
+- Signale feuerten nur in ihrer eigenen Stufe → `every_stage` ergänzt, damit ein Signal mit Wiederholungstext reicht.
+- Modaler `<dialog>` macht den Rest der Seite inert: Treffer-Tests per `elementFromPoint` sehen die Popover-Blase nicht, obwohl sie sichtbar oben liegt → `check_card.py` prüft `:popover-open` + Screenshot.
+- README-Beispiel Trockner war ohne `audience` ungültig → Beispiele immer gegen `validate_rule` prüfen.
+- Größen (gzip -9): Übersicht 98 295 B (32 138), Editoren 104 863 B (23 307), help-tip 16 572 B (5 597), Karteneditor 4 623 B (1 742).
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku

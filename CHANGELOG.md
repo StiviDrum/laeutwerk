@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-12
+
+### Added
+- Time variables in texts: `{seit}`, `{seit_min}`, `{erinnert_um}`, `{nr}`.
+- Repeat texts (`title_repeat` / `message_repeat` / `text_repeat`), used from
+  the 2nd reminder on.
+- `every_stage: true` for signals: sent at the first reminder and at every
+  escalation stage.
+- `on_missed` and `on_reminded` actions next to `on_done`.
+- `min_age` for escalation stages.
+- Sensor attributes `reminded_at`, `last_reminded_at`, `repeats`, `finished_at`.
+- Sensor `sensor.laeutwerk_<rule>_wartet_seit` (disabled by default).
+
+### Changed
+- "at HH:MM" escalation stages are the next occurrence after the first
+  reminder; before, a trigger rule fired such a stage at once.
+- "+ Rule" button in the rules section; the "+" in the card header is removed.
+- Help bubbles are shown in the top layer, so they also work inside dialogs.
+
 ## [0.9.2] - 2026-11-12
 
 ### Added

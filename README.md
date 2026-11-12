@@ -10,7 +10,7 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** actively developed, current version **0.9.0**. All planned
+> **Status:** actively developed, current version **0.10.0**. All planned
 > features from the spec are in: calendar, trigger and interval sources, keyword
 > table with icons and colours, signals (push, light, announcement, own action),
 > opportunities, quiet times, escalation, responsibility with substitute,
@@ -107,6 +107,13 @@ data:
   `{datum}`, `{uhrzeit}`, plus one per column and its plural with an appended
   `n`: `{tonnen}` = "Papiertonne und Biotonne". `title_plural` /
   `message_plural` are used when several keywords matched.
+- **Waiting time and reminder number:** `{seit}` (time since the first
+  reminder, e.g. "seit 25 Minuten" / "seit 1 Std. 25 Min." / "seit 1 Tag 3 Std.";
+  in English "for 25 minutes"), `{seit_min}` (the minutes as a number),
+  `{erinnert_um}` (time of the first reminder, HH:MM), `{nr}` (number of the
+  reminder: 1 = first; counts repeats, escalation stages and reminders after
+  "later"). They are evaluated at every send; a repeated push replaces the
+  previous one, so the waiting time shown is current.
 - **Plural per column:** where a plural makes no sense (e.g. `artikel`),
   switch it off in the column header of the card or write the column as
   `{name: artikel, plural: false}`. Then there is no `{artikeln}`, and with
@@ -133,27 +140,36 @@ Every rule has exactly one source:
 - **Interval:** `interval: {every: 90}` – due again 90 days after the last
   acknowledgement (see *Responsibility, escalation and more*).
 
-Example "washing machine" (placeholder entity names – replace them with yours):
+Example "dryer" (placeholder entity names – `input_select.trockner_status` is a
+placeholder for your own status helper; replace it with yours):
 
 ```yaml
-id: waschmaschine
-name: Wäsche fertig
+id: trockner
+name: Trockner fertig
 start_triggers:
-  - trigger: numeric_state
-    entity_id: sensor.waschmaschine_leistung   # placeholder power sensor
-    below: 5
-    for: "00:03:00"
+  - {trigger: state, entity_id: input_select.trockner_status, to: "Fertig"}
 signals:
-  - id: ansage
-    type: announce
-    players: [media_player.sonos_wohnzimmer]   # placeholder speaker
-    text: "{person}, die Wäsche ist fertig."
-    when:
-      opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}   # placeholder door
+  - id: push
+    type: notify
+    audience: all
+    every_stage: true
+    title: "Trockner ist fertig!"
+    message: "Räum mich aus!"
+    title_repeat: "Erinnerung: Trockner ausräumen"
+    message_repeat: "Die Wäsche wartet {seit}."
+    actions:
+      - {ack: true, label: "Ausgeräumt"}
+escalation:
+  - {after: "1h"}
+  - {after: "10:00", min_age: "8h"}
 acknowledge:
   - type: trigger
-    trigger: {trigger: state, entity_id: binary_sensor.waschmaschine_tuer, to: "on"}   # placeholder door contact
-expire: "+12h"
+    trigger: {trigger: state, entity_id: input_select.trockner_status, from: "Fertig"}
+on_missed:
+  - action: input_select.select_option
+    target: {entity_id: input_select.trockner_status}
+    data: {option: "Bereit"}
+expire: "+32h"
 ```
 
 ### Signals
@@ -347,6 +363,21 @@ on_done:
 visible: false
 ```
 
+- **Repeat texts:** `title_repeat` / `message_repeat` (push) and `text_repeat`
+  (announcement) are used from the 2nd reminder on (`{nr}` ≥ 2); empty = the
+  normal text.
+- **`every_stage: true`** on a signal: it is sent at the first reminder and
+  again at every escalation stage (not together with `stage`).
+- **Escalation times:** a stage `{after: "2h"}` counts from the first reminder;
+  `{after: "10:00"}` (a clock time) means the next 10:00 after the first
+  reminder. The optional `min_age: "8h"` skips the stage if it would come
+  sooner than that after the first reminder. Example: dryer finished 19:42 →
+  stage "10:00, min_age 8h" reminds the next morning; finished 06:30 → skipped.
+- **Actions:** `on_done` runs when a reminder is acknowledged, `on_missed` once
+  when a reminder is missed, `on_reminded` after every reminder (incl. repeats
+  and stages). Variables include `rule_id`, `reminder_id`, `nr`, `seit_min` and
+  the text variables. Errors are logged and block nothing.
+- **Editor step 7:** has the separate blocks *When done · When missed · At every reminder*.
 - **Substitute:** the substitute takes over when the entity given in
   `substitute_when` has the given state at reminder time. Läutwerk does not
   detect absence itself – you choose the entity (e.g. a vacation switch).
@@ -359,7 +390,7 @@ visible: false
   `reminders` lists them (`rule_id`, `rule_name`, `headline`, `assignee_name`,
   `since`).
 
-**Templates:** *+* in the card offers built-in templates (bins, birthdays,
+**Templates:** *+ Rule* in the rules section offers built-in templates (bins, birthdays,
 maintenance, medication supply), your own templates (*Save as template* in
 the editor) and *Import YAML*. `laeutwerk.export_rules` /
 `laeutwerk.import_rules` (and *Export* in the editor) move rules as YAML.
@@ -368,7 +399,8 @@ the editor) and *Import YAML*. `laeutwerk.export_rules` /
 
 | Entity | State |
 |---|---|
-| `sensor.laeutwerk_<rule>` | `planned` / `reminded` / `done` / `missed` / `inactive`, attributes with the event and its variables |
+| `sensor.laeutwerk_<rule>` | `planned` / `reminded` / `done` / `missed` / `inactive`, attributes with the event and its variables, plus `reminded_at`, `last_reminded_at`, `repeats`, `finished_at` |
+| `sensor.laeutwerk_<rule>_wartet_seit` | timestamp of the first reminder while one is open, shown as "x minutes ago"; disabled by default – enable it in the entity settings |
 | `sensor.laeutwerk_offen` | number of reminders waiting for acknowledgement over all rules (attribute `reminders`) |
 | `binary_sensor.laeutwerk_<rule>_offen` | on while a reminder waits to be acknowledged |
 | `sensor.laeutwerk_<rule>_naechster_termin` | start of the next matching event |
@@ -436,6 +468,9 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   columns scroll sideways.
 - **One rule** (`view: rule`): the rule's reminders plus its history (last
   10 finished reminders: done by whom and how, or missed).
+- **New rule:** the **+ Rule** button in the rules section creates a rule; the
+  "+" in the card header is gone. Help bubbles (**?**) also work inside Home
+  Assistant's dialogs.
 - **Visual editor:** all options can be set in the dashboard's card editor.
 - **Signal list:** each signal shows what it reaches ("Light · Stehleuchte",
   "Push · Steven, Anna"); signals of an escalation stage are marked in the
@@ -450,9 +485,9 @@ compact: false        # one line: the next task; tap to confirm done, snooze or 
   and a hex field; the keyword colours can be tapped as the
   fixed colour of a light signal.
 
-The card loads in parts: the overview needs 31.7 KB gzipped (96,954 bytes), the
-editors (22.5 KB + 5.5 KB gzipped) and the visual card editor (1.7 KB gzipped)
-load only when opened (measured with `gzip -9` on 0.9.0).
+The card loads in parts: the overview needs 32.1 KB gzipped (98,295 bytes), the
+editors (23.3 KB + 5.6 KB gzipped) and the visual card editor (1.7 KB gzipped)
+load only when opened (measured with `gzip -9` on 0.10.0).
 
 ## Troubleshooting
 
@@ -495,7 +530,7 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** in aktiver Entwicklung, aktuelle Version **0.9.0**. Alle geplanten
+> **Status:** in aktiver Entwicklung, aktuelle Version **0.10.0**. Alle geplanten
 > Funktionen aus der Spezifikation sind drin: Quellen Kalender, Auslöser und
 > Intervall, Stichwort-Tabelle mit Icons und Farben, Signale (Push, Licht,
 > Ansage, eigene Aktion), Gelegenheiten, Ruhezeiten, Eskalation,
@@ -529,27 +564,36 @@ Jede Regel hat genau eine Quelle:
 - **Intervall:** `interval: {every: 90}` – fällig 90 Tage nach der letzten
   Quittierung (siehe *Zuständigkeit, Eskalation und mehr*).
 
-Beispiel „Waschmaschine“ (Entitätsnamen sind Platzhalter – ersetze sie durch deine):
+Beispiel „Trockner“ (Entitätsnamen sind Platzhalter – `input_select.trockner_status`
+ist ein Platzhalter für deinen eigenen Status-Helfer; ersetze ihn durch deinen):
 
 ```yaml
-id: waschmaschine
-name: Wäsche fertig
+id: trockner
+name: Trockner fertig
 start_triggers:
-  - trigger: numeric_state
-    entity_id: sensor.waschmaschine_leistung   # Platzhalter: Leistungssensor
-    below: 5
-    for: "00:03:00"
+  - {trigger: state, entity_id: input_select.trockner_status, to: "Fertig"}
 signals:
-  - id: ansage
-    type: announce
-    players: [media_player.sonos_wohnzimmer]   # Platzhalter: Lautsprecher
-    text: "{person}, die Wäsche ist fertig."
-    when:
-      opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}   # Platzhalter: Haustür
+  - id: push
+    type: notify
+    audience: all
+    every_stage: true
+    title: "Trockner ist fertig!"
+    message: "Räum mich aus!"
+    title_repeat: "Erinnerung: Trockner ausräumen"
+    message_repeat: "Die Wäsche wartet {seit}."
+    actions:
+      - {ack: true, label: "Ausgeräumt"}
+escalation:
+  - {after: "1h"}
+  - {after: "10:00", min_age: "8h"}
 acknowledge:
   - type: trigger
-    trigger: {trigger: state, entity_id: binary_sensor.waschmaschine_tuer, to: "on"}   # Platzhalter: Türkontakt
-expire: "+12h"
+    trigger: {trigger: state, entity_id: input_select.trockner_status, from: "Fertig"}
+on_missed:
+  - action: input_select.select_option
+    target: {entity_id: input_select.trockner_status}
+    data: {option: "Bereit"}
+expire: "+32h"
 ```
 
 ## Variablen und Mehrzahl
@@ -562,6 +606,13 @@ schreibst die Spalte als `{name: artikel, plural: false}`. Dann gibt es kein
 `{artikeln}`, und `{artikel}` enthält bei mehreren Treffern die verschiedenen
 Werte, mit „und“ verbunden („die“ bzw. „die und den“). Ein eigener Name für
 die Mehrzahl: `{name: tonne, plural: tonnen_liste}`.
+
+Zeit- und Nummern-Variablen: `{seit}` (Zeit seit der ersten Erinnerung, z. B.
+„seit 25 Minuten“, „seit 1 Std. 25 Min.“ oder „seit 1 Tag 3 Std.“), `{seit_min}`
+(die Minuten als Zahl), `{erinnert_um}` (Uhrzeit der ersten Erinnerung, HH:MM) und
+`{nr}` (Nummer der Erinnerung: 1 = erste; zählt Wiederholungen, Eskalationsstufen
+und Erinnerungen nach „Später“). Sie werden bei jedem Senden neu berechnet; ein
+wiederholter Push ersetzt den vorherigen, die angezeigte Wartezeit ist also aktuell.
 
 ## NFC-Tag je Tonne
 
@@ -634,6 +685,9 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
 - **Überschrift** (Schritt 6 „Feinheiten“): wie eine Erinnerung heißt, z. B.
   `{wann} raus: {tonnen}`, mit eigener Mehrzahl-Variante; ohne Angabe
   „Morgen: Papier + Bio“. Auch als Attribut `headline` am Regel-Sensor.
+- **Neue Regel:** der Knopf **+ Rule** im Regel-Bereich legt eine Regel an; das „+“
+  im Karten-Kopf entfällt. Hilfe-Bubbles (**?**) funktionieren auch in Dialogen von
+  Home Assistant.
 - **Regeln sortieren** (↑/↓) und bei vielen Regeln **durchsuchen**.
 - **Quelle** in Schritt 1: *Kalender*, *Auslöser* oder *Intervall* – Intervall
   ist wiederkehrend nach dem letzten Erledigen (z. B. Filter alle 90 Tage),
@@ -664,18 +718,37 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
   an die Person, die quittiert hat (sonst an die Zuständige), und entfernt sie
   nach `clear_after` Sekunden (Standard 10). `on_done`-Aktionen bekommen zusätzlich
   die Variablen `person_entity` und `zustaendig_entity`.
+- **Wiederhol-Texte:** `title_repeat` / `message_repeat` (Push) und `text_repeat`
+  (Ansage) werden ab der 2. Erinnerung genutzt (`{nr}` ≥ 2); leer = normaler Text.
+- **`every_stage: true`** an einem Signal: wird bei der ersten Erinnerung und bei
+  jeder Eskalationsstufe erneut gesendet (nicht zusammen mit `stage`).
+- **Eskalationszeiten:** eine Stufe `{after: "2h"}` zählt ab der ersten Erinnerung;
+  `{after: "10:00"}` (eine Uhrzeit) meint die nächste 10:00 nach der ersten
+  Erinnerung. Das optionale `min_age: "8h"` überspringt die Stufe, wenn sie
+  früher als so lange nach der ersten Erinnerung käme. Beispiel: Trockner fertig
+  um 19:42 → Stufe „10:00, min_age 8h“ erinnert am nächsten Morgen; fertig um
+  06:30 → übersprungen.
+- **Aktionen:** `on_done` läuft beim Erledigen, `on_missed` einmal, wenn eine
+  Erinnerung verpasst wird, `on_reminded` nach jeder Erinnerung (inkl. Wiederholungen
+  und Stufen). Variablen sind u. a. `rule_id`, `reminder_id`, `nr`, `seit_min` und
+  die Textvariablen. Fehler werden protokolliert und blockieren nichts.
+- **Editor, Schritt 7:** hat die getrennten Bereiche *Wenn erledigt · Wenn verpasst · Bei jeder Erinnerung*.
 - **Ausblenden:** `visible: false` blendet eine Regel in der Kartenübersicht aus;
   sie bleibt unter den Regeln mit durchgestrichenem Auge sichtbar, Signale und
   Entitäten arbeiten weiter.
+- **Sensor `sensor.laeutwerk_<regel>_wartet_seit`:** Zeitstempel der ersten
+  Erinnerung, solange eine offen ist (Anzeige „vor x Minuten“); standardmäßig
+  deaktiviert – in den Entitätseinstellungen aktivieren. Die Hauptsensoren haben
+  zusätzlich `reminded_at`, `last_reminded_at`, `repeats` und `finished_at`.
 - **Sensor `sensor.laeutwerk_offen`:** Anzahl der offenen Erinnerungen über alle
   Regeln; das Attribut `reminders` listet sie (`rule_id`, `rule_name`, `headline`,
   `assignee_name`, `since`).
 - **Editor:** Erklärungen liegen hinter kleinen **?**-Symbolen, beim Tippen von `{`
   gibt es Vorschläge, Funktionen innerhalb eines Schritts sind durch feine
   Linien getrennt.
-- **Karten-Größe:** Die Übersicht lädt 31,7 KB gzipped (96.954 Bytes); die
-  Editoren (22,5 KB + 5,5 KB gzipped) und der visuelle Karten-Editor (1,7 KB
-  gzipped) laden erst beim Öffnen (gemessen mit `gzip -9` auf 0.9.0).
+- **Karten-Größe:** Die Übersicht lädt 32,1 KB gzipped (98.295 Bytes); die
+  Editoren (23,3 KB + 5,6 KB gzipped) und der visuelle Karten-Editor (1,7 KB
+  gzipped) laden erst beim Öffnen (gemessen mit `gzip -9` auf 0.10.0).
 - Der **Signal-Editor** ist in einklappbare Bereiche mit Zusammenfassung
   gegliedert; Push in Empfänger (Personen anhaken), Texte und Knöpfe.
   Notify-Aktionen gibst du nicht mehr an – alte werden der Person mit dem

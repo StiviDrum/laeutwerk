@@ -453,17 +453,6 @@ export class LaeutwerkCard extends LitElement {
             ? html`<span class="chip accent">${l.t("n_open", { n: overview.open.length })}</span>`
             : nothing
         }
-        ${
-          this._isAdmin
-            ? html`<button
-                class="mini"
-                aria-label=${l.t("new_rule")}
-                @click=${() => (this._picking = true)}
-              >
-                <ha-icon icon="mdi:plus"></ha-icon>
-              </button>`
-            : nothing
-        }
       </div>
       ${this._actionError ? html`<div class="error">${this._actionError}</div>` : nothing}
       ${this._renderToast()}
@@ -736,6 +725,14 @@ export class LaeutwerkCard extends LitElement {
     const canSort = !this._config?.rules?.length && all.length > 1;
     return html`<div class="separator">
         ${l.t("section_rules")}<span class="line"></span>
+        ${
+          this._isAdmin
+            ? html`<button class="chip" @click=${() => (this._picking = true)}>
+                <ha-icon icon="mdi:plus"></ha-icon>
+                ${l.t("add_rule")}
+              </button>`
+            : nothing
+        }
         ${
           canSort
             ? html`<button class="chip" @click=${() => (this._sorting = !this._sorting)}>

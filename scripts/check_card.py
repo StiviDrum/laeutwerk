@@ -377,6 +377,31 @@ async def main() -> None:
                     " return (top === tip ? 'on top: ' : 'COVERED: ') + tip.textContent.slice(0, 60) })()"
                 )
                 print("help tip:", tip)
+                # 0.10.0: HA's card editor is a modal <dialog> (browser top layer).
+                # A help tip inside such a dialog must still be on top.
+                modal = await cdp.js(
+                    "(async () => { const d = document.createElement('dialog');"
+                    " d.style.cssText = 'width:300px;height:200px';"
+                    " const tip = document.createElement('laeutwerk-help-tip');"
+                    " tip.text = 'Hilfe im Dialog'; d.appendChild(tip);"
+                    " document.body.appendChild(d); d.showModal();"
+                    " await tip.updateComplete; await new Promise(r => setTimeout(r, 200));"
+                    " (tip.shadowRoot.querySelector('button') || tip).click();"
+                    " await new Promise(r => setTimeout(r, 300));"
+                    " const b = [...document.querySelectorAll('[role=tooltip]')]"
+                    "  .find(x => x.textContent.includes('Hilfe im Dialog'));"
+                    " if (!b) { window.__modal = d; return 'no bubble'; }"
+                    # A modal makes the rest of the page inert, so hit-testing can't
+                    # see the bubble; what counts is that it is open in the top layer.
+                    " const ok = b.matches(':popover-open');"
+                    " window.__modal = d; return ok ? 'in top layer (above modal)' : 'NOT in top layer' })()"
+                )
+                print("help tip in modal dialog:", modal)
+                await cdp.shot("modal_tip", full=False)
+                await cdp.js(
+                    "(() => { const d = window.__modal; if (d) { d.close(); d.remove(); }"
+                    " return true })()"
+                )
                 await cdp.shot("helptip", full=False)
                 await cdp.js(
                     "(() => { document.body.dispatchEvent(new PointerEvent('pointerdown',"

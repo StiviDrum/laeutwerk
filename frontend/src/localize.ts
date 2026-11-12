@@ -36,6 +36,7 @@ const en = {
   loading: "Loading…",
   failed: "That did not work: {error}",
   new_rule: "New rule",
+  add_rule: "Rule",
   edit_rule: "Edit rule",
   step_calendar: "Source",
   step_events: "Which events",
@@ -210,7 +211,21 @@ const en = {
   stage_0: "from the start",
   stage_after: "after (e.g. 2h or 21:30)",
   add_stage: "Stage",
-  on_done: "Actions when done",
+  sample_since: "for 25 minutes",
+  every_reminder: "every reminder",
+  every_reminder_opt: "At every reminder",
+  repeat_texts: "Text on repeat",
+  help_repeat_text: "From the 2nd reminder on; empty = normal text.",
+  min_age: "at the earliest after",
+  help_min_age:
+    "Optional. Example: dryer, stage at 10:00, earliest after 8h: only fires if it sat overnight.",
+  on_missed: "When missed",
+  on_missed_hint:
+    "Runs when a reminder expires. Variables: titel, wann, seit, seit_min, nr, rule_id, reminder_id …",
+  on_reminded: "At every reminder",
+  on_reminded_hint:
+    "Runs at every reminder. Variables: titel, wann, seit, seit_min, erinnert_um, nr, rule_id, reminder_id …",
+  on_done: "When done",
   on_done_hint:
     "e.g. add to a shopping list or count. Variables: person, via, titel, person_entity, zustaendig_entity …",
   audience_assignee: "responsible person",
@@ -464,6 +479,7 @@ const de: Strings = {
   loading: "Lädt …",
   failed: "Das hat nicht geklappt: {error}",
   new_rule: "Neue Regel",
+  add_rule: "Regel",
   edit_rule: "Regel bearbeiten",
   step_calendar: "Quelle",
   step_events: "Welche Termine",
@@ -638,7 +654,21 @@ const de: Strings = {
   stage_0: "von Anfang an",
   stage_after: "nach (z. B. 2h oder 21:30)",
   add_stage: "Stufe",
-  on_done: "Aktionen beim Erledigen",
+  sample_since: "seit 25 Minuten",
+  every_reminder: "bei jeder Erinnerung",
+  every_reminder_opt: "Bei jeder Erinnerung",
+  repeat_texts: "Text bei Wiederholung",
+  help_repeat_text: "Ab der 2. Erinnerung; leer = normaler Text.",
+  min_age: "frühestens nach",
+  help_min_age:
+    "Optional. Beispiel Trockner: Stufe um 10:00, frühestens nach 8 Std.: kommt nur, wenn es über Nacht lag.",
+  on_missed: "Wenn verpasst",
+  on_missed_hint:
+    "Läuft, wenn eine Erinnerung verfällt. Variablen: titel, wann, seit, seit_min, nr, rule_id, reminder_id …",
+  on_reminded: "Bei jeder Erinnerung",
+  on_reminded_hint:
+    "Läuft bei jeder Erinnerung. Variablen: titel, wann, seit, seit_min, erinnert_um, nr, rule_id, reminder_id …",
+  on_done: "Wenn erledigt",
   on_done_hint:
     "z. B. auf die Einkaufsliste setzen oder zählen. Variablen: person, via, titel, person_entity, zustaendig_entity …",
   audience_assignee: "Zuständige",

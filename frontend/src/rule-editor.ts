@@ -20,6 +20,8 @@ import {
   colPlural,
   signalTitle,
   stageColor,
+  timeSamples,
+  withMinAge,
   columnNames,
   errorStep,
   ruleProblems,
@@ -300,12 +302,24 @@ export class LaeutwerkRuleEditor extends LitElement {
     };
     if (season?.from && season?.to) preview.activation = { season };
     try {
-      this._preview = await this.hass.callWS<PreviewResult>({
+      const result = await this.hass.callWS<PreviewResult>({
         type: "laeutwerk/preview",
         rule: preview,
         limit: 5,
         titles: true,
       });
+      const samples = timeSamples(this._l);
+      const withSamples = <T extends { variables?: Record<string, string> }>(e: T): T => ({
+        ...e,
+        variables: { ...samples, ...e.variables },
+      });
+      this._preview = {
+        ...result,
+        events: result.events.map(withSamples),
+        plural_sample: result.plural_sample
+          ? withSamples(result.plural_sample)
+          : result.plural_sample,
+      };
       this._titles = this._preview.titles;
       this._previewError = undefined;
     } catch (err) {
@@ -1270,7 +1284,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                   <span class="name">${signalTitle(s, l, this._names)}</span>
                   <span class="sub">
                     ${
-                      color
+                      color && !s.every_stage
                         ? html`<span class="stagechip">${l.t("stage_n", { n: s.stage! })}</span>`
                         : nothing
                     }
@@ -1833,10 +1847,17 @@ export class LaeutwerkRuleEditor extends LitElement {
                   <span class="chip stagechip-big" style="--stage: ${stageColor(r, i + 1)}"
                     >${l.t("stage_n", { n: i + 1 })}</span
                   >
-                  ${this._stageInput(stage.after, (after) =>
-                    this._update({
-                      escalation: stages.map((x, j) => (j === i ? { ...x, after } : x)),
-                    }),
+                  ${this._stageInput(
+                    stage.after,
+                    (after) =>
+                      this._update({
+                        escalation: stages.map((x, j) => (j === i ? { ...x, after } : x)),
+                      }),
+                    stage.min_age ?? "",
+                    (minAge) =>
+                      this._update({
+                        escalation: stages.map((x, j) => (j === i ? withMinAge(x, minAge) : x)),
+                      }),
                   )}
                   <button
                     class="mini"
@@ -1925,6 +1946,8 @@ export class LaeutwerkRuleEditor extends LitElement {
           @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) =>
             this._update({ on_done: e.detail.value ?? [] })}
         ></laeutwerk-field>
+        ${this._hook("on_missed", l.t("on_missed"), "on_missed_hint")}
+        ${this._hook("on_reminded", l.t("on_reminded"), "on_reminded_hint")}
       `,
     );
   }
@@ -1962,7 +1985,12 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   /** Escalation stage: after a number of minutes / hours, or at a time of day. */
-  private _stageInput(after: string, onChange: (after: string) => void): TemplateResult {
+  private _stageInput(
+    after: string,
+    onChange: (after: string) => void,
+    minAge: string,
+    onMinAge: (minAge: string) => void,
+  ): TemplateResult {
     const l = this._l;
     const atTime = /^\d{1,2}:\d{2}$/.test(after);
     const match = /^(\d+)\s*([mh]?)$/.exec(after);
@@ -2001,7 +2029,37 @@ export class LaeutwerkRuleEditor extends LitElement {
               </select>
             </div>`
       }
+      <div class="row bottom">
+        <label class="field grow"
+          >${l.t("min_age")}
+          <input
+            .value=${minAge}
+            placeholder="8h"
+            @change=${(e: Event) => onMinAge((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        ${helpTip(l, "help_min_age")}
+      </div>
     </div>`;
+  }
+
+  /** Action list hook (on_missed / on_reminded) as its own block. */
+  private _hook(
+    key: "on_missed" | "on_reminded",
+    label: string,
+    hint: "on_missed_hint" | "on_reminded_hint",
+  ): TemplateResult {
+    const l = this._l;
+    return html`<hr class="sep" />
+      <div class="sublabel head tiprow">${label}${helpTip(l, hint)}</div>
+      <laeutwerk-field
+        .hass=${this.hass}
+        .localize=${l}
+        .selector=${{ action: {} }}
+        .value=${this._rule[key] ?? EMPTY}
+        @value-changed=${(e: CustomEvent<{ value: HaConfig[] | undefined }>) =>
+          this._update({ [key]: e.detail.value ?? [] })}
+      ></laeutwerk-field>`;
   }
 
   private _toggle(

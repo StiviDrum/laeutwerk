@@ -49,6 +49,7 @@ from .matching import (
     Occurrence,
     build_occurrences,
     build_variables,
+    describe_since,
     is_plural,
     keyword_colors,
     render,
@@ -139,7 +140,7 @@ class RuleRunner:
         # Activation (0.6): False while the rule's conditions are not met.
         self.active = True
         self._activation: list[Callable[[HomeAssistant], bool | None]] = []
-        self._on_done: script_helper.Script | None = None
+        self._on_done = self._on_missed = self._on_reminded = None
         self._lock = asyncio.Lock()
         self._unsub_timer: CALLBACK_TYPE | None = None
         self._unsub_sources: CALLBACK_TYPE | None = None
@@ -162,7 +163,9 @@ class RuleRunner:
         """Start listening to the source calendars and read them once."""
         watched = set(self.rule.sources)
         watched |= await self._async_compile_activation()
-        await self._async_compile_on_done()
+        self._on_done = await self._async_compile_actions("on_done")
+        self._on_missed = await self._async_compile_actions("on_missed")
+        self._on_reminded = await self._async_compile_actions("on_reminded")
         if watched:
             self._unsub_sources = async_track_state_change_event(
                 self.hass, list(watched), self._async_source_changed
@@ -187,20 +190,21 @@ class RuleRunner:
             _LOGGER.warning("Rule %s: activation conditions: %s", self.rule.id, err)
         return entities
 
-    async def _async_compile_on_done(self) -> None:
-        if not self.rule.on_done:
-            return
+    async def _async_compile_actions(self, key: str) -> script_helper.Script | None:
+        """Compile the action list ``on_done`` / ``on_missed`` / ``on_reminded``."""
+        if not (actions := getattr(self.rule, key)):
+            return None
         try:
             sequence = await script_helper.async_validate_actions_config(
-                self.hass, cv.SCRIPT_SCHEMA(self.rule.on_done)
+                self.hass, cv.SCRIPT_SCHEMA(actions)
             )
         except (vol.Invalid, HomeAssistantError) as err:
-            _LOGGER.warning("Rule %s: on_done actions: %s", self.rule.id, err)
-            return
-        self._on_done = script_helper.Script(
+            _LOGGER.warning("Rule %s: %s actions: %s", self.rule.id, key, err)
+            return None
+        return script_helper.Script(
             self.hass,
             sequence,
-            f"{self.rule.name}: on_done",
+            f"{self.rule.name}: {key}",
             DOMAIN,
             script_mode=script_helper.SCRIPT_MODE_PARALLEL,
             logger=_LOGGER,
@@ -235,8 +239,9 @@ class RuleRunner:
     async def async_stop(self) -> None:
         """Cancel timers and listeners."""
         self._stopped = True
-        if self._on_done is not None:
-            await self._on_done.async_stop()
+        for script in (self._on_done, self._on_missed, self._on_reminded):
+            if script is not None:
+                await script.async_stop()
         for listener in [*self._opportunities, *self._ack_triggers]:
             listener.update(False)
         if self._start_listener is not None:
@@ -696,6 +701,7 @@ class RuleRunner:
                 reminder.deferred.clear()
                 self._fire(EVENT_MISSED, reminder)
                 self._clear_notifications(reminder)
+                self._run_hook(self._on_missed, reminder)
                 changed = True
                 continue
             times = self.reminder_times(reminder)
@@ -728,8 +734,10 @@ class RuleRunner:
                     self._dispatch(signal, reminder)
             stage_at = self._next_stage(reminder)
             while stage_at is not None and stage_at <= now:
+                skip = self._stage_skipped(reminder, stage_at)
                 reminder.stage += 1
-                self._escalate(reminder)
+                if not skip:
+                    self._escalate(reminder)
                 changed = True
                 stage_at = self._next_stage(reminder)
             pending = [w for at, w in times if at not in reminder.fired]
@@ -762,19 +770,37 @@ class RuleRunner:
         if ":" in after:
             tz = dt_util.get_default_time_zone()
             hour, minute = (int(part) for part in after.split(":"))
-            return local_instant(since.astimezone(tz).date(), hour * 60 + minute, tz)
+            day = since.astimezone(tz).date()
+            at = local_instant(day, hour * 60 + minute, tz)
+            # The next such time strictly after the first reminder.
+            return (
+                at
+                if at > since
+                else local_instant(day + timedelta(days=1), hour * 60 + minute, tz)
+            )
         return since + timedelta(minutes=duration_minutes(after))
+
+    def _stage_skipped(self, reminder: Reminder, stage_at: datetime) -> bool:
+        """Whether the stage (not yet advanced) is closer than its ``min_age``."""
+        min_age = self.rule.escalation[reminder.stage].get("min_age")
+        if not min_age or reminder.reminded_at is None:
+            return False
+        return stage_at - reminder.reminded_at < timedelta(
+            minutes=duration_minutes(min_age)
+        )
 
     def _escalate(self, reminder: Reminder) -> None:
         """Send the immediate signals of a newly reached escalation stage."""
+        reminder.nr += 1
         self._fire(EVENT_REMINDED, reminder, reminder_time=f"stage_{reminder.stage}")
         for signal in self.rule.signals:
             if (
                 signal.enabled
                 and signal.when == WHEN_NOW
-                and signal.stage == reminder.stage
+                and (signal.stage == reminder.stage or signal.every_stage)
             ):
                 self._dispatch(signal, reminder)
+        self._run_hook(self._on_reminded, reminder)
 
     def _next_repeat(self, reminder: Reminder) -> datetime | None:
         """When an open reminder is repeated next (None: no repetition left)."""
@@ -820,7 +846,25 @@ class RuleRunner:
             if self.rule.assignee
             else None
         )
-        return self._variables_of(reminder.events, assignee)
+        return {
+            **self._variables_of(reminder.events, assignee),
+            **self._time_variables(reminder),
+        }
+
+    def _time_variables(self, item: Reminder | Occurrence) -> dict[str, str]:
+        """``seit``, ``seit_min``, ``erinnert_um`` and ``nr`` as of now."""
+        since = item.reminded_at if isinstance(item, Reminder) else None
+        if not isinstance(item, Reminder) or since is None:
+            return {"seit": "", "seit_min": "0", "erinnert_um": "", "nr": "1"}
+        end = item.finished_at or dt_util.utcnow()
+        minutes = max(0, int((end - since).total_seconds() // 60))
+        tz = dt_util.get_default_time_zone()
+        return {
+            "seit": describe_since(minutes, self.hass.config.language),
+            "seit_min": str(minutes),
+            "erinnert_um": f"{since.astimezone(tz):%H:%M}",
+            "nr": str(max(1, item.nr)),
+        }
 
     def tag_ids(self, item: Reminder | Occurrence) -> list[str]:
         """Tag ids from tag templates such as "{nfc}", one set per event.
@@ -949,6 +993,7 @@ class RuleRunner:
     def _remind(self, reminder: Reminder, *, reminder_time: str | None) -> None:
         """Fire the event and send all "now" signals."""
         reminder.last_reminded = dt_util.utcnow()
+        reminder.nr += 1
         self._fire(EVENT_REMINDED, reminder, reminder_time=reminder_time)
         for signal in self.rule.signals:
             if (
@@ -957,6 +1002,7 @@ class RuleRunner:
                 and signal.stage <= reminder.stage
             ):
                 self._dispatch(signal, reminder)
+        self._run_hook(self._on_reminded, reminder)
 
     def _dispatch(
         self,
@@ -1154,6 +1200,27 @@ class RuleRunner:
 
         unsub = async_call_later(self.hass, delay, clear)
         self._confirm_unsubs.add(unsub)
+
+    def _run_hook(
+        self, script: script_helper.Script | None, reminder: Reminder
+    ) -> None:
+        """Run ``on_missed`` / ``on_reminded``; errors are logged only."""
+        if script is None:
+            return
+        variables = {
+            **self.variables(reminder),
+            "rule_id": self.rule.id,
+            "reminder_id": reminder.id,
+            "titles": [event.summary for event in reminder.events],
+        }
+
+        async def run() -> None:
+            try:
+                await script.async_run(run_variables=variables, context=Context())
+            except Exception:
+                _LOGGER.exception("Rule %s: actions failed", self.rule.id)
+
+        self.hass.async_create_task(run())
 
     def _run_on_done(
         self,

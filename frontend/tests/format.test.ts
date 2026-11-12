@@ -10,6 +10,10 @@ import {
   openStatus,
   relativeDay,
   reminderTitle,
+  repeatPreview,
+  timeSamples,
+  withMinAge,
+  withSignalStage,
   renameColumn,
   renderTemplate,
   signalSummary,
@@ -583,5 +587,36 @@ describe("0.9.2 helpers", () => {
     expect(tooEarlyText({ response: { too_early: null } })).toBeUndefined();
     expect(tooEarlyText(undefined)).toBeUndefined();
     expect(tooEarlyText({})).toBeUndefined();
+  });
+});
+
+describe("0.10.0 helpers", () => {
+  const sample = { titel: "Papier" };
+  it("repeat preview uses the repeat text with nr = 2, else the normal text", () => {
+    expect(repeatPreview("Nr {nr}: {titel}", "Normal", sample, de)).toBe("Nr 2: Papier");
+    expect(repeatPreview("", "Nr {nr}", sample, de)).toBe("Nr 2");
+    expect(timeSamples(de)).toMatchObject({ seit_min: "25", erinnert_um: "19:42", nr: "1" });
+  });
+  it("every_stage and stage exclude each other", () => {
+    const base = defaultSignal("notify", emptyRule());
+    const staged = withSignalStage(base, 2);
+    expect(staged.stage).toBe(2);
+    const every = withSignalStage(staged, "every");
+    expect(every.every_stage).toBe(true);
+    expect("stage" in every).toBe(false);
+    const back = withSignalStage(every, 1);
+    expect(back.stage).toBe(1);
+    expect("every_stage" in back).toBe(false);
+    expect("stage" in withSignalStage(back, 0)).toBe(false);
+  });
+  it("min_age is set and removed on a stage", () => {
+    const stage = withMinAge<{ after: string; min_age?: string }>({ after: "10:00" }, " 8h ");
+    expect(stage).toEqual({ after: "10:00", min_age: "8h" });
+    expect(withMinAge(stage, "")).toEqual({ after: "10:00" });
+  });
+  it("offers the time variables", () => {
+    expect(availableVariables(emptyRule())).toEqual(
+      expect.arrayContaining(["seit", "seit_min", "erinnert_um", "nr"]),
+    );
   });
 });
