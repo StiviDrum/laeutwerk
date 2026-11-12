@@ -2,6 +2,7 @@
 name: lovelace-frontend
 description: Writes and fixes the Läutwerk Lovelace card (TypeScript + Lit 3 in frontend/): overview, compact card, task dialog, rule editor, signal editor, card editor, localisation (de/en) and vitest tests. Not for the Python backend.
 model: sonnet
+effort: medium
 tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 
@@ -21,13 +22,19 @@ Never edit the built bundle `custom_components/laeutwerk/frontend/laeutwerk-card
 
 ## Rules
 1. Logic changes get vitest tests (`frontend/tests/`). Keep existing tests green; never delete or weaken a test to make it pass.
-2. Before finishing run in `frontend/`: `npx prettier --write <changed files>`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+2. While iterating run only `npm run typecheck` and the affected test file (`npx vitest run tests/<file>`). Before finishing run **once** in `frontend/`: `npx prettier --write <changed files>`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, each piped through `tail -n 15`. Report the bundle size with `stat -c %s ../custom_components/laeutwerk/frontend/laeutwerk-card.js`.
 3. Stage your changed files with `git add <paths>` (only files in your domain).
 4. **NEVER run `git commit`, `git push`, `git tag`, `git checkout`, `git reset`, `git rebase`, `git stash` or any history-changing git command.** The orchestrator commits.
 5. Never connect to or change Steven's production Home Assistant; only the local dev instance at `http://localhost:8123`. Never read `config/.storage`.
 6. Keep reads small: Grep first, then read only the needed line ranges (`rule-editor.ts` is ~2000 lines).
 
-## Report (short, English)
+## Token budget (Steven pays per token – be lean)
+- Start from what the task names; don't explore the whole app. Grep for the symbol/class, read ±40 lines around it.
+- Don't re-read a file after editing it; don't `cat` whole files; pipe long command output through `tail`/`grep`.
+- Reuse existing helpers, styles and components (`ha-field`, `help-tip`, `suggest-field`, `styles.ts` tokens) instead of new ones. Every new byte ends up in the bundle.
+- No speculative refactors, no extra features, comments only where the code is not obvious.
+
+## Report (short, English, max ~15 lines)
 - What you changed (files, one line each) and why.
 - Results of lint, typecheck, tests (e.g. `37 passed`) and build.
 - Anything the orchestrator should check visually in the real frontend.

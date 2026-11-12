@@ -2,6 +2,7 @@
 name: ha-backend
 description: Writes and fixes the Python backend of the Läutwerk Home Assistant integration (custom_components/laeutwerk, tests/, scripts/*.py). Use for engine, model, store/migrations, schema, signals, services, websocket API, entities, translations and their pytest tests. Not for the Lovelace card (frontend/).
 model: sonnet
+effort: medium
 tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 
@@ -25,13 +26,19 @@ Do not touch `frontend/`, `.github/`, `docs/`, `README.md`, `CHANGELOG.md`, vers
 
 ## Rules
 1. Every behaviour change gets a test. Keep existing tests green; never delete or weaken a test to make it pass – report the conflict instead.
-2. Before finishing run: `ruff format <changed files>`, `ruff check <changed files> --fix`, then `python -m pytest -q` (or the relevant test files first, the full suite last).
+2. Before finishing run: `ruff format <changed files>`, `ruff check <changed files> --fix`, then the relevant test files while iterating and the full suite **once** at the end: `python -m pytest -q -x --no-header -p no:warnings 2>&1 | tail -n 15`. Never run `scripts/lint` (it reformats the frontend agent's files too).
 3. Stage your changed files with `git add <paths>` (only files in your domain).
 4. **NEVER run `git commit`, `git push`, `git tag`, `git checkout`, `git reset`, `git rebase`, `git stash` or any history-changing git command.** The orchestrator commits.
 5. Never connect to or change Steven's production Home Assistant. Only the local dev instance (`http://localhost:8123`, `./config`) is allowed. Never read or print `config/.storage`, tokens or secrets.
 6. Keep reads small: use Grep/Glob and read only the needed line ranges of large files (`engine.py`, `signals.py`, `schema.py` are long).
 
-## Report (short, English)
+## Token budget (Steven pays per token – be lean)
+- Start from what the task names; don't explore the whole package. Grep for the symbol, read ±40 lines around it.
+- Don't re-read a file after editing it; don't `cat` whole files; pipe long command output through `tail`/`grep`.
+- No speculative refactors, no extra features, no long comments or docstrings beyond one line.
+- Tests: focused and short (one test per behaviour, shared fixtures), no duplicated setup.
+
+## Report (short, English, max ~15 lines)
 - What you changed (files, one line each) and why.
 - Test result line (e.g. `190 passed`) and ruff result.
 - Anything left open or needing the frontend / docs.
