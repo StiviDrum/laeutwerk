@@ -343,6 +343,25 @@ Erkenntnisse:
 - [ ] Offen: Im kompakten Fenster schimmert am unteren Rand der aufgeklappten Entitätsliste die nächste Schritt-Überschrift durch (rein optisch)
 - [x] Release v0.10.1
 
+## 0.11.0 – Einfachere Signale (go 12.11.2026)
+Schnittstelle:
+- Entfällt: `title_plural`, `message_plural`, `text_plural`, `headline_plural`, `title_repeat`, `message_repeat`, `text_repeat`, `every_stage`, `plural_sample` (WS preview). Spalten-Mehrzahl-Variablen (`{tonnen}`) bleiben.
+- Signal `send_on`: `"all"` (Standard) | `"first"` | `"repeat"` | `"stage"`; bei `"stage"`: `stage` (1…n) und `stage_repeat` (bool, Standard false).
+  - all: jeder Durchlauf (erste Erinnerung, Wiederholung, nach „Später“, jede erreichte Stufe)
+  - first: nur Durchlauf 1 · repeat: jeder Durchlauf ab Nr. 2
+  - stage + stage_repeat false: genau einmal beim Erreichen der Stufe · true: beim Erreichen und jedem späteren Durchlauf
+  - bei „bei Gelegenheit“-Signalen: nur all | stage (= scharf ab Stufe N)
+- `limit` (Höchstens/Mindestabstand) nur noch bei „bei Gelegenheit“ (Schema-Fehler bei „sofort“); Ruhezeiten für alle.
+- Auslöser-Regeln: `expire: "never"`; erneutes Auslösen bei offener Erinnerung → alte wird „verpasst“ (on_missed läuft), neue startet. Bei begrenzter Verfallszeit bleibt es wie bisher (kein zweiter Start).
+- [ ] 1 Mehrzahl-Texte entfernen
+- [ ] 2 Wiederholungstexte entfernen
+- [ ] 3 „Kommt bei“ (send_on)
+- [ ] 4 Grenzen nur bei Gelegenheit
+- [ ] 5 Verfällt: Nie
+- [ ] 6 Durchschimmern im kompakten Fenster (erst prüfen, ob es auftritt)
+- [ ] 7 Live-Regeln anpassen (nur mit Stevens Okay)
+- [ ] Doku, Prüfung, Release v0.11.0
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut
