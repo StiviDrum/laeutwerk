@@ -99,9 +99,9 @@ Ablauf je Aufgabe:
 1. Plan kurz in `docs/TASKS.md` festhalten (offene Aufgabe), bei Bedarf in Backend- und Frontend-Teil zerlegen; Schnittstelle (Datenformat, WebSocket-Typ, Feldnamen) im Auftrag an beide Agenten **ausdrücklich** nennen.
 2. Auftrag an den Agenten: Ziel, betroffene Dateien/Funktionen, erwartete Tests, Akzeptanzkriterien. Unabhängige Aufträge parallel starten.
 3. `tester` ausführen lassen (`scripts/check` + `npm run build`). Rot → gezielter Fix-Auftrag an den zuständigen Agenten.
-Sparsam arbeiten (Stevens Vorgabe vom 12.11.2026): Agenten mit `effort` low (haiku) bzw. medium (sonnet), kurze präzise Aufträge, gezielte Tests beim Iterieren und die volle Suite nur einmal am Ende, kurze Berichte. Einfache Aufgaben (Checks, Doku-Text) gehen an die Haiku-Agenten.
-
 4. Orchestrator prüft den Diff (`git diff --staged`), sichtet UI-Änderungen bei Bedarf im echten Frontend (`scripts/check_card.py`, lokale Testinstanz), pflegt Doku (`README.md`, `CHANGELOG.md`, `docs/*`, Versionen) und committet nach Conventional Commits; Push/Tag/Release wie in A2.
+
+Sparsam arbeiten (Stevens Vorgabe vom 12.11.2026): Agenten mit `effort` low (haiku) bzw. medium (sonnet), kurze präzise Aufträge, gezielte Tests beim Iterieren und die volle Suite nur einmal am Ende, kurze Berichte. Einfache Aufgaben (Checks, Doku-Text) gehen an die Haiku-Agenten.
 
 Regeln für alle Subagenten: nur in der eigenen Domäne arbeiten; **niemals `git commit`, `git push`, `git tag` oder Branch-/History-Befehle**; nie Stevens produktives Home Assistant ansprechen; `config/.storage` und Secrets nie lesen. Kleine, klar umrissene Aufgaben (Architektur und knifflige Engine-Logik behält der Orchestrator).
 
