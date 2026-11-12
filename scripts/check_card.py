@@ -154,7 +154,8 @@ async def save_dashboard(session: aiohttp.ClientSession, token: str) -> None:
                             "title": "Läutwerk",
                             "path": "lw",
                             "cards": [
-                                {"type": "custom:laeutwerk-card", "view": "overview"}
+                                {"type": "custom:laeutwerk-card", "view": "overview"},
+                                {"type": "custom:laeutwerk-card", "compact": True},
                             ],
                         }
                     ]
@@ -368,11 +369,12 @@ async def main() -> None:
                     " const b = t.shadowRoot.querySelector('button') || t;"
                     " b.click(); await new Promise(r => setTimeout(r, 400));"
                     # The bubble sits on <body>; it must be the topmost element.
-                    " const tip = document.body.querySelector(':scope > [role=tooltip]');"
+                    " const tip = window.__find(document, '[role=tooltip]');"
                     " if (!tip) return 'no bubble';"
                     " const r = tip.getBoundingClientRect();"
                     " tip.style.pointerEvents = 'auto';"
-                    " const top = document.elementFromPoint(r.left + 20, r.top + r.height / 2);"
+                    " const root = tip.getRootNode();"
+                    " const top = root.elementFromPoint(r.left + 20, r.top + r.height / 2);"
                     " tip.style.pointerEvents = 'none';"
                     " return (top === tip ? 'on top: ' : 'COVERED: ') + tip.textContent.slice(0, 60) })()"
                 )
@@ -388,7 +390,7 @@ async def main() -> None:
                     " await tip.updateComplete; await new Promise(r => setTimeout(r, 200));"
                     " (tip.shadowRoot.querySelector('button') || tip).click();"
                     " await new Promise(r => setTimeout(r, 300));"
-                    " const b = [...document.querySelectorAll('[role=tooltip]')]"
+                    " const b = [...(document.querySelector('home-assistant')?.shadowRoot || document).querySelectorAll('[role=tooltip]')]"
                     "  .find(x => x.textContent.includes('Hilfe im Dialog'));"
                     " if (!b) { window.__modal = d; return 'no bubble'; }"
                     # A modal makes the rest of the page inert, so hit-testing can't
@@ -450,7 +452,7 @@ async def main() -> None:
                     " f.scrollIntoView();"
                     " f.shadowRoot.querySelector('.colorbtn, .pick').click();"
                     " await new Promise(r => setTimeout(r, 500));"
-                    " const p = document.querySelector('laeutwerk-color-popup');"
+                    " const p = window.__find(document, 'laeutwerk-color-popup');"
                     " if (!p) return 'no popup';"
                     " const w = p.shadowRoot.querySelector('.wheel').getBoundingClientRect();"
                     " const opts = {bubbles: true, pointerId: 1, clientX: w.right - 4,"
@@ -461,7 +463,7 @@ async def main() -> None:
                 print("colour picker, right edge of the wheel:", picked)
                 await cdp.shot("colorpicker")
                 await cdp.js(
-                    "(() => { const p = document.querySelector('laeutwerk-color-popup');"
+                    "(() => { const p = window.__find(document, 'laeutwerk-color-popup');"
                     " p.shadowRoot.querySelector('.pill.outline').click(); return true })()"
                 )
                 # Keyword table cell: the popup must not be clipped by the table.
@@ -476,7 +478,7 @@ async def main() -> None:
                 await asyncio.sleep(1)
                 await cdp.shot("keyword_look")
                 await cdp.js(
-                    "(async () => { const k = document.querySelector('laeutwerk-keyword-look');"
+                    "(async () => { const k = window.__find(document, 'laeutwerk-keyword-look');"
                     " if (!k) return false;"
                     " const f = k.shadowRoot.querySelectorAll('laeutwerk-field')[1];"
                     " f.shadowRoot.querySelector('.colorbtn, .pick').click(); return true })()"
@@ -484,9 +486,9 @@ async def main() -> None:
                 await asyncio.sleep(1)
                 await cdp.shot("colorpicker_keyword")
                 await cdp.js(
-                    "(() => { const p = document.querySelector('laeutwerk-color-popup');"
+                    "(() => { const p = window.__find(document, 'laeutwerk-color-popup');"
                     " if (p) p.shadowRoot.querySelector('.pill.outline').click();"
-                    " const k = document.querySelector('laeutwerk-keyword-look');"
+                    " const k = window.__find(document, 'laeutwerk-keyword-look');"
                     " if (k) k.shadowRoot.querySelector('.pill.outline').click(); return true })()"
                 )
                 # Open the second signal (opportunity trigger) in the signal editor.
@@ -566,6 +568,45 @@ async def main() -> None:
                 )
                 print("advanced step fields:", advanced)
                 await cdp.shot("advanced")
+                # Compact card (0.10.1): its dialog must get Home Assistant's
+                # context, else pickers and the trigger editor stay empty.
+                compact = await cdp.js(
+                    "(async () => { const find = (root, sel, out = []) => {"
+                    "  root.querySelectorAll(sel).forEach(x => out.push(x));"
+                    "  root.querySelectorAll('*').forEach(x => x.shadowRoot && find(x.shadowRoot, sel, out));"
+                    "  return out; };"
+                    " const card = find(document, 'laeutwerk-card').find(x => x._config && x._config.compact);"
+                    " if (!card) return 'no compact card';"
+                    " await card._openDialog(); await new Promise(r => setTimeout(r, 800));"
+                    " const d = find(document, 'laeutwerk-task-dialog')[0];"
+                    " if (!d) return 'no dialog';"
+                    " d._editing = JSON.parse(JSON.stringify(card._rules[0])); d._page = 'edit';"
+                    " await d.updateComplete; await new Promise(r => setTimeout(r, 1500));"
+                    " const e = d.shadowRoot.querySelector('laeutwerk-rule-editor');"
+                    " e._open = new Set([1]); await e.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 2500));"
+                    " const ent = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(f => f.selector && f.selector.entity);"
+                    " const picker = !!(ent && window.__find(ent.shadowRoot, 'ha-generic-picker'));"
+                    " e._setMode('trigger'); await e.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 2500));"
+                    " const trg = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(f => f.selector && f.selector.trigger);"
+                    " const trigger = !!(trg && window.__find(trg.shadowRoot, 'ha-automation-trigger'));"
+                    " return JSON.stringify({picker, trigger}) })()"
+                )
+                print("compact dialog editor:", compact)
+                await cdp.shot("compact_dialog", full=False)
+                await cdp.js(
+                    "(() => { const find = (root, sel, out = []) => {"
+                    "  root.querySelectorAll(sel).forEach(x => out.push(x));"
+                    "  root.querySelectorAll('*').forEach(x => x.shadowRoot && find(x.shadowRoot, sel, out));"
+                    "  return out; };"
+                    " find(document, 'laeutwerk-task-dialog').forEach(d => d.close ? d.close() : d.remove());"
+                    " return true })()"
+                )
+                if '"picker":true' not in str(compact):
+                    raise SystemExit("compact dialog: source picker not rendered")
                 # Trigger source (0.9.0): step 1 in trigger mode, all steps open.
                 mode = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"

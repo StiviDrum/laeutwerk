@@ -2,6 +2,7 @@
  * Small confirmation popup ("Als erledigt markieren?") on top of everything.
  * Appended to <body> so dashboards and other dialogs cannot clip it.
  */
+import { overlayHost } from "./overlay-host";
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { shared, tokens } from "./styles";
@@ -117,6 +118,6 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
     popup.options = options;
     popup.resolve = resolve;
     popup.toggleAttribute("dark", !!options.dark);
-    document.body.appendChild(popup);
+    overlayHost().appendChild(popup);
   });
 }

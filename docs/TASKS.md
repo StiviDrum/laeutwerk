@@ -334,6 +334,15 @@ Erkenntnisse:
 - README-Beispiel Trockner war ohne `audience` ungültig → Beispiele immer gegen `validate_rule` prüfen.
 - Größen (gzip -9): Übersicht 98 295 B (32 138), Editoren 104 863 B (23 307), help-tip 16 572 B (5 597), Karteneditor 4 623 B (1 742).
 
+## 0.10.1 – Fix kompakte Karte (12.11.2026)
+- [x] Editor im Fenster der kompakten Karte: Quellen-Auswahl leer, Trigger-Editor unvollständig
+  - Ursache: Fenster/Popups hingen an `document.body`, außerhalb von `<home-assistant>` → HAs Lit-Kontext (Entitäts-Register) erreicht `ha-entity-picker` nicht, `ha-generic-picker` wird nie gebaut. Neu: `overlayHost()` = Schattenbaum von `home-assistant` (Fallback body) für Aufgaben-Fenster, Rückfrage, Farbkreis, Icon/Farbe-Fenster, Hilfe-Blase.
+  - Regressionstest: `check_card.py` hat jetzt eine kompakte Karte im Test-Dashboard, öffnet deren Fenster + Editor und bricht ab, wenn die Quellen-Auswahl nicht gebaut wird. Gegenprobe mit altem Verhalten: Test schlägt an.
+  - Erkenntnis: Sichtprüfungen nur per Screenshot reichen nicht – echte Klicks (CDP `Input.dispatchMouseEvent`) in **allen** Einstiegen (große Karte, kompaktes Fenster, Handy und PC).
+- [x] Auslöser-Regeln: Schritt-Zusammenfassungen ohne Kalender-Angaben
+- [ ] Offen: Im kompakten Fenster schimmert am unteren Rand der aufgeklappten Entitätsliste die nächste Schritt-Überschrift durch (rein optisch)
+- [x] Release v0.10.1
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

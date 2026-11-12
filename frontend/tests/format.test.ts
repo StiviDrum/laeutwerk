@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   availableVariables,
   buildOverview,
@@ -618,5 +618,26 @@ describe("0.10.0 helpers", () => {
     expect(availableVariables(emptyRule())).toEqual(
       expect.arrayContaining(["seit", "seit_min", "erinnert_um", "nr"]),
     );
+  });
+});
+
+describe("overlay host and trigger summaries", () => {
+  it("falls back to body without home-assistant", async () => {
+    const { overlayHost } = await import("../src/overlay-host");
+    const body = {};
+    vi.stubGlobal("document", { body, querySelector: () => null });
+    expect(overlayHost()).toBe(body);
+    vi.stubGlobal("document", { body, querySelector: () => ({ shadowRoot: "sr" }) });
+    expect(overlayHost()).toBe("sr");
+    vi.unstubAllGlobals();
+  });
+  it("summarises trigger rules without calendar info", async () => {
+    const { stepSummary } = await import("../src/format");
+    const r = rule({ start_triggers: [{ trigger: "state" }], reminders: [{ at: "-1d 17:00" }] });
+    expect(stepSummary(r, 3, de)).toBe("einmal");
+    expect(stepSummary({ ...r, repeat: { every: 30, max: 6 } }, 3, de)).toBe(
+      "alle 30 Min., max. 6×",
+    );
+    expect(stepSummary(r, 6, de)).toBe("Verfällt: Terminende");
   });
 });

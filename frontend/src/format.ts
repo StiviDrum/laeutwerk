@@ -675,6 +675,13 @@ export function stepSummary(
       return parts.join(" · ");
     }
     case 3: {
+      if (rule.start_triggers) {
+        const rp = rule.repeat;
+        if (rp === "none") return l.t("repeat_once");
+        return (
+          l.t("sum_repeat_every", { n: String(rp.every) }) + (rp.max ? `, max. ${rp.max}×` : "")
+        );
+      }
       const parts = rule.reminders.map((r) => describeTimespec(r.at, l));
       if (rule.repeat !== "none") parts.push(l.t("sum_repeat"));
       return parts.join(" · ") || "–";
@@ -706,7 +713,10 @@ export function stepSummary(
           : day
             ? `${l.t("expire_event_day")} ${day[1]}`
             : expire;
-      return [rule.bundle ? l.t("sum_bundled") : "", `${l.t("expire")}: ${exp}`]
+      return [
+        rule.bundle && !rule.start_triggers ? l.t("sum_bundled") : "",
+        `${l.t("expire")}: ${exp}`,
+      ]
         .filter(Boolean)
         .join(" · ");
     }

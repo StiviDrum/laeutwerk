@@ -2,6 +2,7 @@
  * laeutwerk-card: "Heute & demnächst" overview, single rule view, compact
  * line and the rule editor (DESIGN.md C1).
  */
+import { overlayHost } from "./overlay-host";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
@@ -918,7 +919,7 @@ export class LaeutwerkCard extends LitElement {
     dialog.only = this._config?.rules ?? [];
     dialog.toggleAttribute("dark", !!this.hass?.themes?.darkMode);
     dialog.addEventListener("closed", () => (this._dialog = undefined));
-    document.body.appendChild(dialog);
+    overlayHost().appendChild(dialog);
     this._dialog = dialog;
   }
 

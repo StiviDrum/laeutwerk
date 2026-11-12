@@ -2,6 +2,7 @@
  * Popup (appended to <body>) to set the icon and colour of one keyword.
  * Empty values fall back on the rule's icon and colour.
  */
+import { overlayHost } from "./overlay-host";
 import { LitElement, css, html, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { badgeLook } from "./format";
@@ -207,6 +208,6 @@ export function editKeywordLook(
     popup.options = options;
     popup.resolve = resolve;
     popup.toggleAttribute("dark", !!options.dark);
-    document.body.appendChild(popup);
+    overlayHost().appendChild(popup);
   });
 }

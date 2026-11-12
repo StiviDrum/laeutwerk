@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-12
+
+### Fixed
+- Compact card: the rule editor in its dialog showed no source picker (only
+  the label "Quellen") and an incomplete trigger editor. Dialogs and popups
+  were attached outside Home Assistant's element tree, where its pickers do
+  not get their data; they now live inside it.
+- Trigger rules: the collapsed steps no longer show calendar-only details
+  ("Vortag 17:00", "gebündelt").
+
 ## [0.10.0] - 2026-11-12
 
 ### Added

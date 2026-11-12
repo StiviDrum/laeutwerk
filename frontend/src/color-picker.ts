@@ -2,6 +2,7 @@
  * Own colour picker (hue/saturation wheel + favourites + hex input) in a popup
  * on <body>. No dependency on Home Assistant's internal colour elements.
  */
+import { overlayHost } from "./overlay-host";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { shared, tokens } from "./styles";
@@ -473,6 +474,6 @@ export function pickColor(options: ColorPickOptions): Promise<string | null> {
     popup.options = options;
     popup.resolve = resolve;
     popup.toggleAttribute("dark", !!options.dark);
-    document.body.appendChild(popup);
+    overlayHost().appendChild(popup);
   });
 }

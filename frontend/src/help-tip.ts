@@ -4,6 +4,7 @@
  * The bubble is a body-level popover (top layer), so neither scroll containers nor
  * stacking contexts (sticky cells) can clip or cover it.
  */
+import { overlayHost } from "./overlay-host";
 import { LitElement, css, html, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { Localizer, StringKey } from "./localize";
@@ -97,7 +98,7 @@ export class LaeutwerkHelpTip extends LitElement {
     // Popover API: top layer, so it also sits above HA's dialogs.
     const pop = el as HTMLElement & { showPopover?: () => void };
     if (typeof pop.showPopover === "function") el.setAttribute("popover", "manual");
-    document.body.appendChild(el);
+    overlayHost().appendChild(el);
     if (el.hasAttribute("popover")) {
       try {
         pop.showPopover?.();
