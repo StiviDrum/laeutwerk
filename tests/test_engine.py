@@ -136,7 +136,7 @@ async def test_lifecycle_push_and_acknowledge(
     assert state(manager) == "inactive"
 
 
-async def test_bundle_is_one_reminder_with_plural_text(
+async def test_bundle_is_one_reminder(
     hass: HomeAssistant,
     freezer: FrozenDateTimeFactory,
     calendars: FakeCalendars,
@@ -151,9 +151,6 @@ async def test_bundle_is_one_reminder_with_plural_text(
 
     assert len(pushes) == 1
     assert pushes[0].data["title"] == "Morgen: Biotonne und Papiertonne"
-    assert pushes[0].data["message"] == (
-        "Bitte heute Abend rausstellen: Biotonne und Papiertonne."
-    )
     # One acknowledgement finishes the whole bundle.
     await manager.async_acknowledge("muell")
     assert state(manager) == "done"

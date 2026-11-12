@@ -117,19 +117,6 @@ export function badgeLooks(
   return looks.length ? looks : [badgeLook(rule, undefined, defaultIcon)];
 }
 
-/** Headline preview in the editor: own template (plural for bundles) or the default. */
-export function headlinePreview(
-  rule: { headline?: string | null; headline_plural?: string | null },
-  event: { titles: string[]; variables?: Record<string, string> } | undefined,
-): string {
-  if (!event) return "";
-  const plural = event.titles.length > 1 ? rule.headline_plural?.trim() : "";
-  const template = plural || rule.headline?.trim();
-  return template
-    ? renderTemplate(template, event.variables ?? {})
-    : reminderTitle({ titles: event.titles, variables: event.variables });
-}
-
 /** Variable suggestions for a text field: `{na` at the cursor offers names starting with "na". */
 export function variableQuery(
   text: string,
@@ -306,25 +293,6 @@ export function timeSamples(l: Localizer, nr = 1): Record<string, string> {
   return { seit: l.t("sample_since"), seit_min: "25", erinnert_um: "19:42", nr: String(nr) };
 }
 
-/** Preview of a repeat text: the repeat variant (nr = 2) if set, else the normal text. */
-export function repeatPreview(
-  repeat: string | undefined,
-  normal: string | undefined,
-  sample: Record<string, string>,
-  l: Localizer,
-): string {
-  return renderTemplate(repeat?.trim() ? repeat : normal, { ...sample, ...timeSamples(l, 2) });
-}
-
-/** Stage of a signal: a number, or "every" (every_stage, stage cleared); they exclude each other. */
-export function withSignalStage(signal: Signal, stage: number | "every"): Signal {
-  const rest = { ...signal };
-  delete rest.stage;
-  delete rest.every_stage;
-  if (stage === "every") return { ...rest, every_stage: true };
-  return stage ? { ...rest, stage } : rest;
-}
-
 /** Stage with a new `min_age` (empty = removed). */
 export function withMinAge<T extends { min_age?: string }>(stage: T, minAge: string): T {
   const next = { ...stage };
@@ -479,6 +447,30 @@ export function signalTitle(
   return targets.length ? `${type} · ${targets.join(", ")}` : type;
 }
 
+/** Expire value when a trigger rule switches between "after … h" and "never". */
+export function expireForMode(never: boolean): string {
+  return never ? "never" : "+12h";
+}
+
+/** Short label for "Kommt bei" (empty = every reminder). */
+export function sendOnLabel(signal: Signal, l: Localizer): string {
+  const on = signal.send_on ?? "all";
+  if (on === "first") return l.t("send_first_s");
+  if (on === "repeat") return l.t("send_repeat_s");
+  if (on !== "stage") return "";
+  return l.t(signal.when === "now" ? "stage_n" : "from_stage_n", { n: signal.stage ?? 1 });
+}
+
+/** Signal with a new "Kommt bei" mode; stage fields only belong to "stage". */
+export function withSendOn(signal: Signal, mode: NonNullable<Signal["send_on"]>): Signal {
+  const rest = { ...signal };
+  delete rest.send_on;
+  delete rest.stage;
+  delete rest.stage_repeat;
+  if (mode === "all") return rest;
+  return mode === "stage" ? { ...rest, send_on: mode, stage: 1 } : { ...rest, send_on: mode };
+}
+
 /** Short description below the title: when, pattern, limits, quiet times. */
 export function signalSummary(signal: Signal, l: Localizer): string {
   const bits: string[] = [];
@@ -488,8 +480,10 @@ export function signalSummary(signal: Signal, l: Localizer): string {
       `${l.t(signal.pattern?.effect === "pulse" ? "effect_pulse" : "effect_blink")} ${signal.pattern?.count ?? 3}×`,
     );
   }
-  if (signal.every_stage) bits.push(l.t("every_reminder"));
-  if (signal.limit?.per_reminder) bits.push(l.t("s_max", { n: signal.limit.per_reminder }));
+  const sendOn = sendOnLabel(signal, l);
+  if (sendOn) bits.push(sendOn);
+  if (signal.when !== "now" && signal.limit?.per_reminder)
+    bits.push(l.t("s_max", { n: signal.limit.per_reminder }));
   for (const quiet of signal.quiet ?? []) {
     bits.push(l.t("s_quiet", { from: shortClock(quiet.from), to: shortClock(quiet.to) }));
   }
@@ -531,11 +525,10 @@ export function defaultSignal(type: Signal["type"], rule: Rule, done = "OK"): Si
       pattern: { effect: "blink", count: 3 },
       ...(colorColumn ? { color_from: colorColumn } : {}),
       restore: true,
-      limit: { per_reminder: 1 },
     };
   }
   if (type === "announce") {
-    return { ...base, players: [], text: `{wann}: ${what}`, limit: { per_reminder: 1 } };
+    return { ...base, players: [], text: `{wann}: ${what}` };
   }
   return { ...base, actions: [] };
 }
@@ -887,13 +880,6 @@ export function tasks(rules: Rule[], only?: string[]): Task[] {
   return list.sort((a, b) => Number(b.open) - Number(a.open) || key(a).localeCompare(key(b)));
 }
 
-export interface HeadlineLine {
-  /** Rendered text, empty when no preview is possible. */
-  text: string;
-  /** Plural field empty: the singular template is used for bundles. */
-  fallback: boolean;
-}
-
 type PreviewEvent = { titles: string[]; variables?: Record<string, string> };
 
 /** Preview for the singular headline field: first event with a single match, else the first. */
@@ -907,23 +893,6 @@ export function singularHeadlinePreview(
   return template
     ? renderTemplate(template, event.variables ?? {})
     : reminderTitle({ titles: event.titles, variables: event.variables });
-}
-
-/** Preview for the plural field: real bundle > backend `plural_sample` > none. */
-export function pluralHeadlinePreview(
-  rule: { headline?: string | null; headline_plural?: string | null },
-  events: PreviewEvent[] | undefined,
-  sample?: PreviewEvent | null,
-): HeadlineLine {
-  const event =
-    events?.find((e) => e.titles.length > 1) ?? (sample?.titles?.length ? sample : undefined);
-  if (!event) return { text: "", fallback: false };
-  const own = rule.headline_plural?.trim();
-  const template = own || rule.headline?.trim();
-  const text = template
-    ? renderTemplate(template, event.variables ?? {})
-    : reminderTitle({ titles: event.titles, variables: event.variables });
-  return { text, fallback: !own };
 }
 
 /** Rule with a new "finish early" mode (hours keep their last value, default 24). */

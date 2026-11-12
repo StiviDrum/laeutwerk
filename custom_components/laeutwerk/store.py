@@ -28,6 +28,40 @@ class StoredData(TypedDict):
     templates: list[dict[str, Any]]
 
 
+_REMOVED_TEXTS = (
+    "title_plural",
+    "message_plural",
+    "text_plural",
+    "headline_plural",
+    "title_repeat",
+    "message_repeat",
+    "text_repeat",
+)
+
+
+def migrate_rule_0_11(rule: dict[str, Any]) -> dict[str, Any]:
+    """Convert a rule to the 0.11 signal format (send_on, no plural/repeat texts)."""
+    rule = {k: v for k, v in rule.items() if k not in _REMOVED_TEXTS}
+    signals = []
+    for old in rule.get("signals") or []:
+        signal = {k: v for k, v in old.items() if k not in _REMOVED_TEXTS}
+        every = signal.pop("every_stage", False)
+        stage = int(signal.pop("stage", 0) or 0)
+        once = (signal.get("limit") or {}).get("per_reminder") == 1
+        if signal.get("when", "now") == "now":
+            signal.pop("limit", None)
+            if stage and not every:
+                signal.update(send_on="stage", stage=stage, stage_repeat=not once)
+            elif not stage and once and not every:
+                signal["send_on"] = "first"
+        elif stage:
+            signal.update(send_on="stage", stage=stage)
+        signals.append(signal)
+    if "signals" in rule:
+        rule["signals"] = signals
+    return rule
+
+
 class _VersionedStore(Store[StoredData]):
     """Store with a migration hook."""
 
@@ -41,11 +75,17 @@ class _VersionedStore(Store[StoredData]):
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
         )
+        convert = old_major_version == 1 and old_minor_version < 4
+        rules = list(old_data.get("rules", []))
+        templates = list(old_data.get("templates", []))
+        if convert:
+            rules = [migrate_rule_0_11(r) for r in rules]
+            templates = [migrate_rule_0_11(t) for t in templates]
         return {
-            "rules": list(old_data.get("rules", [])),
+            "rules": rules,
             "reminders": dict(old_data.get("reminders", {})),
             "history": dict(old_data.get("history", {})),
-            "templates": list(old_data.get("templates", [])),
+            "templates": templates,
         }
 
 

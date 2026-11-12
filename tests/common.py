@@ -158,7 +158,6 @@ def muell_rule(**changes: Any) -> dict[str, Any]:
                 "targets": [PHONE],
                 "title": "{wann}: {tonnen}",
                 "message": "Bitte heute Abend {artikel} {tonne} rausstellen.",
-                "message_plural": "Bitte heute Abend rausstellen: {tonnen}.",
                 "actions": [{"ack": True, "label": "Steht draußen"}],
             }
         ],

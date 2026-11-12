@@ -104,21 +104,16 @@ async def test_time_variables_nr_and_repeat_texts(
         freezer,
         at(MON, 9),
         repeat={"every": 60, "max": 5},
-        signals=[
-            push(
-                message="{nr}|{seit}|{seit_min}|{erinnert_um}",
-                message_repeat="again {nr} {seit}",
-            )
-        ],
+        signals=[push(message="{nr}|{seit}|{seit_min}|{erinnert_um}")],
     )
     reminder_vars = manager.runners["klingel"].variables
     await ring(hass)
     assert sent(pushes) == ["1|seit weniger als einer Minute|0|09:00"]
     await tick(hass, freezer, at(MON, 10))
-    assert sent(pushes)[-1] == "again 2 seit 1 Std."
+    assert sent(pushes)[-1] == "2|seit 1 Std.|60|09:00"
     await manager.async_snooze(10)
     await tick(hass, freezer, at(MON, 10, 10))
-    assert sent(pushes)[-1] == "again 3 seit 1 Std. 10 Min."
+    assert sent(pushes)[-1] == "3|seit 1 Std. 10 Min.|70|09:00"
     reminder = manager.reminders["klingel"]
     assert next(iter(reminder.values())).nr == 3
     assert reminder_vars(next(iter(reminder.values())))["seit_min"] == "70"
@@ -139,30 +134,6 @@ async def test_variables_before_first_remind(
         variables = runner.variables(item)
         assert variables["seit"] == variables["erinnert_um"] == ""
         assert (variables["seit_min"], variables["nr"]) == ("0", "1")
-
-
-async def test_every_stage_and_stage_nr(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, pushes: list[ServiceCall]
-) -> None:
-    await start(
-        hass,
-        freezer,
-        at(MON, 9),
-        escalation=[{"after": "1h"}, {"after": "2h"}],
-        signals=[
-            push(id="a", message="always {nr}", every_stage=True),
-            push(id="b", message="first only"),
-            push(id="c", message="stage1", stage=1),
-        ],
-    )
-    await ring(hass)
-    assert sorted(sent(pushes)) == ["always 1", "first only"]
-    await tick(hass, freezer, at(MON, 10))
-    assert "always 2" in sent(pushes)
-    assert "stage1" in sent(pushes)
-    await tick(hass, freezer, at(MON, 11))
-    assert sent(pushes).count("always 3") == 1
-    assert sent(pushes).count("first only") == 1
 
 
 async def test_hooks_and_failing_hook(
@@ -216,7 +187,10 @@ async def test_stage_clock_time_is_next_occurrence(
         freezer,
         at(MON, 19, 40),
         escalation=[{"after": "10:00"}],
-        signals=[push(message="x"), push(id="s", message="s1", stage=1)],
+        signals=[
+            push(message="x", send_on="first"),
+            push(id="s", message="s1", send_on="stage", stage=1, stage_repeat=True),
+        ],
     )
     freezer.move_to(at(MON, 19, 42))
     await ring(hass)
@@ -257,7 +231,10 @@ async def test_stage_min_age_skips(
         freezer,
         at(MON, 19, 42),
         escalation=[{"after": "21:30", "min_age": "2h"}, {"after": "4h"}],
-        signals=[push(message="x"), push(id="s1", message="s1", stage=1)],
+        signals=[
+            push(message="x", send_on="first"),
+            push(id="s1", message="s1", send_on="stage", stage=1),
+        ],
     )
     await ring(hass)
     reminder = next(iter(manager.reminders["klingel"].values()))
@@ -324,18 +301,10 @@ def test_schema() -> None:
         {
             **base,
             "escalation": [{"after": "21:30", "min_age": "2h"}],
-            "signals": [push(message="m", message_repeat="r", title_repeat="t")],
+            "signals": [push(message="m")],
             "on_missed": [{"action": "test.hook"}],
         }
     )
     assert ok["on_reminded"] == []
-    with pytest.raises(vol.Invalid, match="every_stage"):
-        validate_rule(
-            {
-                **base,
-                "escalation": [{"after": "1h"}],
-                "signals": [push(message="m", every_stage=True, stage=1)],
-            }
-        )
     with pytest.raises(vol.Invalid):
         validate_rule({**base, "escalation": [{"after": "1h", "min_age": "soon"}]})

@@ -10,10 +10,11 @@ import {
   openStatus,
   relativeDay,
   reminderTitle,
-  repeatPreview,
   timeSamples,
   withMinAge,
-  withSignalStage,
+  withSendOn,
+  sendOnLabel,
+  expireForMode,
   renameColumn,
   renderTemplate,
   signalSummary,
@@ -204,6 +205,7 @@ describe("rule editing", () => {
     const lamp = {
       ...defaultSignal("light_signal", rule()),
       when: { opportunity: [], manual_only: true },
+      limit: { per_reminder: 1 },
       quiet: [{ from: "00:00", to: "10:00", mode: "skip" as const }],
     };
     expect(signalSummary(lamp, de)).toBe("bei Gelegenheit · blinken 3× · max. 1× · nicht 0–10 Uhr");
@@ -236,9 +238,8 @@ describe("0.6 helpers", () => {
     const withAssignee = rule({ assignee: { persons: ["person.steven"] } });
     expect(availableVariables(withAssignee)).toContain("zustaendig");
     expect(availableVariables(rule())).not.toContain("zustaendig");
-    const ansage = { ...defaultSignal("announce", rule()), stage: 2 };
-    // The stage is shown as a coloured chip next to the summary.
-    expect(signalSummary(ansage, de)).toBe("sofort · max. 1×");
+    const ansage = { ...defaultSignal("announce", rule()), send_on: "stage" as const, stage: 2 };
+    expect(signalSummary(ansage, de)).toBe("sofort · Stufe 2");
     const toAssignee = { ...defaultSignal("notify", rule()), audience: "assignee" as const };
     expect(signalSummary(toAssignee, de)).toBe("sofort");
     expect(signalTitle(toAssignee, de)).toBe("Push · Zuständige");
@@ -591,23 +592,34 @@ describe("0.9.2 helpers", () => {
 });
 
 describe("0.10.0 helpers", () => {
-  const sample = { titel: "Papier" };
-  it("repeat preview uses the repeat text with nr = 2, else the normal text", () => {
-    expect(repeatPreview("Nr {nr}: {titel}", "Normal", sample, de)).toBe("Nr 2: Papier");
-    expect(repeatPreview("", "Nr {nr}", sample, de)).toBe("Nr 2");
+  it("time samples", () => {
     expect(timeSamples(de)).toMatchObject({ seit_min: "25", erinnert_um: "19:42", nr: "1" });
   });
-  it("every_stage and stage exclude each other", () => {
+  it("send_on: stage needs a stage, other modes drop stage fields", () => {
     const base = defaultSignal("notify", emptyRule());
-    const staged = withSignalStage(base, 2);
-    expect(staged.stage).toBe(2);
-    const every = withSignalStage(staged, "every");
-    expect(every.every_stage).toBe(true);
-    expect("stage" in every).toBe(false);
-    const back = withSignalStage(every, 1);
-    expect(back.stage).toBe(1);
-    expect("every_stage" in back).toBe(false);
-    expect("stage" in withSignalStage(back, 0)).toBe(false);
+    expect("send_on" in base).toBe(false);
+    const staged = withSendOn({ ...base, stage_repeat: true }, "stage");
+    expect(staged).toMatchObject({ send_on: "stage", stage: 1 });
+    expect("stage_repeat" in staged).toBe(false);
+    const first = withSendOn({ ...staged, stage_repeat: true }, "first");
+    expect(first.send_on).toBe("first");
+    expect("stage" in first || "stage_repeat" in first).toBe(false);
+    expect("send_on" in withSendOn(first, "all")).toBe(false);
+  });
+  it("expire never toggle", () => {
+    expect(expireForMode(true)).toBe("never");
+    expect(expireForMode(false)).toBe("+12h");
+  });
+  it("send_on summary and limits only for opportunities", () => {
+    const base = defaultSignal("announce", emptyRule());
+    expect(sendOnLabel({ ...base, send_on: "first" }, de)).toBe("nur erste");
+    expect(sendOnLabel({ ...base, send_on: "repeat" }, de)).toBe("ab 2.");
+    expect(sendOnLabel({ ...base, send_on: "stage", stage: 1 }, de)).toBe("Stufe 1");
+    const opp = { ...base, when: { opportunity: [] }, send_on: "stage" as const, stage: 1 };
+    expect(sendOnLabel(opp, de)).toBe("ab Stufe 1");
+    expect(base.limit).toBeUndefined();
+    expect(signalSummary({ ...opp, limit: { per_reminder: 1 } }, de)).toContain("max. 1×");
+    expect(signalSummary({ ...base, limit: { per_reminder: 1 } }, de)).not.toContain("max.");
   });
   it("min_age is set and removed on a stage", () => {
     const stage = withMinAge<{ after: string; min_age?: string }>({ after: "10:00" }, " 8h ");

@@ -46,15 +46,12 @@ export interface Signal {
   targets?: string[];
   audience?: "all" | "present" | "persons" | "assignee";
   only_present?: boolean;
+  send_on?: "all" | "first" | "repeat" | "stage";
   stage?: number;
-  every_stage?: boolean;
+  stage_repeat?: boolean;
   persons?: string[];
   title?: string;
-  title_plural?: string;
   message?: string;
-  message_plural?: string;
-  title_repeat?: string;
-  message_repeat?: string;
   actions?: PushButton[] | HaConfig[];
   data?: HaConfig;
   // light_signal
@@ -69,8 +66,6 @@ export interface Signal {
   // announce
   players?: string[];
   text?: string;
-  text_plural?: string;
-  text_repeat?: string;
   volume?: number;
   tts?: string;
   language?: string;
@@ -174,7 +169,6 @@ export interface Rule {
   ack_label: string | null;
   /** Headline template, e.g. "{wann}: {titel}" (empty = default). */
   headline?: string | null;
-  headline_plural?: string | null;
   repeat: "none" | { every: number | string; max?: number };
   bundle: boolean;
   expire: string;
@@ -250,8 +244,6 @@ export interface TitleSuggestion {
 export interface PreviewResult {
   titles?: TitleSuggestion[];
   events: UpcomingEvent[];
-  /** Sample bundle (>= 2 titles) when no real one exists; may be missing on older backends. */
-  plural_sample?: UpcomingEvent | null;
   total_events: number;
   errors: Record<string, string>;
   variables: string[];

@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-12
+
+### Changed
+- `send_on` replaces the signal settings `stage` and `every_stage`, and the
+  per-signal `limit` on "immediately" signals. Values: `all` (default), `first`,
+  `repeat`, `stage` (with `stage: N`, plus `stage_repeat: true` for every later
+  reminder).
+- `limit` applies only to "on opportunity" signals.
+
+### Added
+- `expire: "never"` for trigger rules: a new trigger while a reminder is open
+  marks it missed and starts a fresh one.
+
+### Removed
+- Plural text fields: `title_plural`, `message_plural`, `text_plural`,
+  `headline_plural`.
+- Repeat texts: `title_repeat`, `message_repeat`, `text_repeat`.
+- `every_stage`, `plural_sample`.
+
+### Migration
+- Stored rules are converted automatically on the first start: plural and
+  repeat texts are dropped, `stage` → `send_on: stage`, `limit: 1` →
+  `send_on: first`.
+
 ## [0.10.1] - 2026-11-12
 
 ### Fixed

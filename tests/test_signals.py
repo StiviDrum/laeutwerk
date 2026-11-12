@@ -52,7 +52,6 @@ ANNOUNCE = {
     "volume": 45,
     "tts": "tts.piper",
     "text": "Stell endlich die {tonne} raus!",
-    "text_plural": "Stell endlich {tonnen} raus!",
 }
 
 
@@ -300,8 +299,7 @@ async def test_announcement(
     assert [call.data for call in play] == [
         {
             "entity_id": [SONOS],
-            "media_content_id": "tts:tts.piper:Stell endlich Biotonne und "
-            "Papiertonne raus!",
+            "media_content_id": "tts:tts.piper:Stell endlich die Biotonne raus!",
             "media_content_type": "music",
             "announce": True,
             "extra": {"volume": 45},
@@ -334,7 +332,7 @@ async def test_custom_action_gets_the_variables(
                     "data": {
                         "text": "{{ wann }}: {{ tonnen }}",
                         "id": "{{ reminder_id }}",
-                        "many": "{{ plural }}",
+                        "many": "{{ nr }}",
                     },
                 }
             ],
@@ -346,7 +344,7 @@ async def test_custom_action_gets_the_variables(
         {
             "text": "morgen: gelben Sack und Papiertonne",
             "id": REMINDER,
-            "many": True,
+            "many": 1,
         }
     ]
 
@@ -466,25 +464,24 @@ async def test_deferred_signal_survives_restart_and_stops_with_acknowledge(
     ]
 
 
-async def test_limits(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, pushes: list[ServiceCall]
-) -> None:
-    await start(
-        hass,
-        freezer,
-        {**PUSH, "id": "once", "message": "once", "limit": {"per_reminder": 1}},
-        {**PUSH, "id": "spaced", "message": "spaced", "limit": {"min_interval": 90}},
-        {**PUSH, "id": "always", "message": "always"},
-        reminders=[{"at": "-1d 17:00"}, {"at": "-1d 18:00"}, {"at": "-1d 19:00"}],
+def test_limits() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from custom_components.laeutwerk.model import Reminder, Signal
+    from custom_components.laeutwerk.signals import limit_reached
+
+    now = datetime(2026, 11, 16, 17, tzinfo=UTC)
+    reminder = Reminder(
+        id="r", rule_id="x", day=now.date(), start=now, end=now, events=[]
     )
-    await tick(hass, freezer, at(MON, 17, 0))
-    await tick(hass, freezer, at(MON, 18, 0))
-    await tick(hass, freezer, at(MON, 19, 0))
-    assert [call.data["message"] for call in pushes] == [
-        *("once", "spaced", "always"),
-        "always",  # 18:00: "spaced" was sent 60 min ago
-        *("spaced", "always"),
-    ]
+    once = Signal("once", "notify", config={"limit": {"per_reminder": 1}})
+    spaced = Signal("spaced", "notify", config={"limit": {"min_interval": 90}})
+    assert not limit_reached(once, reminder, now)
+    reminder.signals_sent.update(once=1, spaced=1)
+    reminder.signal_last.update(once=now, spaced=now)
+    assert limit_reached(once, reminder, now)
+    assert limit_reached(spaced, reminder, now + timedelta(minutes=60))
+    assert not limit_reached(spaced, reminder, now + timedelta(minutes=90))
 
 
 async def test_only_if_conditions(

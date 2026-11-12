@@ -70,7 +70,6 @@ class SignalRun:
     signal: Signal
     reminder_id: str
     variables: Mapping[str, str]
-    plural: bool
     context: Context
     # Responsible person (entity id) for audience "assignee".
     assignee: str | None = None
@@ -78,20 +77,8 @@ class SignalRun:
     colors: list[str] = field(default_factory=list)
 
     def text(self, key: str) -> str:
-        """Render a text field, using its plural variant if it applies."""
-        config = self.signal.config
-        if (repeat := config.get(f"{key}_repeat")) and _number(self.variables) >= 2:
-            return render(repeat, self.variables)
-        template = (self.plural and config.get(f"{key}_plural")) or config.get(key)
-        return render(template, self.variables)
-
-
-def _number(variables: dict[str, str]) -> int:
-    """Return the number of the reminder (``nr``), 1 if unknown."""
-    try:
-        return int(variables.get("nr", "1"))
-    except ValueError:
-        return 1
+        """Render a text field."""
+        return render(self.signal.config.get(key), self.variables)
 
 
 async def _sleep(seconds: float) -> None:
@@ -470,7 +457,6 @@ async def _async_action(run: SignalRun) -> bool:
         variables = {
             **run.variables,
             "reminder_id": run.reminder_id,
-            "plural": run.plural,
         }
         await script.async_run(run_variables=variables, context=run.context)
     except (vol.Invalid, HomeAssistantError) as err:

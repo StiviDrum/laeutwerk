@@ -211,31 +211,6 @@ def sample_occurrence(rule: Rule) -> Occurrence:
     )
 
 
-def sample_bundle(rule: Rule) -> Occurrence | None:
-    """Made-up bundle for tomorrow from the first two non-regex keyword rows."""
-    if not rule.bundle or not rule.sources:
-        return None
-    rows = [row for row in rule.filter.rows if row.mode != MATCH_REGEX and row.match]
-    if len(rows) < 2:
-        return None
-    tz = dt_util.get_default_time_zone()
-    day = dt_util.now().date() + timedelta(days=1)
-    start = local_instant(day, 0, tz)
-    end = local_instant(day + timedelta(days=1), 0, tz)
-    events = tuple(
-        CalendarEvent(
-            calendar=rule.sources[0],
-            summary=row.match,
-            start=start,
-            end=end,
-            all_day=True,
-            day=day,
-        )
-        for row in rows[:2]
-    )
-    return Occurrence(id="sample_bundle", day=day, start=start, end=end, events=events)
-
-
 def join_words(words: Iterable[str], language: str | None) -> str:
     """Join unique, non-empty words: "a, b und c"."""
     unique = list(dict.fromkeys(word for word in words if word))
@@ -300,22 +275,8 @@ def hit_badges(rule: Rule, events: Iterable[CalendarEvent]) -> list[dict[str, An
 def render_headline(
     rule: Rule, events: Iterable[CalendarEvent], variables: Mapping[str, str]
 ) -> str | None:
-    """Render the rule headline (plural variant for several hits); None if unset."""
-    events = list(events)
-    template = (
-        rule.headline_plural
-        if rule.headline_plural and is_plural(rule, events)
-        else rule.headline
-    )
-    return render(template, variables) if template else None
-
-
-def is_plural(rule: Rule, events: Iterable[CalendarEvent]) -> bool:
-    """Whether the plural text variants apply (more than one hit / event)."""
-    events = list(events)
-    if rule.filter.rows:
-        return len(hits_of(rule, events)) > 1
-    return len(events) > 1
+    """Render the rule headline; None if unset."""
+    return render(rule.headline, variables) if rule.headline else None
 
 
 def build_variables(

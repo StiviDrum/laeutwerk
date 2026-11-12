@@ -10,7 +10,6 @@ from custom_components.laeutwerk.matching import (
     build_occurrences,
     build_variables,
     describe_day,
-    is_plural,
     join_words,
     match_event,
     parse_event,
@@ -177,7 +176,6 @@ def test_variables_single_and_plural() -> None:
         "artikel": "die",
         "artikeln": "die",
     }
-    assert not is_plural(rule, [all_day("Papier")])
 
     events = [all_day("Papier"), all_day("Bio"), all_day("Gelb")]
     many = build_variables(rule, events, today=monday, tz=TZ, language="de")
@@ -187,7 +185,6 @@ def test_variables_single_and_plural() -> None:
     assert many["artikeln"] == "die und den"  # unique values only
     assert many["titel"] == "Papier, Bio und Gelb"
     assert many["kalender"] == WASTE
-    assert is_plural(rule, events)
 
     english = build_variables(rule, events[:2], today=monday, tz=TZ, language="en")
     assert english["tonnen"] == "Papiertonne and Biotonne"

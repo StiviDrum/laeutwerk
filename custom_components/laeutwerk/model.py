@@ -48,6 +48,12 @@ MATCH_ALL = "all"
 MATCH_ANY = "any"
 
 WHEN_NOW = "now"
+SEND_ALL = "all"
+SEND_FIRST = "first"
+SEND_REPEAT = "repeat"
+SEND_STAGE = "stage"
+SEND_ON = (SEND_ALL, SEND_FIRST, SEND_REPEAT, SEND_STAGE)
+EXPIRE_NEVER = "never"
 
 REPEAT_NONE = "none"
 DEFAULT_REPEAT_MAX = 24
@@ -181,14 +187,19 @@ class Signal:
         return self.when.get("opportunity") if isinstance(self.when, dict) else None
 
     @property
-    def stage(self) -> int:
-        """Escalation stage from which the signal is active."""
-        return int(self.config.get("stage", 0))
+    def send_on(self) -> str:
+        """Which passes send the signal: all / first / repeat / stage."""
+        return str(self.config.get("send_on", SEND_ALL))
 
     @property
-    def every_stage(self) -> bool:
-        """Also sent at every reached escalation stage."""
-        return bool(self.config.get("every_stage", False))
+    def stage(self) -> int:
+        """Escalation stage of ``send_on: stage`` (0 otherwise)."""
+        return int(self.config.get("stage", 0)) if self.send_on == SEND_STAGE else 0
+
+    @property
+    def stage_repeat(self) -> bool:
+        """With ``send_on: stage``: also at every later pass."""
+        return bool(self.config.get("stage_repeat", False))
 
     @property
     def manual_only(self) -> bool:
@@ -233,7 +244,6 @@ class Rule:
     color: str | None = None
     # Editable headline of a reminder ({variables}); None: the card's default.
     headline: str | None = None
-    headline_plural: str | None = None
     enabled: bool = True
     filter: Filter = field(default_factory=Filter)
     signals: list[Signal] = field(default_factory=list)
@@ -298,7 +308,6 @@ class Rule:
             icon=data.get("icon"),
             color=data.get("color"),
             headline=data.get("headline") or None,
-            headline_plural=data.get("headline_plural") or None,
             enabled=bool(data.get("enabled", True)),
             filter=Filter.from_dict(data.get("filter") or {}),
             signals=[Signal.from_dict(item) for item in data.get("signals", [])],
@@ -330,7 +339,6 @@ class Rule:
             "icon": self.icon,
             "color": self.color,
             "headline": self.headline,
-            "headline_plural": self.headline_plural,
             "enabled": self.enabled,
             "sources": list(self.sources),
             "filter": self.filter.to_dict(),

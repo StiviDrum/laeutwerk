@@ -402,10 +402,11 @@ async def test_escalation_stages(
     rule = muell_rule(
         escalation=[{"after": "2h"}, {"after": "21:30"}],
         signals=[
-            push(id="push", message="stufe 0"),
+            push(id="push", message="stufe 0", send_on="first"),
             push(
                 id="lampe",
                 message="lampe",
+                send_on="stage",
                 stage=1,
                 when={
                     "opportunity": {
@@ -415,7 +416,7 @@ async def test_escalation_stages(
                     }
                 },
             ),
-            push(id="ansage", message="stufe 2", stage=2),
+            push(id="ansage", message="stufe 2", send_on="stage", stage=2),
         ],
     )
     manager = await start(hass, freezer, at(MON, 9), rule)
@@ -449,7 +450,11 @@ async def test_escalation_stages(
     assert len(messages(pushes)) == 3
 
     with pytest.raises(vol.Invalid, match="stage 3 does not exist"):
-        validate_rule(muell_rule(escalation=[{"after": "1h"}], signals=[push(stage=3)]))
+        validate_rule(
+            muell_rule(
+                escalation=[{"after": "1h"}], signals=[push(send_on="stage", stage=3)]
+            )
+        )
     with pytest.raises(vol.Invalid, match="invalid escalation time"):
         validate_rule(muell_rule(escalation=[{"after": "bald"}]))
 

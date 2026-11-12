@@ -29,6 +29,7 @@ from .model import (
     DEFAULT_REPEAT_MAX,
     EFFECT_BLINK,
     EFFECTS,
+    EXPIRE_NEVER,
     MATCH_ALL,
     MATCH_ANY,
     MATCH_CONTAINS,
@@ -39,6 +40,11 @@ from .model import (
     REPEAT_NONE,
     ROTATION_FIXED,
     ROTATIONS,
+    SEND_ALL,
+    SEND_FIRST,
+    SEND_ON,
+    SEND_REPEAT,
+    SEND_STAGE,
     SIGNAL_ACTION,
     SIGNAL_ANNOUNCE,
     SIGNAL_LIGHT,
@@ -89,6 +95,8 @@ def _reminder_time(value: Any) -> str:
 
 def _expire_time(value: Any) -> str:
     text = _non_empty(value)
+    if text.lower() == EXPIRE_NEVER:
+        return EXPIRE_NEVER
     try:
         parse_timespec(text)
     except ValueError as err:
@@ -370,10 +378,10 @@ _SIGNAL_BASE = {
     vol.Optional("conditions_match", default=MATCH_ALL): vol.In([MATCH_ALL, MATCH_ANY]),
     vol.Optional("limit"): _LIMIT_SCHEMA,
     vol.Optional("quiet"): [_QUIET_SCHEMA],
-    # Escalation stage from which the signal is active (0 = from the start).
-    vol.Optional("stage"): vol.All(vol.Coerce(int), vol.Range(min=0, max=10)),
-    # Also send at every reached escalation stage (not combined with "stage").
-    vol.Optional("every_stage"): cv.boolean,
+    # Which passes send the signal: all / first / repeat / stage (see "stage").
+    vol.Optional("send_on", default=SEND_ALL): vol.In(SEND_ON),
+    vol.Optional("stage"): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
+    vol.Optional("stage_repeat", default=False): cv.boolean,
 }
 
 _SIGNAL_SCHEMAS = {
@@ -388,11 +396,7 @@ _SIGNAL_SCHEMAS = {
             # With audience "persons": only those of them who are at home.
             vol.Optional("only_present"): cv.boolean,
             vol.Optional("title"): _text,
-            vol.Optional("title_plural"): _text,
-            vol.Optional("title_repeat"): _text,
-            vol.Optional("message_repeat"): _text,
             vol.Required("message"): _non_empty,
-            vol.Optional("message_plural"): _text,
             vol.Optional("actions", default=list): [_NOTIFY_ACTION_SCHEMA],
             vol.Optional("data"): dict,
         }
@@ -432,8 +436,6 @@ _SIGNAL_SCHEMAS = {
                 cv.ensure_list, [_domain_entity("media_player")], vol.Length(min=1)
             ),
             vol.Required("text"): _non_empty,
-            vol.Optional("text_plural"): _text,
-            vol.Optional("text_repeat"): _text,
             vol.Optional("volume"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
             vol.Optional("tts"): _domain_entity("tts"),
             vol.Optional("language"): _text,
@@ -591,7 +593,6 @@ RULE_SCHEMA = vol.Schema(
         vol.Optional("icon", default=None): vol.Any(None, cv.icon),
         vol.Optional("color", default=None): vol.Any(None, _text),
         vol.Optional("headline", default=None): _opt_text,
-        vol.Optional("headline_plural", default=None): _opt_text,
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Optional("sources", default=list): vol.All(
             cv.ensure_list, [_source_entity], vol.Unique()
@@ -678,6 +679,9 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
     trigger_mode = bool(rule["start_triggers"])
     if "expire" not in rule:
         rule["expire"] = "+12h" if trigger_mode else DEFAULT_EXPIRE
+    elif rule["expire"] == EXPIRE_NEVER:
+        if not trigger_mode:
+            raise vol.Invalid("'expire: never' is only allowed for trigger rules")
     elif trigger_mode and parse_timespec(rule["expire"]).kind in (
         KIND_EVENT_START,
         KIND_EVENT_END,
@@ -690,15 +694,27 @@ def validate_rule(data: dict[str, Any]) -> dict[str, Any]:
         raise vol.Invalid("reminders: at least one reminder time is required")
     stages = len(rule["escalation"])
     for signal in rule["signals"]:
-        if signal.get("stage", 0) > stages:
+        name = f"signal '{signal['id']}'"
+        send_on = signal["send_on"]
+        opportunity = signal["when"] != WHEN_NOW
+        if send_on == SEND_STAGE:
+            if "stage" not in signal:
+                raise vol.Invalid(f"{name}: send_on 'stage' needs 'stage' (1..n)")
+            if signal["stage"] > stages:
+                raise vol.Invalid(
+                    f"{name}: stage {signal['stage']} does not exist "
+                    f"(the rule has {stages} escalation stage(s))"
+                )
+        elif "stage" in signal or signal["stage_repeat"]:
+            raise vol.Invalid(f"{name}: 'stage' / 'stage_repeat' need send_on 'stage'")
+        if opportunity and send_on in (SEND_FIRST, SEND_REPEAT):
             raise vol.Invalid(
-                f"signal '{signal['id']}': stage {signal['stage']} does not exist "
-                f"(the rule has {stages} escalation stage(s))"
+                f"{name}: 'bei Gelegenheit' signals allow send_on 'all' or 'stage' only"
             )
-        if signal.get("every_stage") and signal.get("stage"):
+        if not opportunity and "limit" in signal:
             raise vol.Invalid(
-                f"signal '{signal['id']}': 'every_stage' cannot be combined "
-                "with 'stage'"
+                f"{name}: limits only apply to 'bei Gelegenheit' signals – "
+                "use send_on instead"
             )
         if signal.get("audience") == AUDIENCE_ASSIGNEE and not rule["assignee"]:
             raise vol.Invalid(

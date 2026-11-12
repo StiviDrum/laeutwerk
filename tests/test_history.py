@@ -107,7 +107,7 @@ async def test_storage_migration_from_1_1(
     assert manager.history == {}
     assert await hass.config_entries.async_unload(entry.entry_id)
     stored = hass_storage["laeutwerk"]
-    assert stored["minor_version"] == 3
+    assert stored["minor_version"] == 4
     assert stored["data"]["history"] == {}
     assert stored["data"]["templates"] == []
 

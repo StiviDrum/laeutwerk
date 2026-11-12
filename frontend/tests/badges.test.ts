@@ -4,8 +4,6 @@ import {
   badgeLook,
   badgeLooks,
   filterSuggestions,
-  headlinePreview,
-  pluralHeadlinePreview,
   singularHeadlinePreview,
   insertVariable,
   reminderTitle,
@@ -65,17 +63,6 @@ describe("headline", () => {
     expect(reminderTitle({ ...base, headline: null })).toBe("Morgen: Papier + Bio");
     expect(reminderTitle(base)).toBe("Morgen: Papier + Bio");
   });
-
-  it("previews the own template, plural for bundles", () => {
-    const event = { titles: ["Papier"], variables: { wann: "morgen", titel: "Papier" } };
-    expect(headlinePreview({}, event)).toBe("Morgen: Papier");
-    expect(headlinePreview({ headline: "{wann}!" }, event)).toBe("Morgen!");
-    const bundled = { titles: ["A", "B"], variables: { wann: "heute", titel: "A + B" } };
-    expect(
-      headlinePreview({ headline: "{titel}", headline_plural: "Alle: {titel}" }, bundled),
-    ).toBe("Alle: A + B");
-    expect(headlinePreview({ headline: "x" }, undefined)).toBe("");
-  });
 });
 
 describe("variable autocomplete", () => {
@@ -121,32 +108,11 @@ describe("headline field previews", () => {
     titles: ["Papier", "Bio"],
     variables: { titel: "Papier und Bio", wann: "Morgen" },
   };
-  const sample = { titles: ["A", "B"], variables: { titel: "A und B", wann: "Heute" } };
-  const rule = { headline: "{wann}: {titel}", headline_plural: "Alle: {titel}" };
+  const rule = { headline: "{wann}: {titel}" };
 
   it("singular uses the first single-match event, else the first", () => {
     expect(singularHeadlinePreview(rule, [bundle, single])).toBe("Morgen: Papier");
     expect(singularHeadlinePreview(rule, [bundle])).toBe("Morgen: Papier und Bio");
     expect(singularHeadlinePreview(rule, [])).toBe("");
-  });
-
-  it("plural prefers a real bundle over plural_sample", () => {
-    expect(pluralHeadlinePreview(rule, [single, bundle], sample)).toEqual({
-      text: "Alle: Papier und Bio",
-      fallback: false,
-    });
-    expect(pluralHeadlinePreview(rule, [single], sample).text).toBe("Alle: A und B");
-  });
-
-  it("plural has no preview without bundle or sample", () => {
-    expect(pluralHeadlinePreview(rule, [single]).text).toBe("");
-    expect(pluralHeadlinePreview(rule, [single], null).text).toBe("");
-  });
-
-  it("empty plural falls back to the singular template", () => {
-    expect(pluralHeadlinePreview({ headline: "{wann}: {titel}" }, [bundle])).toEqual({
-      text: "Morgen: Papier und Bio",
-      fallback: true,
-    });
   });
 });

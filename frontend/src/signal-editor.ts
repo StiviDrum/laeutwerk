@@ -8,8 +8,7 @@ import { property, state } from "lit/decorators.js";
 import {
   SIGNAL_ICONS,
   availableVariables,
-  repeatPreview,
-  withSignalStage,
+  withSendOn,
   columnNames,
   defaultSignal,
   renderTemplate,
@@ -224,9 +223,9 @@ export class LaeutwerkSignalEditor extends LitElement {
       ${this._section("what", l.t("sig_what"), this._whatSummary(), () => this._fields())}
       ${this._section(
         "limits",
-        l.t("sig_limits"),
+        l.t(opportunity ? "sig_limits" : "quiet_times"),
         this._limitsSummary(),
-        () => html`${this._stage()} ${this._limits()}`,
+        () => this._limits(),
       )}
       ${this._footer()}
     </div>`;
@@ -255,20 +254,30 @@ export class LaeutwerkSignalEditor extends LitElement {
     const opportunity = this._sig.when !== "now";
     return html`<div class="row">
         <div class="segmented grow">
-          <button aria-pressed=${!opportunity} @click=${() => this._set({ when: "now" })}>
+          <button
+            aria-pressed=${!opportunity}
+            @click=${() => opportunity && this._set({ when: "now", limit: undefined })}
+          >
             ${l.t("when_now")}
           </button>
           <button
             aria-pressed=${opportunity}
-            @click=${() =>
-              !opportunity && this._set({ when: { opportunity: [], manual_only: false } })}
+            @click=${() => !opportunity && this._whenOpportunity()}
           >
             ${l.t("when_opportunity")}
           </button>
         </div>
         ${helpTip(l, "help_when")}
       </div>
-      ${opportunity ? this._opportunity() : nothing}`;
+      ${opportunity ? this._opportunity() : nothing}
+      <hr class="sep" />
+      ${this._sendOn()}`;
+  }
+
+  private _whenOpportunity(): void {
+    const next = { ...this._sig, when: { opportunity: [], manual_only: false } } as Signal;
+    if (next.send_on === "first" || next.send_on === "repeat") delete next.send_on;
+    this._sig = next;
   }
 
   private _onlyIfBody(): TemplateResult {
@@ -319,8 +328,8 @@ export class LaeutwerkSignalEditor extends LitElement {
     const l = this._l;
     const s = this._sig;
     const bits: string[] = [];
-    if (s.stage) bits.push(l.t("stage_n", { n: s.stage }));
-    if (s.limit?.per_reminder) bits.push(l.t("s_max", { n: s.limit.per_reminder }));
+    if (s.when !== "now" && s.limit?.per_reminder)
+      bits.push(l.t("s_max", { n: s.limit.per_reminder }));
     if (s.quiet?.length) bits.push(`${l.t("quiet_times")}: ${s.quiet.length}`);
     return bits.join(" · ");
   }
@@ -409,16 +418,6 @@ export class LaeutwerkSignalEditor extends LitElement {
         () =>
           html`${this._text("title", l.t("push_title"))}
           ${this._text("message", l.t("push_message"), true)}`,
-        true,
-      )}
-      ${this._section(
-        "texts_repeat",
-        l.t("repeat_texts"),
-        s.title_repeat || s.message_repeat || "",
-        () =>
-          html`<div class="sublabel tiprow">${helpTip(l, "help_repeat_text")}</div>
-            ${this._repeatText("title_repeat", "title", l.t("push_title"))}
-            ${this._repeatText("message_repeat", "message", l.t("push_message"), true)}`,
         true,
       )}
       ${this._section(
@@ -738,27 +737,17 @@ export class LaeutwerkSignalEditor extends LitElement {
         ></laeutwerk-field>
       </div>
       ${this._text("text", l.t("spoken_text"), true)}
-      ${this._section(
-        "text_repeat",
-        l.t("repeat_texts"),
-        s.text_repeat ?? "",
-        () =>
-          html`<div class="sublabel tiprow">${helpTip(l, "help_repeat_text")}</div>
-            ${this._repeatText("text_repeat", "text", l.t("spoken_text"), true)}`,
-        true,
-      )}
     `;
   }
 
-  /** Repeat variant of a text (from the 2nd reminder on) with a preview for nr = 2. */
-  private _repeatText(
-    key: "title_repeat" | "message_repeat" | "text_repeat",
-    base: "title" | "message" | "text",
+  /** Text field with a live preview. */
+  private _text(
+    key: "title" | "message" | "text",
     label: string,
     multiline = false,
   ): TemplateResult {
     const s = this._sig;
-    const preview = repeatPreview(s[key], s[base], this.sample, this._l);
+    const preview = renderTemplate(s[key], this.sample);
     return html`<laeutwerk-suggest
         .label=${label}
         .multiline=${multiline}
@@ -775,67 +764,65 @@ export class LaeutwerkSignalEditor extends LitElement {
       }`;
   }
 
-  /** Text field with its plural variant and a live preview. */
-  private _text(
-    key: "title" | "message" | "text",
-    label: string,
-    multiline = false,
-  ): TemplateResult {
-    const l = this._l;
-    const s = this._sig;
-    const pluralKey = `${key}_plural` as "title_plural" | "message_plural" | "text_plural";
-    const names = this._variableNames();
-    const input = (k: typeof key | typeof pluralKey, fieldLabel: string) =>
-      html`<laeutwerk-suggest
-        .label=${fieldLabel}
-        .multiline=${multiline}
-        .variables=${names}
-        .value=${String(s[k] ?? "")}
-        @value-changed=${(e: CustomEvent<{ value: string }>) => this._set({ [k]: e.detail.value })}
-      ></laeutwerk-suggest>`;
-    const preview = renderTemplate(s[key], this.sample);
-    return html`
-      ${input(key, label)} ${input(pluralKey, l.t("plural_variant"))}
-      ${
-        preview && Object.keys(this.sample).length
-          ? html`<div class="preview">
-              <ha-icon icon="mdi:eye-outline"></ha-icon><span>${preview}</span>
-            </div>`
-          : nothing
-      }
-    `;
-  }
-
   private _variableNames(): string[] {
     return availableVariables(this.rule, this._sig.when !== "now");
   }
 
-  private _stage(): TemplateResult | typeof nothing {
-    const stages = this.rule.escalation?.length ?? 0;
-    if (!stages) return nothing;
+  /** "Kommt bei": which pass of a reminder fires this signal. */
+  private _sendOn(): TemplateResult {
     const l = this._l;
-    return html`<label class="field"
-      >${l.t("stage")}
-      <select
-        @change=${(e: Event) => {
-          const v = (e.target as HTMLSelectElement).value;
-          this._sig = withSignalStage(this._sig, v === "every" ? "every" : Number(v));
-        }}
-      >
-        ${Array.from({ length: stages + 1 }, (_, n) => n).map(
-          (n) =>
-            html`<option
-              value=${n}
-              ?selected=${!this._sig.every_stage && (this._sig.stage ?? 0) === n}
+    const s = this._sig;
+    const stages = this.rule.escalation ?? [];
+    const opportunity = s.when !== "now";
+    const on = s.send_on ?? "all";
+    const modes: [NonNullable<Signal["send_on"]>, string][] = opportunity
+      ? [["all", l.t("send_all")]]
+      : [
+          ["all", l.t("send_all")],
+          ["first", l.t("send_first")],
+          ["repeat", l.t("send_repeat")],
+        ];
+    if (stages.length) modes.push(["stage", opportunity ? l.t("send_from_stage") : l.t("stage")]);
+    return html`<div class="sublabel head tiprow">
+        ${l.t("send_on")}${helpTip(l, "help_send_on")}
+      </div>
+      <div class="segmented">
+        ${modes.map(
+          ([mode, label]) =>
+            html`<button
+              aria-pressed=${on === mode}
+              @click=${() => on !== mode && (this._sig = withSendOn(s, mode))}
             >
-              ${n ? `${l.t("stage_n", { n })} · ${this.rule.escalation![n - 1].after}` : l.t("stage_0")}
-            </option>`,
+              ${label}
+            </button>`,
         )}
-        <option value="every" ?selected=${!!this._sig.every_stage}>
-          ${l.t("every_reminder_opt")}
-        </option>
-      </select>
-    </label>`;
+      </div>
+      ${
+        on === "stage"
+          ? html`<label class="field"
+                >${l.t("stage")}
+                <select
+                  @change=${(e: Event) => this._set({ stage: Number((e.target as HTMLSelectElement).value) })}
+                >
+                  ${stages.map(
+                    (st, i) =>
+                      html`<option value=${i + 1} ?selected=${(s.stage ?? 1) === i + 1}>
+                        ${l.t("stage_n", { n: i + 1 })} ·
+                        ${l.t(st.after.includes(":") ? "stage_at_mode" : "stage_after_mode")}
+                        ${st.after}
+                      </option>`,
+                  )}
+                </select>
+              </label>
+              ${
+                opportunity
+                  ? nothing
+                  : this._toggle(l.t("stage_repeat"), !!s.stage_repeat, (v) =>
+                      this._set({ stage_repeat: v || undefined }),
+                    )
+              }`
+          : nothing
+      }`;
   }
 
   private _limits(): TemplateResult {
@@ -855,29 +842,41 @@ export class LaeutwerkSignalEditor extends LitElement {
       this._set({ quiet: next.length ? next : undefined });
     };
     return html`
-      <div class="row bottom">
-        <label class="field grow"
-          >${l.t("per_reminder")}
-          <input
-            type="number"
-            min="1"
-            .value=${limit.per_reminder === undefined ? "" : String(limit.per_reminder)}
-            @change=${(e: Event) => setLimit("per_reminder", (e.target as HTMLInputElement).value)}
-          />
-        </label>
-        <label class="field grow"
-          >${l.t("min_interval")}
-          <input
-            type="number"
-            min="1"
-            .value=${limit.min_interval === undefined ? "" : String(limit.min_interval)}
-            @change=${(e: Event) => setLimit("min_interval", (e.target as HTMLInputElement).value)}
-          />
-        </label>
-        ${helpTip(l, "help_limits")}
-      </div>
-      <hr class="sep" />
-      <div class="sublabel head tiprow">${l.t("quiet_times")}${helpTip(l, "help_quiet")}</div>
+      ${
+        s.when === "now"
+          ? nothing
+          : html` <div class="row bottom">
+                <label class="field grow"
+                  >${l.t("per_reminder")}
+                  <input
+                    type="number"
+                    min="1"
+                    .value=${limit.per_reminder === undefined ? "" : String(limit.per_reminder)}
+                    @change=${(e: Event) => setLimit("per_reminder", (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label class="field grow"
+                  >${l.t("min_interval")}
+                  <input
+                    type="number"
+                    min="1"
+                    .value=${limit.min_interval === undefined ? "" : String(limit.min_interval)}
+                    @change=${(e: Event) => setLimit("min_interval", (e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                ${helpTip(l, "help_limits")}
+              </div>
+              <div class="muted">${l.t("limits_hint")}</div>
+              <hr class="sep" />`
+      }
+      ${
+        // "sofort" signals: the section itself is called "Ruhezeiten" – no second heading.
+        s.when === "now"
+          ? html`<div class="tiprow">${helpTip(l, "help_quiet")}</div>`
+          : html`<div class="sublabel head tiprow">
+              ${l.t("quiet_times")}${helpTip(l, "help_quiet")}
+            </div>`
+      }
       <div class="divided">
         ${quiet.map(
           (q, i) =>

@@ -353,14 +353,16 @@ Schnittstelle:
   - bei „bei Gelegenheit“-Signalen: nur all | stage (= scharf ab Stufe N)
 - `limit` (Höchstens/Mindestabstand) nur noch bei „bei Gelegenheit“ (Schema-Fehler bei „sofort“); Ruhezeiten für alle.
 - Auslöser-Regeln: `expire: "never"`; erneutes Auslösen bei offener Erinnerung → alte wird „verpasst“ (on_missed läuft), neue startet. Bei begrenzter Verfallszeit bleibt es wie bisher (kein zweiter Start).
-- [ ] 1 Mehrzahl-Texte entfernen
-- [ ] 2 Wiederholungstexte entfernen
-- [ ] 3 „Kommt bei“ (send_on)
-- [ ] 4 Grenzen nur bei Gelegenheit
-- [ ] 5 Verfällt: Nie
-- [ ] 6 Durchschimmern im kompakten Fenster (erst prüfen, ob es auftritt)
+- [x] 1 Mehrzahl-Texte entfernen
+- [x] 2 Wiederholungstexte entfernen
+- [x] 3 „Kommt bei“ (send_on)
+- [x] 4 Grenzen nur bei Gelegenheit
+- [x] 5 Verfällt: Nie
+- [x] 6 Durchschimmern geprüft: HAs eigene Liste blendet am unteren Rand weich aus, darunterliegender Text scheint durch – auch in der großen Karte, kein Läutwerk-Fehler → gestrichen
 - [ ] 7 Live-Regeln anpassen (nur mit Stevens Okay)
-- [ ] Doku, Prüfung, Release v0.11.0
+- Erkenntnis: entfernte Felder hätten Stevens 3 Live-Regeln beim Laden ungültig gemacht (werden dann ignoriert) → einmalige Speicher-Umwandlung `migrate_rule_0_11` (Store 1.4). Mit Stevens echten Regeln lokal geprüft: alle gültig, Verhalten gleich (Müll: Push all, Lampen first, Ansage stage 1 einmal).
+- Erkenntnis: `send_on: all` sendet jetzt auch bei jeder erreichten Stufe (vorher nur Durchlauf 1 + Wiederholungen).
+- [x] Doku, Prüfung, Release v0.11.0
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku

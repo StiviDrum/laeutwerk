@@ -89,32 +89,17 @@ def test_empty_icon_is_omitted_and_invalid_rejected() -> None:
 
 
 def test_headline_round_trip() -> None:
-    data = validate_rule(rule_data(headline="{wann}: {tonne}", headline_plural=" "))
+    data = validate_rule(rule_data(headline="{wann}: {tonne}"))
     assert data["headline"] == "{wann}: {tonne}"
-    assert data["headline_plural"] is None
     rule = Rule.from_dict(data)
     assert rule.to_dict()["headline"] == "{wann}: {tonne}"
-    assert rule.to_dict()["headline_plural"] is None
     assert Rule.from_dict(validate_rule(rule_data())).headline is None
 
 
 def test_headline_rendering() -> None:
-    rule = Rule.from_dict(
-        validate_rule(
-            rule_data(headline="{wann}: {tonne}", headline_plural="{wann}: {tonnen}")
-        )
-    )
-    one = events("Papier")
+    rule = Rule.from_dict(validate_rule(rule_data(headline="{wann}: {tonne}")))
     two = events("Papier", "Bio")
-    assert render_headline(rule, one, {"wann": "morgen", "tonne": "Papiertonne"}) == (
-        "Morgen: Papiertonne"
-    )
-    assert (
-        render_headline(rule, two, {"wann": "morgen", "tonnen": "Papier und Bio"})
-        == "Morgen: Papier und Bio"
-    )
-    # No plural text: the singular one is used.
-    rule.headline_plural = None
+    assert render_headline(rule, two, {"wann": "morgen", "tonne": "x"}) == ("Morgen: x")
     assert render_headline(rule, two, {"wann": "morgen", "tonne": "x"}) == ("Morgen: x")
     rule.headline = None
     assert render_headline(rule, two, {}) is None
@@ -151,9 +136,7 @@ async def test_payloads_sensor_and_preview(
     manager: LaeutwerkManager,
     hass_ws_client: WebSocketGenerator,
 ) -> None:
-    await manager.async_create_rule(
-        rule_data(headline="{wann}: {tonne}", headline_plural="{wann}: {tonnen}")
-    )
+    await manager.async_create_rule(rule_data(headline="{wann}: {tonnen}"))
     await hass.async_block_till_done()
 
     expected = [

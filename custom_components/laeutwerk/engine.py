@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 import logging
 from typing import Any
 
@@ -50,7 +50,6 @@ from .matching import (
     build_occurrences,
     build_variables,
     describe_since,
-    is_plural,
     keyword_colors,
     render,
     template_variables,
@@ -58,12 +57,16 @@ from .matching import (
 from .model import (
     ACK_TAG,
     ACK_TRIGGER,
+    EXPIRE_NEVER,
     INTERVAL_SOURCE,
     MATCH_ANY,
     ROTATION_AFTER_LAST,
     ROTATION_FIXED,
     ROTATION_PER_EVENT,
     ROTATION_WEEKLY,
+    SEND_FIRST,
+    SEND_REPEAT,
+    SEND_STAGE,
     STATE_DONE,
     STATE_INACTIVE,
     STATE_MISSED,
@@ -103,6 +106,7 @@ _LOGGER = logging.getLogger(__name__)
 # Calendar entities change state when events start/end or are edited;
 # several changes in a row cause one refresh.
 SOURCE_DEBOUNCE = 2  # seconds
+NEVER = datetime(2100, 1, 1, tzinfo=UTC)  # expire "never"
 # Finished reminders are kept this long after their day (card: "done" list).
 KEEP_FINISHED = timedelta(days=1)
 
@@ -409,6 +413,8 @@ class RuleRunner:
 
     def expire_at(self, item: Reminder | Occurrence) -> datetime:
         """When an open reminder counts as missed."""
+        if self.rule.expire == EXPIRE_NEVER:
+            return NEVER
         return self._instant(self.rule.expire, item)
 
     def reminder_times(self, item: Reminder | Occurrence) -> list[tuple[str, datetime]]:
@@ -489,13 +495,14 @@ class RuleRunner:
     async def async_start_now(self, person: str = "") -> Reminder | None:
         """Start a reminder of a trigger rule now (none while one is open)."""
         async with self._lock:
-            if (
-                self._stopped
-                or not self.active
-                or any(r.is_open for r in self.reminders.values())
-            ):
+            if self._stopped or not self.active:
                 return None
             now = dt_util.utcnow()
+            open_ones = [r for r in self.reminders.values() if r.is_open]
+            if open_ones and self.rule.expire != EXPIRE_NEVER:
+                return None
+            for old in open_ones:  # "never": the new trigger replaces the old one
+                self._mark_missed(old, now)
             tz = dt_util.get_default_time_zone()
             day = now.astimezone(tz).date()
             event = CalendarEvent(
@@ -688,6 +695,14 @@ class RuleRunner:
             changed = self._process(dt_util.utcnow())
         self._finish(changed)
 
+    def _mark_missed(self, reminder: Reminder, now: datetime) -> None:
+        reminder.state = STATE_MISSED
+        reminder.finished_at = now
+        reminder.deferred.clear()
+        self._fire(EVENT_MISSED, reminder)
+        self._clear_notifications(reminder)
+        self._run_hook(self._on_missed, reminder)
+
     def _process(self, now: datetime) -> bool:
         changed = False
         next_time: datetime | None = None
@@ -696,12 +711,7 @@ class RuleRunner:
                 continue
             expire = self.expire_at(reminder)
             if now >= expire:
-                reminder.state = STATE_MISSED
-                reminder.finished_at = now
-                reminder.deferred.clear()
-                self._fire(EVENT_MISSED, reminder)
-                self._clear_notifications(reminder)
-                self._run_hook(self._on_missed, reminder)
+                self._mark_missed(reminder, now)
                 changed = True
                 continue
             times = self.reminder_times(reminder)
@@ -797,7 +807,7 @@ class RuleRunner:
             if (
                 signal.enabled
                 and signal.when == WHEN_NOW
-                and (signal.stage == reminder.stage or signal.every_stage)
+                and self._sends(signal, reminder, reached=True)
             ):
                 self._dispatch(signal, reminder)
         self._run_hook(self._on_reminded, reminder)
@@ -999,10 +1009,24 @@ class RuleRunner:
             if (
                 signal.enabled
                 and signal.when == WHEN_NOW
-                and signal.stage <= reminder.stage
+                and self._sends(signal, reminder, reached=False)
             ):
                 self._dispatch(signal, reminder)
         self._run_hook(self._on_reminded, reminder)
+
+    @staticmethod
+    def _sends(signal: Signal, reminder: Reminder, *, reached: bool) -> bool:
+        """Whether a "now" signal belongs to this pass (``reached``: new stage)."""
+        mode = signal.send_on
+        if mode == SEND_FIRST:
+            return reminder.nr == 1
+        if mode == SEND_REPEAT:
+            return reminder.nr >= 2
+        if mode == SEND_STAGE:
+            if reminder.stage < signal.stage:
+                return False
+            return signal.stage_repeat or (reached and reminder.stage == signal.stage)
+        return True
 
     def _dispatch(
         self,
@@ -1046,7 +1070,6 @@ class RuleRunner:
                 **self.variables(item),
                 **(extra or {}),
             },
-            plural=is_plural(self.rule, item.events),
             context=context,
             assignee=item.assignee if isinstance(item, Reminder) else None,
             colors=keyword_colors(self.rule, item.events),

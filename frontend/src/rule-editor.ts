@@ -10,7 +10,7 @@ import {
   availableVariables,
   badgeLook,
   badgeLooks,
-  pluralHeadlinePreview,
+  expireForMode,
   singularHeadlinePreview,
   defaultSignal,
   describeTimespec,
@@ -316,9 +316,6 @@ export class LaeutwerkRuleEditor extends LitElement {
       this._preview = {
         ...result,
         events: result.events.map(withSamples),
-        plural_sample: result.plural_sample
-          ? withSamples(result.plural_sample)
-          : result.plural_sample,
       };
       this._titles = this._preview.titles;
       this._previewError = undefined;
@@ -1284,7 +1281,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                   <span class="name">${signalTitle(s, l, this._names)}</span>
                   <span class="sub">
                     ${
-                      color && !s.every_stage
+                      color && s.send_on === "stage"
                         ? html`<span class="stagechip">${l.t("stage_n", { n: s.stage! })}</span>`
                         : nothing
                     }
@@ -1520,23 +1517,13 @@ export class LaeutwerkRuleEditor extends LitElement {
     return text ? this._previewLine(text) : nothing;
   }
 
-  private _pluralPreview(): TemplateResult {
-    const l = this._l;
-    const line = pluralHeadlinePreview(
-      this._rule,
-      this._preview?.events,
-      this._preview?.plural_sample,
-    );
-    if (!line.text) return html`<div class="muted">${l.t("headline_no_preview")}</div>`;
-    return this._previewLine(line.text, line.fallback ? ` ${l.t("headline_same")}` : "");
-  }
-
   private _stepDetails(): TemplateResult {
     const l = this._l;
     const r = this._rule;
     const expire = r.expire.trim();
     const dayMatch = /^event_day (\d{1,2}:\d{2})$/.exec(expire);
     const kind = expire === "event_end" ? "end" : dayMatch ? "day" : "custom";
+    const never = expire === "never";
     return this._step(
       6,
       "step_details",
@@ -1559,7 +1546,6 @@ export class LaeutwerkRuleEditor extends LitElement {
         )}
         <hr class="sep" />
         <div class="sublabel head tiprow">${l.t("headline")}${helpTip(l, "help_headline")}</div>
-        ${this._trigger ? nothing : html`<div class="sublabel">${l.t("headline_one")}</div>`}
         <laeutwerk-suggest
           .value=${r.headline ?? ""}
           .placeholder=${l.t("headline_default")}
@@ -1568,35 +1554,40 @@ export class LaeutwerkRuleEditor extends LitElement {
             this._update({ headline: e.detail.value || null })}
         ></laeutwerk-suggest>
         ${this._singularPreview()}
-        ${
-          this._trigger
-            ? nothing
-            : html`<div class="sublabel">${l.t("headline_plural")}</div>
-                <laeutwerk-suggest
-                  .value=${r.headline_plural ?? ""}
-                  .placeholder=${r.headline || l.t("headline_default")}
-                  .variables=${availableVariables(r)}
-                  @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                    this._update({ headline_plural: e.detail.value || null })}
-                ></laeutwerk-suggest>
-                ${this._pluralPreview()}`
-        }
         <hr class="sep" />
         <div class="sublabel head tiprow">${l.t("expire")}${helpTip(l, "help_expire")}</div>
         ${
           this._trigger
-            ? html`<label class="field"
-                >${l.t("expire_hours_n")}
-                <input
-                  type="number"
-                  min="1"
-                  .value=${/^\+(\d+)h$/.exec(expire)?.[1] ?? "12"}
-                  @change=${(e: Event) =>
-                    this._update({
-                      expire: `+${Math.max(1, Math.round(Number((e.target as HTMLInputElement).value)) || 12)}h`,
-                    })}
-                />
-              </label>`
+            ? html`<div class="segmented">
+                  <button
+                    aria-pressed=${!never}
+                    @click=${() => never && this._update({ expire: expireForMode(false) })}
+                  >
+                    ${l.t("expire_hours")}
+                  </button>
+                  <button
+                    aria-pressed=${never}
+                    @click=${() => !never && this._update({ expire: expireForMode(true) })}
+                  >
+                    ${l.t("expire_never")}
+                  </button>
+                </div>
+                ${
+                  never
+                    ? html`<div class="muted">${l.t("expire_never_hint")}</div>`
+                    : html`<label class="field"
+                        >${l.t("expire_hours_n")}
+                        <input
+                          type="number"
+                          min="1"
+                          .value=${/^\+(\d+)h$/.exec(expire)?.[1] ?? "12"}
+                          @change=${(e: Event) =>
+                            this._update({
+                              expire: `+${Math.max(1, Math.round(Number((e.target as HTMLInputElement).value)) || 12)}h`,
+                            })}
+                        />
+                      </label>`
+                }`
             : html`<div class="segmented">
                 <button
                   aria-pressed=${kind === "end"}

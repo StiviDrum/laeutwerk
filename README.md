@@ -10,7 +10,7 @@
 Reminders for Home Assistant that turn **calendar events** into signals which
 stay active **until someone acknowledges them**.
 
-> **Status:** actively developed, current version **0.10.0**. All planned
+> **Status:** actively developed, current version **0.11.0**. All planned
 > features from the spec are in: calendar, trigger and interval sources, keyword
 > table with icons and colours, signals (push, light, announcement, own action),
 > opportunities, quiet times, escalation, responsibility with substitute,
@@ -92,7 +92,7 @@ data:
   (`{match: Bio, icon: "mdi:leaf", color: "#43a047"}`); the card shows the
   icon of the due keyword in its colour. Each part falls back to the rule's
   icon / colour on its own (icon only → rule colour, colour only → rule icon).
-- **Headline:** `headline` (and `headline_plural` for bundles) sets how a
+- **Headline:** `headline` sets how a
   reminder is titled in the card and the `headline` sensor attribute, e.g.
   `"{wann} raus: {tonnen}"`; default "{wann}: titles" ("Morgen: Papier + Bio").
 - **Times** (`reminders[].at`, `expire`): `-1d 17:00` (the day before at
@@ -105,8 +105,7 @@ data:
   `{beschreibung}`, `{ort}`, `{kalender}`, `{wann}` (heute / morgen / am
   Donnerstag – English wording if Home Assistant is not set to German),
   `{datum}`, `{uhrzeit}`, plus one per column and its plural with an appended
-  `n`: `{tonnen}` = "Papiertonne und Biotonne". `title_plural` /
-  `message_plural` are used when several keywords matched.
+  `n`: `{tonnen}` = "Papiertonne und Biotonne".
 - **Waiting time and reminder number:** `{seit}` (time since the first
   reminder, e.g. "seit 25 Minuten" / "seit 1 Std. 25 Min." / "seit 1 Tag 3 Std.";
   in English "for 25 minutes"), `{seit_min}` (the minutes as a number),
@@ -135,13 +134,13 @@ Every rule has exactly one source:
   time, which Läutwerk checks when you save.
 - **Trigger:** `start_triggers` – any Home Assistant trigger, written as in
   automations, starts a reminder immediately. While a reminder is open no second
-  one starts. Trigger rules default to `expire: "+12h"`; `expire` also accepts
-  `+<duration>`. The action `laeutwerk.start` starts one from an automation.
+  one starts – except with `expire: "never"`: then a new trigger marks the open
+  reminder as missed and starts a fresh one. Trigger rules default to
+  `expire: "+12h"`; `expire` also accepts `+<duration>` or `never`. The action `laeutwerk.start` starts one from an automation.
 - **Interval:** `interval: {every: 90}` – due again 90 days after the last
   acknowledgement (see *Responsibility, escalation and more*).
 
-Example "dryer" (placeholder entity names – `input_select.trockner_status` is a
-placeholder for your own status helper; replace it with yours):
+Example "dryer" (all entity names and texts are placeholders – `input_select.trockner_status` stands for your own status helper; replace it with yours):
 
 ```yaml
 id: trockner
@@ -149,14 +148,20 @@ name: Trockner fertig
 start_triggers:
   - {trigger: state, entity_id: input_select.trockner_status, to: "Fertig"}
 signals:
-  - id: push
+  - id: fertig
     type: notify
     audience: all
-    every_stage: true
+    send_on: first
     title: "Trockner ist fertig!"
     message: "Räum mich aus!"
-    title_repeat: "Erinnerung: Trockner ausräumen"
-    message_repeat: "Die Wäsche wartet {seit}."
+    actions:
+      - {ack: true, label: "Ausgeräumt"}
+  - id: erinnerung
+    type: notify
+    audience: all
+    send_on: repeat
+    title: "Erinnerung: Trockner ausräumen"
+    message: "Die Wäsche wartet {seit}."
     actions:
       - {ack: true, label: "Ausgeräumt"}
 escalation:
@@ -175,12 +180,13 @@ expire: "+32h"
 ### Signals
 
 A rule can have any number of signals. Every signal has a type, optional
-"only if" conditions, quiet times and a frequency limit:
+"only if" conditions, quiet times and, for opportunity signals, a frequency limit:
 
 ```yaml
 signals:
   - id: push
     type: notify
+    send_on: all                 # all | first | repeat | stage
     audience: persons            # all | present | persons | assignee
     persons: [person.steven, person.anna]   # their phones (companion app)
     only_present: true           # only those of them who are at home
@@ -192,6 +198,7 @@ signals:
   - id: lampe
     type: light_signal
     entity: light.stehleuchte
+    send_on: first              # blinks once, at the first reminder
     pattern: {effect: blink, count: 3}    # blink | pulse, interval in seconds
     color_from_keyword: true     # blink in the colours of the matched keywords
     color: "#ff8800"             # else / otherwise a fixed colour
@@ -203,11 +210,11 @@ signals:
     players: [media_player.sonos_wohnzimmer]
     volume: 45
     tts: tts.piper               # default: the first TTS entity
-    text: "Stell endlich die {tonne} raus!"
-    text_plural: "Stell endlich {tonnen} raus!"
+    text: "Stell endlich die {tonnen} raus!"
     quiet:
       - {from: "22:00", to: "08:00", mode: defer}   # send when the quiet time ends
-    limit: {per_reminder: 1, min_interval: 60}      # at most once, 60 min apart
+    send_on: stage
+    stage: 1                     # once, when escalation stage 1 is reached (e.g. 20:00)
   - id: eigene
     type: action
     conditions:
@@ -236,9 +243,10 @@ fires while the reminder is open:
   - id: ansage
     type: announce
     players: [media_player.sonos_wohnzimmer]
-    text: "{person}, stell bitte die {tonne} raus!"
+    text: "{person}, stell bitte die {tonnen} raus!"
     when:
       opportunity: {trigger: state, entity_id: binary_sensor.haustuer, to: "on"}
+    limit: {per_reminder: 1}     # front door: at most once per reminder
 ```
 
 `{person}` is who came home or operated the device, as far as Home Assistant
@@ -342,7 +350,7 @@ assignee:
   substitute_when: {entity_id: input_boolean.vertretung, state: "on"}   # placeholder entity
 
 # Escalation while open: stages start after a duration or at a time of day;
-# a signal with "stage: n" is active from that stage on.
+# a signal with `send_on: stage` and `stage: n` fires when stage n is reached.
 escalation:
   - {after: 2h}
   - {after: "21:30", color: "#c58cff"}   # optional colour of the stage in the card
@@ -363,11 +371,8 @@ on_done:
 visible: false
 ```
 
-- **Repeat texts:** `title_repeat` / `message_repeat` (push) and `text_repeat`
-  (announcement) are used from the 2nd reminder on (`{nr}` ≥ 2); empty = the
-  normal text.
-- **`every_stage: true`** on a signal: it is sent at the first reminder and
-  again at every escalation stage (not together with `stage`).
+- **Send on (`send_on`):** when a signal is sent. `all` (default): every reminder – the first, every repeat, after "later" and every reached escalation stage. `first`: only the first reminder. `repeat`: from the second reminder on. `stage` with `stage: N`: exactly once, when escalation stage N is reached; add `stage_repeat: true` to send it again at every later reminder. Signals on opportunity only use `all` or `stage` (armed from stage N on). In the editor this is the field *Sent on* (German *Kommt bei*), section *When*.
+- **Limit:** `limit: {per_reminder: N, min_interval: M}` – at most N times per reminder, M minutes apart. Only for signals on opportunity (e.g. a front-door announcement: at most once). Quiet times work for every signal.
 - **Escalation times:** a stage `{after: "2h"}` counts from the first reminder;
   `{after: "10:00"}` (a clock time) means the next 10:00 after the first
   reminder. The optional `min_age: "8h"` skips the stage if it would come
@@ -530,7 +535,7 @@ MIT © Steven Glab
 Erinnerungen für Home Assistant: aus **Kalenderterminen** werden Signale, die
 so lange aktiv bleiben, **bis jemand sie quittiert**.
 
-> **Status:** in aktiver Entwicklung, aktuelle Version **0.10.0**. Alle geplanten
+> **Status:** in aktiver Entwicklung, aktuelle Version **0.11.0**. Alle geplanten
 > Funktionen aus der Spezifikation sind drin: Quellen Kalender, Auslöser und
 > Intervall, Stichwort-Tabelle mit Icons und Farben, Signale (Push, Licht,
 > Ansage, eigene Aktion), Gelegenheiten, Ruhezeiten, Eskalation,
@@ -558,13 +563,15 @@ Jede Regel hat genau eine Quelle:
   den frühesten Erinnerungszeitpunkt abdecken – Läutwerk prüft das beim Speichern.
 - **Auslöser:** `start_triggers` – jeder Home-Assistant-Auslöser, so geschrieben
   wie in Automationen, startet sofort eine Erinnerung. Solange eine Erinnerung
-  offen ist, startet keine zweite. Auslöser-Regeln verwenden standardmäßig
-  `expire: "+12h"`; `expire` akzeptiert auch `+<Dauer>`. Die Aktion
+  offen ist, startet keine zweite – außer mit `expire: "never"`: dann markiert ein neuer
+  Auslöser die offene Erinnerung als verpasst und startet eine frische. Auslöser-Regeln
+  verwenden standardmäßig `expire: "+12h"`; `expire` akzeptiert auch `+<Dauer>` oder
+  `never`. Die Aktion
   `laeutwerk.start` startet eine Erinnerung aus einer Automation.
 - **Intervall:** `interval: {every: 90}` – fällig 90 Tage nach der letzten
   Quittierung (siehe *Zuständigkeit, Eskalation und mehr*).
 
-Beispiel „Trockner“ (Entitätsnamen sind Platzhalter – `input_select.trockner_status`
+Beispiel „Trockner“ (alle Entitätsnamen und Texte sind Platzhalter – `input_select.trockner_status`
 ist ein Platzhalter für deinen eigenen Status-Helfer; ersetze ihn durch deinen):
 
 ```yaml
@@ -573,14 +580,20 @@ name: Trockner fertig
 start_triggers:
   - {trigger: state, entity_id: input_select.trockner_status, to: "Fertig"}
 signals:
-  - id: push
+  - id: fertig
     type: notify
     audience: all
-    every_stage: true
+    send_on: first
     title: "Trockner ist fertig!"
     message: "Räum mich aus!"
-    title_repeat: "Erinnerung: Trockner ausräumen"
-    message_repeat: "Die Wäsche wartet {seit}."
+    actions:
+      - {ack: true, label: "Ausgeräumt"}
+  - id: erinnerung
+    type: notify
+    audience: all
+    send_on: repeat
+    title: "Erinnerung: Trockner ausräumen"
+    message: "Die Wäsche wartet {seit}."
     actions:
       - {ack: true, label: "Ausgeräumt"}
 escalation:
@@ -683,7 +696,7 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
   fälligen Stichworts in seiner Farbe; fehlt eines von beiden, gilt das Icon
   bzw. die Farbe der Regel.
 - **Überschrift** (Schritt 6 „Feinheiten“): wie eine Erinnerung heißt, z. B.
-  `{wann} raus: {tonnen}`, mit eigener Mehrzahl-Variante; ohne Angabe
+  `{wann} raus: {tonnen}`; ohne Angabe
   „Morgen: Papier + Bio“. Auch als Attribut `headline` am Regel-Sensor.
 - **Neue Regel:** der Knopf **+ Rule** im Regel-Bereich legt eine Regel an; das „+“
   im Karten-Kopf entfällt. Hilfe-Bubbles (**?**) funktionieren auch in Dialogen von
@@ -718,10 +731,8 @@ sie wieder. Die Karte zeigt denselben Text als kurze Meldung, und
   an die Person, die quittiert hat (sonst an die Zuständige), und entfernt sie
   nach `clear_after` Sekunden (Standard 10). `on_done`-Aktionen bekommen zusätzlich
   die Variablen `person_entity` und `zustaendig_entity`.
-- **Wiederhol-Texte:** `title_repeat` / `message_repeat` (Push) und `text_repeat`
-  (Ansage) werden ab der 2. Erinnerung genutzt (`{nr}` ≥ 2); leer = normaler Text.
-- **`every_stage: true`** an einem Signal: wird bei der ersten Erinnerung und bei
-  jeder Eskalationsstufe erneut gesendet (nicht zusammen mit `stage`).
+- **Sendezeitpunkt (`send_on`):** wann ein Signal gesendet wird. `all` (Standard): jede Erinnerung – die erste, jede Wiederholung, nach „Später“ und jede erreichte Eskalationsstufe. `first`: nur die erste Erinnerung. `repeat`: ab der zweiten Erinnerung. `stage` mit `stage: N`: genau einmal, wenn Eskalationsstufe N erreicht wird; mit `stage_repeat: true` wird es bei jeder späteren Erinnerung erneut gesendet. Signale bei Gelegenheit nutzen nur `all` oder `stage` (scharf ab Stufe N). Im Editor heißt das Feld *Kommt bei* (Schritt *Wann*).
+- **Grenze (`limit`):** `limit: {per_reminder: N, min_interval: M}` – höchstens N-mal pro Erinnerung, M Minuten auseinander. Nur für Signale bei Gelegenheit (z. B. Ansage an der Haustür: höchstens einmal). Ruhezeiten gelten für jedes Signal.
 - **Eskalationszeiten:** eine Stufe `{after: "2h"}` zählt ab der ersten Erinnerung;
   `{after: "10:00"}` (eine Uhrzeit) meint die nächste 10:00 nach der ersten
   Erinnerung. Das optionale `min_age: "8h"` überspringt die Stufe, wenn sie
