@@ -410,7 +410,7 @@ Etappen (feiner als in der Anweisung):
 - [x] 3 Verlauf (Backend fertig: `laeutwerk/events`, Store 1.5) (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
 - Erkenntnisse Etappe 1: Rundlauf mit Stevens drei Live-Regeln (in der Testinstanz importiert, danach gelöscht) identisch. Editor bekam 3 Spalten erst, als die Regel-Liste zur Leiste einklappt (bei 1440 px blieben sonst ~780 px). Offen: Einheiten-Auswahl bei „frühestens nach“ zu schmal („Stu“).
 - Erkenntnisse Etappe 2: im echten Frontend geprüft (Regel `hc_test`: fehlende Entität + Stichwort „Sperrmüll“ gemeldet; Vorschau 17:00 / 18:00 / 19:00 Wiederholung / 20:00 Stufe 1 stimmt mit Einstellung überein). Stichwort-Prüfung kostet je Stichwort einen Vorschau-Aufruf (MAX_PREVIEW 10).
-- [ ] 4 Assistent, Vorlagen, Satz-Ansicht, Woche
+- [x] 4 Assistent, Vorlagen, Satz-Ansicht, Woche
 - [x] 5 Schlummern bis zuhause (Backend + Menüeintrag, mit Etappe 3 ausgeliefert; Person = die mit `user_id` des angemeldeten Benutzers)
 
 ## 1.0 – Veröffentlichung
@@ -418,3 +418,8 @@ Etappen (feiner als in der Anweisung):
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut
 - [ ] HACS-Standardliste (vorher Steven fragen)
 - [ ] Release v1.0.0
+
+### Nach Beta 4 offen (UI-Umbau)
+- Satz-Ansicht: Leerzeichen vor Satzzeichen zwischen den Stücken, „verfällt: Terminende“ → „verfällt am Terminende“, Wiederholung im Gerät-Satz einbinden.
+- Vorlage „Filter wechseln“ verfällt nach 7 Tagen (`never` nur für Auslöser-Regeln erlaubt).
+- README für die Panel-Version überarbeiten, sobald Steven den Merge nach `main` freigibt.

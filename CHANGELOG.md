@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.4] - 2026-11-26 (beta)
+
+### Added
+- "Neue Regel" chooser: assistant with two questions (what, when) and a live
+  sentence, templates, empty rule, import.
+- Seven built-in templates: waste collection, laundry done, medication,
+  window open, door not locked, birthday, change filter. They ask for the
+  entities they need; the old built-in templates are replaced.
+- Sentence view of a rule in the editor; each piece opens its setting.
+- "Woche" tab: planned reminders of the next seven days.
+
 ## [0.12.0-beta.3] - 2026-11-26 (beta)
 
 ### Added
