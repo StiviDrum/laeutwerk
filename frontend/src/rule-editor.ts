@@ -6,6 +6,17 @@
 import { pickColor } from "./color-picker";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
+import { History } from "./history";
+import { durationField, expertOnly, timespecField } from "./builder-ui";
+import {
+  formatDuration,
+  formatInterval,
+  minutesToParts,
+  parseDuration,
+  parseInterval,
+  partsToMinutes,
+  type IntervalParts,
+} from "./builders";
 import {
   SIGNAL_ICONS,
   availableVariables,
@@ -110,7 +121,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _timeDays = 1;
   @state() private _timeClock = "17:00";
   @state() private _timeAmount = 2;
-  @state() private _timeCustom = "";
+  @state() private _timeCustom = "-1d 17:00";
   @state() private _confirmDelete = false;
   @state() private _exportYaml?: string;
   @state() private _notice?: string;
@@ -129,6 +140,15 @@ export class LaeutwerkRuleEditor extends LitElement {
   /** The keyword table can scroll further to the right (shows an edge fade). */
   @state() private _kwMore = false;
   private _initial = "";
+  private _hist = new History<Rule>();
+  /** YAML expert view of the whole rule: parsed value (undefined = invalid). */
+  @state() private _yamlOpen = false;
+  @state() private _yamlValue?: Rule;
+  private _yamlInit?: Rule;
+  @state() private _yamlOk = true;
+  @state() private _yamlError?: string;
+  private _yamlTimer?: number;
+  private _yamlSeq = 0;
   private _previewTimer?: number;
   private _draftTimer?: number;
 
@@ -137,6 +157,8 @@ export class LaeutwerkRuleEditor extends LitElement {
       const copy = clone(this.rule);
       delete copy.status;
       this._rule = copy;
+      this._hist.clear();
+      this._yamlOpen = false;
       this._initial = JSON.stringify(copy);
       this._guided = !copy.id;
       this._mode = sourceModeOf(copy);
@@ -150,6 +172,7 @@ export class LaeutwerkRuleEditor extends LitElement {
     super.connectedCallback();
     document.addEventListener("click", this._outside);
     document.addEventListener("keydown", this._outside);
+    document.addEventListener("keydown", this._keys);
     if (!this._persons.length && this.hass) {
       this.hass
         .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
@@ -175,12 +198,45 @@ export class LaeutwerkRuleEditor extends LitElement {
     this._menuOpen = false;
   };
 
+  /** Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y) outside of text fields (those keep their own undo). */
+  private _keys = (e: KeyboardEvent): void => {
+    if (!this._pipeline || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key !== "z" && key !== "y") return;
+    const target = e.composedPath()[0] as HTMLElement | undefined;
+    if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? ""))
+      return;
+    e.preventDefault();
+    if (key === "y" || e.shiftKey) this._redo();
+    else this._undo();
+  };
+
+  private _restore(rule: Rule | undefined): void {
+    if (!rule) return;
+    this._rule = rule;
+    this._mode = sourceModeOf(rule);
+    this._confirmCancel = false;
+    this._problems = [];
+    this._storeDraft();
+    this._schedulePreview(300);
+  }
+
+  private _undo(): void {
+    this._restore(this._hist.undo(clone(this._rule)));
+  }
+
+  private _redo(): void {
+    this._restore(this._hist.redo(clone(this._rule)));
+  }
+
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("click", this._outside);
     document.removeEventListener("keydown", this._outside);
+    document.removeEventListener("keydown", this._keys);
     window.clearTimeout(this._previewTimer);
     window.clearTimeout(this._draftTimer);
+    window.clearTimeout(this._yamlTimer);
   }
 
   // --- draft in the browser (per viewer, best effort) -------------------------
@@ -256,6 +312,7 @@ export class LaeutwerkRuleEditor extends LitElement {
     if (mode === this._mode) return;
     this._mode = mode;
     const base: Rule = { ...this._rule, sources: [], interval: null, start_triggers: undefined };
+    this._hist.push(clone(this._rule), "mode");
     this._rule = { ...keepOnlySource(base, mode), filter: this._rule.filter };
     this._update({}, true);
   }
@@ -286,6 +343,8 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   private _update(changes: Partial<Rule>, preview = false): void {
+    const keys = Object.keys(changes);
+    if (keys.length) this._hist.push(clone(this._rule), keys.join(","));
     this._rule = { ...this._rule, ...changes };
     this._confirmCancel = false;
     if (this._problems.length) this._problems = ruleProblems(this._forSaving(this._rule), this._l);
@@ -346,7 +405,10 @@ export class LaeutwerkRuleEditor extends LitElement {
     }
   }
 
-  private _emit(name: "saved" | "cancel" | "deleted" | "duplicated", detail?: unknown): void {
+  private _emit(
+    name: "saved" | "cancel" | "deleted" | "duplicated" | "undoable",
+    detail?: unknown,
+  ): void {
     this.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
@@ -367,6 +429,7 @@ export class LaeutwerkRuleEditor extends LitElement {
         ? await this.hass.callWS<Rule>({ type: "laeutwerk/rules/update", rule_id: rule.id, rule })
         : await this.hass.callWS<Rule>({ type: "laeutwerk/rules/create", rule });
       this._clearDraft();
+      this._emit("undoable", { previous: this.rule.id ? this.rule : undefined, saved });
       this._emit("saved", saved);
     } catch (err) {
       const detail = errorText(err);
@@ -425,6 +488,7 @@ export class LaeutwerkRuleEditor extends LitElement {
     }
     try {
       await this.hass.callWS({ type: "laeutwerk/rules/delete", rule_id: this._rule.id });
+      this._emit("undoable", { previous: this.rule });
       this._emit("deleted", this._rule.id);
     } catch (err) {
       this._error = this._l.t("failed", { error: errorText(err) });
@@ -633,6 +697,24 @@ export class LaeutwerkRuleEditor extends LitElement {
         }
         <span class="grow"></span>
         <button
+          class="iconbtn"
+          aria-label=${l.t("undo")}
+          title="Ctrl+Z"
+          ?disabled=${!this._hist.canUndo}
+          @click=${this._undo}
+        >
+          <ha-icon icon="mdi:undo"></ha-icon>
+        </button>
+        <button
+          class="iconbtn"
+          aria-label=${l.t("redo")}
+          title="Ctrl+Shift+Z"
+          ?disabled=${!this._hist.canRedo}
+          @click=${this._redo}
+        >
+          <ha-icon icon="mdi:redo"></ha-icon>
+        </button>
+        <button
           class="switch"
           role="switch"
           aria-checked=${r.enabled}
@@ -655,6 +737,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             this._menuOpen
               ? html`<div class="menu" role="menu">
                   ${r.id ? menuItem("mdi:content-copy", l.t("duplicate"), () => void this._duplicate()) : nothing}
+                  ${menuItem("mdi:code-braces", l.t("as_yaml"), () => this._openYaml())}
                   ${r.id ? menuItem("mdi:export", l.t("export"), () => void this._export()) : nothing}
                   ${
                     valid
@@ -682,13 +765,17 @@ export class LaeutwerkRuleEditor extends LitElement {
         <button class="pill outline ${this._confirmCancel ? "danger" : ""}" @click=${this._cancel}>
           ${this._confirmCancel ? l.t("discard_changes") : l.t("cancel")}
         </button>
-        <button class="pill primary" ?disabled=${this._saving} @click=${this._save}>
+        <button
+          class="pill primary"
+          ?disabled=${this._saving || (this._yamlOpen && !(this._yamlValue && this._yamlOk))}
+          @click=${this._saveClicked}
+        >
           ${this._saving ? "…" : l.t("save")}
         </button>
       </div>
       ${this._notice ? html`<div class="hint">${this._notice}</div>` : nothing} ${this._draftBox()}
-      ${this._messages()}
-      <div class="cols">
+      ${this._messages()} ${this._yamlOpen ? this._yamlView() : nothing}
+      <div class="cols" ?hidden=${this._yamlOpen}>
         <div class="col">
           ${this._colHead(1, "col_source", "col_source_help")} ${this._stepCalendar()}
           ${this._custom ? nothing : this._stepEvents()}
@@ -700,6 +787,99 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="col wide">
           ${this._colHead(3, "step_signals", "help_signals")} ${this._stepSignals()}
         </div>
+      </div>
+    </div>`;
+  }
+
+  private _openYaml(): void {
+    const copy = clone(this._forSaving(this._rule));
+    this._yamlInit = copy;
+    this._yamlOk = true;
+    this._yamlError = undefined;
+    this._yamlValue = copy;
+    this._yamlOpen = true;
+  }
+
+  private _applyYaml(): boolean {
+    const value = this._yamlValue;
+    if (!value) return false;
+    const next = { ...value, id: this._rule.id } as Rule;
+    if (!next.id) delete next.id;
+    this._hist.push(clone(this._rule), "yaml");
+    this._rule = next;
+    this._mode = sourceModeOf(next);
+    this._storeDraft();
+    this._schedulePreview(300);
+    this._yamlOpen = false;
+    return true;
+  }
+
+  /** Debounced backend validation of the YAML draft (nothing is saved). */
+  private _checkYaml(): void {
+    window.clearTimeout(this._yamlTimer);
+    this._yamlOk = false;
+    this._yamlError = undefined;
+    const value = this._yamlValue;
+    if (!value || !this.hass) return;
+    const seq = ++this._yamlSeq;
+    this._yamlTimer = window.setTimeout(async () => {
+      try {
+        const rule = { ...value, id: this._rule.id };
+        if (!rule.id) delete rule.id;
+        const res = await this.hass!.callWS<{ valid: boolean; error?: string | null }>({
+          type: "laeutwerk/rules/validate",
+          rule,
+          ...(this._rule.id ? { rule_id: this._rule.id } : {}),
+        });
+        if (seq !== this._yamlSeq) return;
+        this._yamlOk = res.valid;
+        this._yamlError = res.error ?? undefined;
+      } catch (err) {
+        if (seq === this._yamlSeq) this._yamlError = errorText(err);
+      }
+    }, 500);
+  }
+
+  private _saveClicked(): void {
+    if (this._yamlOpen && !this._applyYaml()) return;
+    void this._save();
+  }
+
+  private _yamlView(): TemplateResult {
+    const l = this._l;
+    return html`<div class="panel">
+      <div class="step">${l.t("yaml_expert")}</div>
+      <laeutwerk-field
+        .hass=${this.hass}
+        .localize=${l}
+        .selector=${{ object: {} }}
+        .value=${this._yamlInit}
+        label="YAML"
+        @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+          const v = e.detail.value;
+          this._yamlValue =
+            v && typeof v === "object" && !Array.isArray(v) ? (v as Rule) : undefined;
+          this._checkYaml();
+        }}
+      ></laeutwerk-field>
+      ${
+        this._yamlValue
+          ? this._yamlError
+            ? html`<div class="error">${this._yamlError}</div>`
+            : nothing
+          : html`<div class="error">${l.t("yaml_invalid")}</div>`
+      }
+      <div class="wrap">
+        <button class="pill outline" @click=${() => (this._yamlOpen = false)}>
+          ${l.t("as_form")}
+        </button>
+        <button
+          class="pill"
+          ?disabled=${!(this._yamlValue && this._yamlOk)}
+          @click=${() => this._applyYaml()}
+        >
+          ${l.t("yaml_apply")}
+        </button>
       </div>
     </div>`;
   }
@@ -737,6 +917,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                 <button
                   class="chip accent"
                   @click=${() => {
+                    this._hist.push(clone(this._rule), "draft");
                     this._rule = this._draft!.rule;
                     this._draft = undefined;
                     this._open = new Set([1, 2, 3, 4, 5, 6, 7]);
@@ -974,19 +1155,47 @@ export class LaeutwerkRuleEditor extends LitElement {
   private _intervalFields(): TemplateResult {
     const l = this._l;
     const interval = this._rule.interval ?? { every: 90 };
+    const ivParts = parseInterval(interval.every);
+    const setEvery = (p: IntervalParts) =>
+      this._update({ interval: { ...interval, every: formatInterval(p) } });
     return html`
       <div class="row">
         <label class="field grow"
           >${l.t("interval_days")}
-          <input
-            type="number"
-            min="1"
-            .value=${String(interval.every)}
-            @change=${(e: Event) =>
-              this._update({
-                interval: { ...interval, every: Number((e.target as HTMLInputElement).value) },
-              })}
-          />
+          ${
+            ivParts
+              ? html`<span class="row dur">
+                  <input
+                    type="number"
+                    min="1"
+                    .value=${String(ivParts.amount)}
+                    @change=${(e: Event) =>
+                      setEvery({
+                        ...ivParts,
+                        amount: Math.max(
+                          1,
+                          Math.round(Number((e.target as HTMLInputElement).value)) || 1,
+                        ),
+                      })}
+                  />
+                  <select
+                    @change=${(e: Event) =>
+                      setEvery({
+                        ...ivParts,
+                        number: undefined,
+                        unit: (e.target as HTMLSelectElement).value as "d" | "w",
+                      })}
+                  >
+                    ${(["d", "w"] as const).map(
+                      (u) =>
+                        html`<option value=${u} ?selected=${u === ivParts.unit}>
+                          ${l.t(u === "d" ? "u_d" : "u_w")}
+                        </option>`,
+                    )}
+                  </select>
+                </span>`
+              : expertOnly(l)
+          }
         </label>
         <label class="field grow"
           >${l.t("interval_start")}
@@ -1345,12 +1554,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                           @input=${(e: Event) => (this._timeClock = (e.target as HTMLInputElement).value)}
                         />`
                       : this._timeKind === "custom"
-                        ? html`<input
-                            class="grow"
-                            placeholder="-1d 17:00"
-                            .value=${this._timeCustom}
-                            @input=${(e: Event) => (this._timeCustom = (e.target as HTMLInputElement).value)}
-                          />`
+                        ? timespecField(l, this._timeCustom, (v) => (this._timeCustom = v))
                         : html`<input
                             type="number"
                             min="1"
@@ -1391,18 +1595,20 @@ export class LaeutwerkRuleEditor extends LitElement {
             ? html`<div class="row">
                 <label class="field grow"
                   >${l.t("repeat_every")}
-                  <input
-                    type="number"
-                    min="1"
-                    .value=${String(r.repeat.every)}
-                    @change=${(e: Event) =>
+                  ${durationField(
+                    l,
+                    typeof r.repeat.every === "number"
+                      ? formatDuration(minutesToParts(r.repeat.every))
+                      : r.repeat.every,
+                    (v) =>
                       this._update({
                         repeat: {
                           ...(r.repeat as { every: number }),
-                          every: Number((e.target as HTMLInputElement).value),
+                          every: partsToMinutes(parseDuration(v, ["m", "h"])!),
                         },
-                      })}
-                  />
+                      }),
+                    ["m", "h"],
+                  )}
                 </label>
                 <label class="field grow"
                   >${l.t("repeat_max")}
@@ -1799,10 +2005,7 @@ export class LaeutwerkRuleEditor extends LitElement {
                     this._update({ expire: `event_day ${(e.target as HTMLInputElement).value}` })}
                 />`
               : kind === "custom"
-                ? html`<input
-                    .value=${expire}
-                    @change=${(e: Event) => this._update({ expire: (e.target as HTMLInputElement).value })}
-                  />`
+                ? timespecField(l, expire, (v) => this._update({ expire: v }))
                 : nothing
         }
       `,
@@ -2217,12 +2420,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       }
       <div class="row bottom">
         <label class="field grow"
-          >${l.t("min_age")}
-          <input
-            .value=${minAge}
-            placeholder="8h"
-            @change=${(e: Event) => onMinAge((e.target as HTMLInputElement).value)}
-          />
+          >${l.t("min_age")} ${durationField(l, minAge, onMinAge, ["m", "h", "d"], "h")}
         </label>
         ${helpTip(l, "help_min_age")}
       </div>
@@ -2353,6 +2551,9 @@ export class LaeutwerkRuleEditor extends LitElement {
       }
       .menuitem.danger {
         color: var(--lw-danger, #db4437);
+      }
+      .cols[hidden] {
+        display: none;
       }
       .cols {
         display: grid;

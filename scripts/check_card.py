@@ -664,6 +664,39 @@ async def main() -> None:
                     " return location.pathname })()"
                 )
                 print("panel after back:", back)
+                # Round trip (UI rework acceptance): open every rule in the panel,
+                # save it unchanged, the export must stay byte-identical.
+                roundtrip = await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const ws = (m) => p.hass.callWS(m);"
+                    " try { await ws({type: 'laeutwerk/rules/delete', rule_id: 'rt_service'}); } catch (e) {}"
+                    " await p.hass.callService('laeutwerk', 'create_rule', {config: {id: 'rt_service',"
+                    "  name: 'Rundlauf Dienst', start_triggers: [{trigger: 'state', entity_id: 'input_boolean.lampe', to: 'on'}],"
+                    "  signals: [{id: 'push', type: 'notify', audience: 'all', title: 'T', message: 'M', send_on: 'first'},"
+                    "   {id: 'push2', type: 'notify', audience: 'all', title: 'W {seit}', message: 'M', send_on: 'repeat'}],"
+                    "  repeat: {every: 60, max: 3}, escalation: [{after: '10:00', min_age: '8h'}], expire: '+32h'}});"
+                    " await new Promise(r => setTimeout(r, 2500));"
+                    " const before = (await ws({type: 'laeutwerk/rules/export'})).yaml;"
+                    " const ids = [...p.shadowRoot.querySelectorAll('[data-rule]')].map(r => r.dataset.rule);"
+                    " const bad = [];"
+                    " for (const id of ids) {"
+                    "  history.pushState(null, '', '/laeutwerk/rules/' + id);"
+                    "  window.dispatchEvent(new CustomEvent('location-changed'));"
+                    "  await new Promise(r => setTimeout(r, 2500));"
+                    "  const ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
+                    "  if (!ed) { bad.push(id + ': no editor'); continue; }"
+                    "  try { localStorage.clear(); } catch (e) {}"
+                    "  await ed._save(); await new Promise(r => setTimeout(r, 1500));"
+                    "  if (ed._error) bad.push(id + ': ' + ed._error); }"
+                    " const after = (await ws({type: 'laeutwerk/rules/export'})).yaml;"
+                    " const a = before.split('\\n'), b = after.split('\\n'); const diff = [];"
+                    " for (let i = 0; i < Math.max(a.length, b.length) && diff.length < 12; i++)"
+                    "  if (a[i] !== b[i]) diff.push(i + ': ' + JSON.stringify(a[i]) + ' -> ' + JSON.stringify(b[i]));"
+                    " return JSON.stringify({rules: ids.length, identical: before === after, bad, diff}) })()"
+                )
+                print("panel round trip:", roundtrip)
+                if '"identical":true' not in str(roundtrip):
+                    raise SystemExit("round trip changed the stored rules")
         finally:
             proc.terminate()
 

@@ -41,7 +41,13 @@ export class LaeutwerkPanel extends LitElement {
       return false;
     }
   })();
-  @state() private _toast?: string;
+  @state() private _toast?: { text: string; undo?: () => void };
+  @state() private _tool?: "export" | "import";
+  @state() private _toolText = "";
+  @state() private _toolMsg?: { text: string; error?: boolean };
+  /** Import text that passed the dry run. */
+  @state() private _checked = "";
+  private _undoable?: { previous?: Rule; saved?: Rule };
   private _toastTimer?: number;
   @state() private _editorsReady = false;
   /** Snapshot handed to the editor (never the live rule: it would reset the editor). */
@@ -126,10 +132,162 @@ export class LaeutwerkPanel extends LitElement {
     this.requestUpdate();
   }
 
-  private _showToast(text: string): void {
-    this._toast = text;
+  private _showToast(text: string, undo?: () => void): void {
+    this._toast = { text, undo };
     window.clearTimeout(this._toastTimer);
-    this._toastTimer = window.setTimeout(() => (this._toast = undefined), 5000);
+    this._toastTimer = window.setTimeout(() => (this._toast = undefined), undo ? 10000 : 5000);
+  }
+
+  /** Revert the last save / delete (restore the previous rule). */
+  private async _revert(u: { previous?: Rule; saved?: Rule }): Promise<void> {
+    this._toast = undefined;
+    const strip = (r: Rule): Rule => {
+      const copy = JSON.parse(JSON.stringify(r)) as Rule;
+      delete copy.status;
+      return copy;
+    };
+    try {
+      if (u.previous && u.saved) {
+        await this.hass?.callWS({
+          type: "laeutwerk/rules/update",
+          rule_id: u.previous.id,
+          rule: strip(u.previous),
+        });
+      } else if (u.saved) {
+        await this.hass?.callWS({ type: "laeutwerk/rules/delete", rule_id: u.saved.id });
+      } else if (u.previous) {
+        await this.hass?.callWS({ type: "laeutwerk/rules/create", rule: strip(u.previous) });
+      }
+    } catch (err) {
+      this._showToast(this._errText(err));
+    }
+  }
+
+  private async _openTool(tool: "export" | "import"): Promise<void> {
+    this._picking = false;
+    this._tool = tool;
+    this._toolMsg = undefined;
+    this._toolText = "";
+    this._checked = "";
+    if (tool === "export") {
+      try {
+        const res = await this.hass?.callWS<{ yaml: string }>({ type: "laeutwerk/rules/export" });
+        this._toolText = res?.yaml ?? "";
+      } catch (err) {
+        this._toolMsg = { text: this._errText(err), error: true };
+      }
+    }
+  }
+
+  private _errText(err: unknown): string {
+    const msg = err && typeof err === "object" && "message" in err ? err.message : err;
+    return this._l.t("failed", { error: String(msg) });
+  }
+
+  private async _checkImport(): Promise<void> {
+    if (!this._toolText.trim()) return;
+    this._toolMsg = undefined;
+    this._checked = "";
+    const text = this._toolText;
+    try {
+      const res = await this.hass?.callWS<{
+        rules: { id: string; name: string; new_id?: string }[];
+        errors?: unknown[];
+      }>({ type: "laeutwerk/rules/import", yaml: text, dry_run: true });
+      if (res?.errors?.length) {
+        this._toolMsg = { text: res.errors.map(String).join("\n"), error: true };
+        return;
+      }
+      const list = (res?.rules ?? [])
+        .map((r) => (r.new_id && r.new_id !== r.id ? `${r.name} (${r.id} → ${r.new_id})` : r.name))
+        .join(", ");
+      this._toolMsg = {
+        text: `${this._l.t("import_result", { n: res?.rules.length ?? 0 })} ${list}`,
+      };
+      this._checked = text;
+    } catch (err) {
+      this._toolMsg = { text: this._errText(err), error: true };
+    }
+  }
+
+  private async _runImport(): Promise<void> {
+    if (!this._toolText.trim() || this._checked !== this._toolText) return;
+    this._toolMsg = undefined;
+    try {
+      const res = await this.hass?.callWS<{ rules: Rule[] }>({
+        type: "laeutwerk/rules/import",
+        yaml: this._toolText,
+      });
+      this._toolMsg = { text: `✓ ${this._l.t("import_result", { n: res?.rules.length ?? 0 })}` };
+      this._checked = "";
+    } catch (err) {
+      this._toolMsg = { text: this._errText(err), error: true };
+    }
+  }
+
+  private _download(): void {
+    const url = URL.createObjectURL(new Blob([this._toolText], { type: "text/yaml" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "laeutwerk-rules.yaml";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private _renderTool(): TemplateResult {
+    const l = this._l;
+    const exporting = this._tool === "export";
+    return html`<div class="tool">
+      <div class="ename">${exporting ? l.t("export_all") : l.t("import_yaml")}</div>
+      <div class="hint">${exporting ? l.t("export_hint") : l.t("import_hint")}</div>
+      <textarea
+        spellcheck="false"
+        ?readonly=${exporting}
+        .value=${this._toolText}
+        @input=${(e: Event) => {
+          this._toolText = (e.target as HTMLTextAreaElement).value;
+          this._checked = "";
+        }}
+      ></textarea>
+      ${
+        this._toolMsg
+          ? html`<div class=${this._toolMsg.error ? "message error" : "message"}>
+              ${this._toolMsg.text}
+            </div>`
+          : nothing
+      }
+      <div class="toolbtns">
+        ${
+          exporting
+            ? html`<button
+                  class="pill outline"
+                  @click=${() => void navigator.clipboard?.writeText(this._toolText)}
+                >
+                  ${l.t("export_copy")}
+                </button>
+                <button class="pill primary" @click=${this._download}>
+                  ${l.t("export_download")}
+                </button>`
+            : html`<button
+                  class="pill outline"
+                  ?disabled=${!this._toolText.trim()}
+                  @click=${this._checkImport}
+                >
+                  ${l.t("import_check")}
+                </button>
+                <button
+                  class="pill primary"
+                  ?disabled=${!this._checked || this._checked !== this._toolText}
+                  @click=${this._runImport}
+                >
+                  ${l.t("import_button")}
+                </button>`
+        }
+        <button class="pill outline" @click=${() => (this._tool = undefined)}>
+          ${l.t("close")}
+        </button>
+      </div>
+    </div>`;
   }
 
   private _closeEditor(): void {
@@ -169,7 +327,19 @@ export class LaeutwerkPanel extends LitElement {
         </nav>
       </header>
       <main>${tab === "rules" ? this._renderRules() : this._renderOverview()}</main>
-      ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
+      ${
+        this._toast
+          ? html`<div class="toast" role="status">
+              ${this._toast.text}${
+                this._toast.undo
+                  ? html`<button class="toast-undo" @click=${this._toast.undo}>
+                      ${l.t("undo")}
+                    </button>`
+                  : nothing
+              }
+            </div>`
+          : nothing
+      }
     `;
   }
 
@@ -249,8 +419,24 @@ export class LaeutwerkPanel extends LitElement {
           aria-label=${l.t("search")}
           @input=${(e: Event) => (this._query = (e.target as HTMLInputElement).value)}
         />
-        <button class="primary" @click=${() => (this._picking = true)}>
+        <button class="primary" @click=${() => ((this._tool = undefined), (this._picking = true))}>
           <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
+        </button>
+        <button
+          class="icon-btn"
+          aria-label=${l.t("export_all")}
+          title=${l.t("export_all")}
+          @click=${() => void this._openTool("export")}
+        >
+          <ha-icon icon="mdi:export"></ha-icon>
+        </button>
+        <button
+          class="icon-btn"
+          aria-label=${l.t("import_all")}
+          title=${l.t("import_all")}
+          @click=${() => void this._openTool("import")}
+        >
+          <ha-icon icon="mdi:import"></ha-icon>
         </button>
         ${
           this._editing && !this._isNarrow
@@ -315,6 +501,7 @@ export class LaeutwerkPanel extends LitElement {
   private _renderDetail(): TemplateResult {
     const l = this._l;
     if (!this._editorsReady) return html`<div class="message">${l.t("loading")}</div>`;
+    if (this._tool) return this._renderTool();
     if (this._picking) {
       return html`<laeutwerk-template-picker
         .hass=${this.hass}
@@ -333,15 +520,22 @@ export class LaeutwerkPanel extends LitElement {
       .localize=${l}
       .rule=${this._editing.rule}
       layout="pipeline"
+      @undoable=${(e: CustomEvent<{ previous?: Rule; saved?: Rule }>) =>
+        (this._undoable = e.detail)}
       @saved=${() => {
+        const u = this._undoable;
         this._closeEditor();
-        this._showToast(l.t("saved_toast"));
+        this._showToast(l.t("saved_toast"), u && (() => void this._revert(u)));
       }}
       @duplicated=${(e: CustomEvent<Rule>) => {
         this._editing = undefined;
         this._go("rules", e.detail.id ?? "");
       }}
-      @deleted=${() => this._closeEditor()}
+      @deleted=${() => {
+        const u = this._undoable;
+        this._closeEditor();
+        this._showToast(l.t("undo_toast_deleted"), u && (() => void this._revert(u)));
+      }}
       @cancel=${() => this._closeEditor()}
     ></laeutwerk-rule-editor>`;
   }
@@ -538,7 +732,34 @@ export class LaeutwerkPanel extends LitElement {
         color: var(--lw-on-accent);
         z-index: 10;
       }
+      .toast-undo {
+        margin-left: 12px;
+        min-height: 36px;
+        padding: 0 12px;
+        border-radius: 18px;
+        background: transparent;
+        color: inherit;
+        font-weight: 600;
+        text-decoration: underline;
+      }
+      .tool {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 720px;
+      }
+      .tool textarea {
+        min-height: 280px;
+        font-family: monospace;
+        font-size: 13px;
+      }
+      .toolbtns {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
       .message {
+        white-space: pre-line;
         padding: 24px 12px;
         color: var(--lw-text-2);
         text-align: center;

@@ -5,6 +5,7 @@
  */
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
+import { durationField } from "./builder-ui";
 import {
   SIGNAL_ICONS,
   availableVariables,
@@ -461,13 +462,7 @@ export class LaeutwerkSignalEditor extends LitElement {
                 @input=${(e: Event) =>
                   setButtons(ack, { ...snooze, label: (e.target as HTMLInputElement).value })}
               />
-              <input
-                style="width:84px"
-                aria-label=${l.t("btn_snooze_duration")}
-                .value=${String(snooze.snooze)}
-                @input=${(e: Event) =>
-                  setButtons(ack, { ...snooze, snooze: (e.target as HTMLInputElement).value })}
-              />
+              ${durationField(l, snooze.snooze, (v) => setButtons(ack, { ...snooze, snooze: v }))}
             </div>`
           : nothing
       }
