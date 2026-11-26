@@ -403,13 +403,14 @@ Git für den Umbau: je Etappe Branch `claude/ui-panel-etappe-N`, nur der Branch 
 
 Etappen (feiner als in der Anweisung):
 - [x] 0 Ist-Zustand (in der Antwort an Steven vom 26.11.: Dienste, `laeutwerk/preview`, `test_signal`, Verlauf = 50 abgeschlossene Erinnerungen je Regel, `snooze` mit duration/until, `early` vor der ersten Erinnerung, Stufe = eigener Durchlauf)
-- [ ] 1a Panel-Gerüst (Seitenleiste, nur Admin), Liste + vorhandener Editor in voller Breite
-- [ ] 1b 3-Spalten-Pipeline (Quelle · Zeitpunkte/Bedingungen · Signale), schmal 3→2→1
-- [ ] 1c Lücken der Baukästen, Undo/Redo, YAML-Expertenansicht, Duplizieren/Aktiv/Löschen/Import/Export-Knöpfe, Rundlauf-Test
-- [ ] 2 Vorschau (Backend erweitert `laeutwerk/preview` um Wiederholungen/Stufen), „Jetzt testen“, Health-Check
-- [ ] 3 Verlauf (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
+- [x] 1a Panel-Gerüst (Seitenleiste, nur Admin), Liste + vorhandener Editor in voller Breite
+- [x] 1b 3-Spalten-Pipeline (Quelle · Zeitpunkte/Bedingungen · Signale), schmal 3→2→1
+- [x] 1c Lücken der Baukästen, Undo/Redo, YAML-Expertenansicht, Duplizieren/Aktiv/Löschen/Import/Export-Knöpfe, Rundlauf-Test
+- [ ] 2 Vorschau (Backend fertig: `passes`, `days`; validate + import dry_run) (Backend erweitert `laeutwerk/preview` um Wiederholungen/Stufen), „Jetzt testen“, Health-Check
+- [ ] 3 Verlauf (Backend fertig: `laeutwerk/events`, Store 1.5) (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
+- Erkenntnisse Etappe 1: Rundlauf mit Stevens drei Live-Regeln (in der Testinstanz importiert, danach gelöscht) identisch. Editor bekam 3 Spalten erst, als die Regel-Liste zur Leiste einklappt (bei 1440 px blieben sonst ~780 px). Offen: Einheiten-Auswahl bei „frühestens nach“ zu schmal („Stu“).
 - [ ] 4 Assistent, Vorlagen, Satz-Ansicht, Woche
-- [ ] 5 Schlummern bis zuhause (Backend)
+- [ ] 5 Schlummern bis zuhause (Backend fertig: snooze `until_home`; fehlt Menüeintrag in der Karte)
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku

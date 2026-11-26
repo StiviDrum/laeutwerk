@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.1] - 2026-11-26 (beta)
+
+### Added
+- Admin panel "Läutwerk" in the sidebar: rule list with search and on/off
+  switches, rule editor in full width as a three-column pipeline
+  (Source · Times & conditions · Signals), sticky header with status, active
+  switch, duplicate/export/template/delete, undo/redo and an undo toast.
+- No shortcodes in the editor: number + unit and time builders write the
+  stored formats unchanged (round-trip checked, also with real rules).
+- YAML expert view (checked live), export of all rules, import with a check
+  before importing.
+- Backend for the next stages: preview passes (`laeutwerk/preview`), event
+  log (`laeutwerk/events`), snooze `until_home`, `laeutwerk/rules/validate`,
+  import `dry_run`.
+
+### Notes
+- Beta: install via "show beta versions" in HACS. The card keeps its editor
+  until the panel is accepted. Store version 1.5 (event log); going back to
+  0.11.x keeps working.
+
 ## [0.11.4] - 2026-11-12
 
 ### Fixed
