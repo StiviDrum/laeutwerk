@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.2] - 2026-11-26 (beta)
+
+### Added
+- Panel editor: live preview "next 5 passes" (first reminder, repeats,
+  escalation stages, which signals fire) computed by the backend from the
+  unsaved draft.
+- Test button per signal and "test all signals" (sends now, ignores
+  conditions and quiet times).
+- Health check tab and badges: missing or unavailable entities, no matching
+  event, keywords not found in the next 90 days, lookahead too short, no
+  signal, push without recipients.
+
 ## [0.12.0-beta.1] - 2026-11-26 (beta)
 
 ### Added
