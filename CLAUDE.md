@@ -37,6 +37,7 @@ Danach:
 - Nach jeder erledigten Aufgabe pushen. CI muss grün bleiben; rote CI zuerst reparieren.
 - Am Ende jedes Meilensteins: Version in `manifest.json` + `package.json`, `CHANGELOG.md`, Tag `v0.x.0`, Tag pushen (Release-Workflow baut das ZIP). **Releases nicht als Pre-Release markieren**, sonst bietet HACS Commit-Stände statt Versionen an (bei Zeitwerk passiert).
 - Kein Force-Push auf `main`. Keine Secrets, Tokens, `.storage`-Dateien oder persönlichen Daten committen.
+- **Beta-Versionen** (Stevens Freigabe vom 26.11.2026): Tags mit Bindestrich wie `v0.12.0-beta.1` aus einem Feature-Branch werden automatisch als Vorabversion veröffentlicht; Steven installiert sie per „Beta-Versionen anzeigen“ in HACS. Reguläre Versionen bleiben normale Releases. Großer UI-Umbau (Panel): Branches `claude/ui-panel-etappe-N`, kein Merge nach `main` ohne Stevens Freigabe (siehe `docs/TASKS.md`).
 
 ## A3. Technik (entschieden)
 
