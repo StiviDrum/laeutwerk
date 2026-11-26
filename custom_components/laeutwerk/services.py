@@ -138,6 +138,15 @@ def async_setup_services(hass: HomeAssistant) -> None:
         rule_id: str | None = call.data.get(ATTR_RULE)
         if rule_id is not None:
             _check_rule(manager, rule_id)
+        if "until_home" in call.data:
+            snoozed = await manager.async_snooze_until_home(
+                call.data["until_home"],
+                rule_id,
+                reminder_id=call.data.get("reminder_id"),
+            )
+            return (
+                {"snoozed": [r.id for r in snoozed]} if call.return_response else None
+            )
         if "until" in call.data:
             minutes = minutes_until(call.data["until"])
         elif "duration" in call.data:
@@ -278,7 +287,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
     async def import_rules(call: ServiceCall) -> ServiceResponse:
         await _require_admin(hass, call)
         try:
-            rules = await get_manager(hass).async_import_rules(call.data["yaml"])
+            manager = get_manager(hass)
+            if call.data.get("dry_run"):
+                return await manager.async_import_dry_run(call.data["yaml"])
+            rules = await manager.async_import_rules(call.data["yaml"])
         except (vol.Invalid, ValueError, HomeAssistantError) as err:
             raise ServiceValidationError(str(err)) from err
         return {"rules": [rule.id for rule in rules]} if call.return_response else None
@@ -317,6 +329,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 vol.Optional("reminder_id"): cv.string,
                 vol.Exclusive("duration", "when"): duration_minutes,
                 vol.Exclusive("until", "when"): cv.time,
+                vol.Exclusive("until_home", "when"): cv.entity_domain("person"),
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,
@@ -379,7 +392,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_IMPORT_RULES,
         import_rules,
-        vol.Schema({vol.Required("yaml"): cv.string}),
+        vol.Schema(
+            {vol.Required("yaml"): cv.string, vol.Optional("dry_run"): cv.boolean}
+        ),
         supports_response=SupportsResponse.OPTIONAL,
     )
     register(DOMAIN, SERVICE_ENABLE, enable, _RULES_SCHEMA)

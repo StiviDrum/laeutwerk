@@ -52,6 +52,7 @@ async def async_get_config_entry_diagnostics(
         **await _header(hass),
         "rules": [_rule_diagnostics(manager, rule_id) for rule_id in manager.rules],
         "invalid_rules": manager.invalid_rules,
+        "events": manager.events[:50],
     }
 
 

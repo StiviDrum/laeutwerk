@@ -123,11 +123,15 @@ en = {
         ),
         "snooze": svc(
             "Snooze",
-            "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give either 'duration' or 'until'. Without 'rule': all open reminders.",
+            "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give one of 'duration', 'until' or 'until_home'. Without 'rule': all open reminders.",
             rule=("Rule", "Rule id. Empty: all open reminders."),
             reminder_id=("Reminder", "Snooze exactly this reminder."),
             duration=("Duration", "Minutes, or a duration such as 30m, 3h, 1d."),
             until=("Until", "Time of day, e.g. 07:00 (the next time it is reached)."),
+            until_home=(
+                "Until home",
+                "Person entity: remind once this person is home (if home now: after leaving and coming back), at the latest shortly before the reminder expires.",
+            ),
         ),
         "reopen": svc(
             "Reopen",
@@ -197,6 +201,10 @@ en = {
             "Import rules",
             "Creates rules from YAML as returned by export_rules. Ids that exist already get a new one. All rules are checked first; if one is invalid, none is created. Requires admin.",
             yaml=("YAML", "One rule (mapping) or a list of rules."),
+            dry_run=(
+                "Dry run",
+                "Only check and report what would be created; saves nothing.",
+            ),
         ),
         "enable": svc(
             "Enable",
@@ -299,13 +307,17 @@ de = {
         ),
         "snooze": svc(
             "Später erinnern",
-            "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Entweder 'duration' oder 'until' angeben. Ohne 'rule': alle offenen Erinnerungen.",
+            "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Eines von 'duration', 'until' oder 'until_home' angeben. Ohne 'rule': alle offenen Erinnerungen.",
             rule=("Regel", "Regel-ID. Leer: alle offenen Erinnerungen."),
             reminder_id=("Erinnerung", "Genau diese Erinnerung zurückstellen."),
             duration=("Dauer", "Minuten oder eine Dauer wie 30m, 3h, 1d."),
             until=(
                 "Bis",
                 "Uhrzeit, z. B. 07:00 (das nächste Mal, dass sie erreicht wird).",
+            ),
+            until_home=(
+                "Bis zu Hause",
+                "Personen-Entität: erinnert, sobald diese Person zu Hause ist (ist sie es schon: nach dem Weggehen und Heimkommen), spätestens kurz vor dem Verfall.",
             ),
         ),
         "reopen": svc(
@@ -377,6 +389,10 @@ de = {
             "Regeln importieren",
             "Legt Regeln aus YAML an, wie es export_rules liefert. Vorhandene IDs bekommen eine neue. Alle Regeln werden vorher geprüft; ist eine ungültig, wird keine angelegt. Nur Admin.",
             yaml=("YAML", "Eine Regel (Objekt) oder eine Liste von Regeln."),
+            dry_run=(
+                "Probelauf",
+                "Nur prüfen und melden, was angelegt würde; speichert nichts.",
+            ),
         ),
         "enable": svc(
             "Einschalten",

@@ -188,3 +188,42 @@ async def test_import_requires_admin(
             blocking=True,
             context=Context(user_id=hass_read_only_user.id),
         )
+
+
+async def test_validate_draft_and_import_dry_run(
+    hass: HomeAssistant,
+    manager: LaeutwerkManager,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    await manager.async_create_rule(muell_rule())
+    ws = await hass_ws_client(hass)
+    n = 0
+
+    async def send(type_: str, **data: Any) -> dict[str, Any]:
+        nonlocal n
+        n += 1
+        await ws.send_json({"id": n, "type": f"laeutwerk/{type_}", **data})
+        return (await ws.receive_json())["result"]
+
+    assert await send("rules/validate", rule=kult61_rule()) == {
+        "valid": True,
+        "error": None,
+    }
+    # An update draft keeps the id of the stored rule; a new one must not clash.
+    assert (await send("rules/validate", rule=muell_rule(), rule_id="muell"))["valid"]
+    clash = await send("rules/validate", rule=muell_rule())
+    assert not clash["valid"] and "already exists" in clash["error"]
+    broken = await send("rules/validate", rule={**kult61_rule(), "reminders": []})
+    assert broken["valid"] is False and broken["error"]
+
+    good = manager.export_rules(["muell"])
+    dry = await send("rules/import", yaml=good, dry_run=True)
+    assert dry["errors"] == []
+    assert dry["rules"][0]["id"] != "muell" and dry["rules"][0]["new_id"]
+    bad = await send(
+        "rules/import",
+        yaml="- {id: x, name: x}\n- " + good.replace("\n", "\n  ").strip(),
+        dry_run=True,
+    )
+    assert bad["errors"] and bad["rules"] == []
+    assert list(manager.rules) == ["muell"]

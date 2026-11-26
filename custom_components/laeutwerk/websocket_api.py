@@ -13,7 +13,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from .compat import vol
-from .const import DOMAIN, HISTORY_MAX
+from .const import DOMAIN, EVENTS_MAX, HISTORY_MAX
 from .engine import RuleRunner
 from .manager import (
     EVENT_REMOVED,
@@ -24,12 +24,13 @@ from .manager import (
     lookahead_window,
     occurrence_payload,
 )
-from .matching import build_occurrences
+from .matching import Occurrence, build_occurrences
 from .model import Rule
 from .signals import person_notify_targets
 from .sources import async_fetch_events
 
 MAX_PREVIEW = 10
+MAX_PASSES = 50
 
 type _Handler = Callable[
     [HomeAssistant, websocket_api.ActiveConnection, dict[str, Any], LaeutwerkManager],
@@ -112,6 +113,27 @@ async def ws_create(
     """Create a rule (admin)."""
     rule = await manager.async_create_rule(msg["rule"])
     connection.send_result(msg["id"], rule_payload(manager, rule))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/rules/validate",
+        vol.Required("rule"): dict,
+        vol.Optional("rule_id"): cv.string,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_validate(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Validate a rule draft without saving (admin)."""
+    error = await manager.async_validate_draft(msg["rule"], msg.get("rule_id"))
+    connection.send_result(msg["id"], {"valid": error is None, "error": error})
 
 
 @websocket_api.websocket_command(
@@ -238,6 +260,12 @@ async def ws_subscribe(
         vol.Optional("limit", default=5): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=MAX_PREVIEW)
         ),
+        # Look-ahead in days for this call (default: the rule's own).
+        vol.Optional("days"): vol.All(vol.Coerce(int), vol.Range(min=1, max=365)),
+        # Number of reminder passes to simulate (nobody acknowledges).
+        vol.Optional("passes", default=5): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_PASSES)
+        ),
         # Also return the distinct event titles (keyword suggestions).
         vol.Optional("titles", default=False): cv.boolean,
     }
@@ -260,7 +288,7 @@ async def ws_preview(
 
     now = dt_util.utcnow()
     events, errors = await async_fetch_events(
-        hass, rule.sources, *lookahead_window(rule)
+        hass, rule.sources, *lookahead_window(rule, msg.get("days"))
     )
     runner = RuleRunner(
         hass, rule, {}, on_update=lambda _runner: None, on_changed=lambda: None
@@ -274,10 +302,26 @@ async def ws_preview(
         ]
         payload["expires_at"] = runner.expire_at(occurrence).isoformat()
         items.append(payload)
+    passes: list[dict[str, Any]] = []
+    if rule.trigger_mode:
+        sample = Occurrence(
+            id=f"{rule.id}__sample",
+            day=dt_util.now().date(),
+            start=now,
+            end=now,
+            events=(),
+        )
+        passes = runner.simulate_passes(sample, now, msg["passes"], sample=True)
+    else:
+        for occurrence in [o for o in occurrences if o.end > now]:
+            passes += runner.simulate_passes(occurrence, now, msg["passes"])
+        passes.sort(key=lambda p: p["at"])
+        del passes[msg["passes"] :]
     connection.send_result(
         msg["id"],
         {
             "events": items,
+            "passes": passes,
             "total_events": len(events),
             "errors": errors,
             "variables": sorted(runner.variables(occurrences[0]))
@@ -367,6 +411,41 @@ async def ws_history(
     connection.send_result(msg["id"], {"history": entries})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "laeutwerk/events",
+        vol.Optional("rule_id"): cv.string,
+        vol.Optional("kinds"): [cv.string],
+        vol.Optional("since"): cv.datetime,
+        vol.Optional("limit", default=200): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=EVENTS_MAX)
+        ),
+    }
+)
+@websocket_api.async_response
+@_with_manager
+async def ws_events(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: LaeutwerkManager,
+) -> None:
+    """Event log (reminded, signals, acknowledged ...), newest first."""
+    since = dt_util.as_utc(msg["since"]).isoformat() if "since" in msg else None
+    kinds = msg.get("kinds")
+    entries = [
+        e
+        for e in manager.events
+        if ("rule_id" not in msg or e["rule_id"] == msg["rule_id"])
+        and (not kinds or e["kind"] in kinds)
+        and (
+            since is None
+            or dt_util.parse_datetime(e["ts"]) >= dt_util.parse_datetime(since)
+        )
+    ]
+    connection.send_result(msg["id"], {"events": entries[: msg["limit"]]})
+
+
 @websocket_api.websocket_command({vol.Required("type"): "laeutwerk/templates/list"})
 @websocket_api.async_response
 @_with_manager
@@ -449,7 +528,11 @@ async def ws_export(
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "laeutwerk/rules/import", vol.Required("yaml"): cv.string}
+    {
+        vol.Required("type"): "laeutwerk/rules/import",
+        vol.Required("yaml"): cv.string,
+        vol.Optional("dry_run", default=False): cv.boolean,
+    }
 )
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -460,7 +543,12 @@ async def ws_import(
     msg: dict[str, Any],
     manager: LaeutwerkManager,
 ) -> None:
-    """Create rules from YAML (admin)."""
+    """Create rules from YAML (admin); dry_run only reports."""
+    if msg["dry_run"]:
+        connection.send_result(
+            msg["id"], await manager.async_import_dry_run(msg["yaml"])
+        )
+        return
     rules = await manager.async_import_rules(msg["yaml"])
     connection.send_result(
         msg["id"], {"rules": [rule_payload(manager, rule) for rule in rules]}
@@ -512,12 +600,14 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_delete,
         ws_subscribe,
         ws_preview,
+        ws_events,
         ws_history,
         ws_templates_list,
         ws_templates_save,
         ws_templates_delete,
         ws_export,
         ws_import,
+        ws_validate,
         ws_persons,
         ws_test_signal,
         ws_reorder,

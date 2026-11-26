@@ -437,6 +437,10 @@ class Reminder:
     deferred: dict[str, datetime] = field(default_factory=dict)
     # "Remind me later": planned again until this time.
     snoozed_until: datetime | None = None
+    # "Remind me when ... is home": person entity and phase ("leave": wait until
+    # the person left, "arrive": wait until the person is home).
+    snoozed_until_home: str | None = None
+    snoozed_home_phase: str | None = None
     # Repetitions while reminding: how many and when last reminded.
     repeats: int = 0
     last_reminded: datetime | None = None
@@ -482,6 +486,8 @@ class Reminder:
                 key: _parse_dt(value) for key, value in data.get("deferred", {}).items()
             },
             snoozed_until=_parse_opt(data.get("snoozed_until")),
+            snoozed_until_home=data.get("snoozed_until_home"),
+            snoozed_home_phase=data.get("snoozed_home_phase"),
             repeats=int(data.get("repeats", 0)),
             last_reminded=_parse_opt(data.get("last_reminded")),
             stage=int(data.get("stage", 0)),
@@ -515,6 +521,8 @@ class Reminder:
                 key: value.isoformat() for key, value in self.deferred.items()
             },
             "snoozed_until": _format_opt(self.snoozed_until),
+            "snoozed_until_home": self.snoozed_until_home,
+            "snoozed_home_phase": self.snoozed_home_phase,
             "repeats": self.repeats,
             "last_reminded": _format_opt(self.last_reminded),
             "stage": self.stage,

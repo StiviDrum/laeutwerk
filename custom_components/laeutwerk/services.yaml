@@ -46,6 +46,12 @@ snooze:
       example: "07:00"
       selector:
         time:
+    until_home:
+      required: false
+      example: person.steven
+      selector:
+        entity:
+          domain: person
 
 reopen:
   fields:
@@ -149,6 +155,11 @@ import_rules:
       selector:
         text:
           multiline: true
+    dry_run:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 enable:
   fields:

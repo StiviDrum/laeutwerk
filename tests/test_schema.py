@@ -176,6 +176,8 @@ def test_reminder_round_trip() -> None:
         "signal_last": {"push": "2026-11-16T16:00:00+00:00"},
         "deferred": {"ansage": "2026-11-17T07:00:00+00:00"},
         "snoozed_until": None,
+        "snoozed_until_home": None,
+        "snoozed_home_phase": None,
         "repeats": 2,
         "last_reminded": "2026-11-16T18:00:00+00:00",
         "stage": 1,

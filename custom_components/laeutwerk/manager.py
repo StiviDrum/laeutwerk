@@ -29,6 +29,7 @@ from .const import (
     ACTION_ACK_PREFIX,
     ACTION_SNOOZE_PREFIX,
     DOMAIN,
+    EVENTS_MAX,
     HISTORY_MAX,
     LOOKAHEAD_DAYS,
     REFRESH_MINUTES,
@@ -133,6 +134,7 @@ class LaeutwerkManager:
         self.reminders: dict[str, dict[str, Reminder]] = {}
         self.history: dict[str, list[dict[str, Any]]] = {}
         self.templates: list[dict[str, Any]] = []
+        self.events: list[dict[str, Any]] = []
         self._invalid: list[dict[str, Any]] = []  # kept so nothing is lost
         self._listeners: list[RuleListener] = []
         self._started = False
@@ -146,6 +148,7 @@ class LaeutwerkManager:
         data = await self.store.async_load()
         self.history = data["history"]
         self.templates = data["templates"]
+        self.events = data["events"]
         for raw in data["rules"]:
             try:
                 rule = Rule.from_dict(validate_rule(raw))
@@ -216,6 +219,7 @@ class LaeutwerkManager:
             "rules": [rule.to_dict() for rule in self.rules.values()] + self._invalid,
             "history": self.history,
             "templates": self.templates,
+            "events": self.events,
             "reminders": {
                 rule_id: [reminder.to_dict() for reminder in reminders.values()]
                 for rule_id, reminders in self.reminders.items()
@@ -266,9 +270,16 @@ class LaeutwerkManager:
                 rule_id, reminder.id
             ),
             household_quiet=self.household_quiet,
+            log=self.log_event,
         )
         self.runners[rule.id] = runner
         await runner.async_start()
+
+    def log_event(self, entry: dict[str, Any]) -> None:
+        """Add an entry to the persisted event log (newest first, bounded)."""
+        self.events.insert(0, entry)
+        del self.events[EVENTS_MAX:]
+        self.async_schedule_save()
 
     def household_quiet(self) -> list[dict[str, str]]:
         """Quiet times of the whole household (integration options)."""
@@ -434,6 +445,49 @@ class LaeutwerkManager:
         self._notify(EVENT_UPDATED, rule_id)
         return rule
 
+    async def async_validate_draft(
+        self, data: dict[str, Any], rule_id: str | None = None
+    ) -> str | None:
+        """Validate like create/update without saving; the error text or None."""
+        data = {k: v for k, v in data.items() if k != "status"}
+        try:
+            if rule_id:
+                self.get_rule(rule_id)
+                data["id"] = rule_id
+            elif not data.get("id"):
+                data["id"] = make_rule_id(str(data.get("name", "")), set(self.rules))
+            elif data["id"] in self.rules:
+                raise vol.Invalid(f"a rule with id '{data['id']}' already exists")
+            await async_validate_rule(self.hass, data)
+        except (vol.Invalid, ValueError, HomeAssistantError) as err:
+            return str(err)
+        return None
+
+    async def async_import_dry_run(self, text: str) -> dict[str, Any]:
+        """Report what an import would create, without saving."""
+        rules: list[dict[str, Any]] = []
+        errors: list[str] = []
+        taken = set(self.rules)
+        try:
+            items = parse_rules_yaml(text)
+        except (vol.Invalid, ValueError, HomeAssistantError) as err:
+            return {"rules": [], "errors": [str(err)]}
+        for item in items:
+            data = {k: v for k, v in item.items() if k not in RUNTIME_KEYS}
+            new_id = None
+            if not data.get("id") or data["id"] in self.rules:
+                new_id = make_rule_id(str(data.get("name", "")), taken)
+                data["id"] = new_id
+            taken.add(data["id"])
+            if error := await self.async_validate_draft(data):
+                errors.append(f"{data.get('name') or data['id']}: {error}")
+                continue
+            entry: dict[str, Any] = {"id": data["id"], "name": data.get("name", "")}
+            if new_id and item.get("id"):
+                entry["new_id"] = new_id
+            rules.append(entry)
+        return {"rules": [] if errors else rules, "errors": errors}
+
     async def async_import_rules(self, text: str) -> list[Rule]:
         """Create rules from YAML; ids that exist already get a new one."""
         items = parse_rules_yaml(text)
@@ -520,6 +574,7 @@ class LaeutwerkManager:
         del self.rules[rule_id]
         self.reminders.pop(rule_id, None)
         self.history.pop(rule_id, None)
+        self.events = [e for e in self.events if e.get("rule_id") != rule_id]
         async_clear_rule(self.hass, rule_id)
         self.async_schedule_save()
         self._notify(EVENT_REMOVED, rule_id)
@@ -582,6 +637,25 @@ class LaeutwerkManager:
             if rule_id is not None and runner.rule.id != rule_id:
                 continue
             snoozed += await runner.async_snooze(minutes, reminder_id=reminder_id)
+        return snoozed
+
+    async def async_snooze_until_home(
+        self,
+        person: str,
+        rule_id: str | None = None,
+        *,
+        reminder_id: str | None = None,
+    ) -> list[Reminder]:
+        """Remind again when ``person`` is home (again)."""
+        if rule_id is not None:
+            self.get_rule(rule_id)
+        snoozed: list[Reminder] = []
+        for runner in list(self.runners.values()):
+            if rule_id is not None and runner.rule.id != rule_id:
+                continue
+            snoozed += await runner.async_snooze_until_home(
+                person, reminder_id=reminder_id
+            )
         return snoozed
 
     async def async_test_signal(
@@ -692,6 +766,9 @@ class LaeutwerkManager:
             )
             payload["expires_at"] = runner.expire_at(reminder).isoformat()
             payload["next_reminder_at"] = next_time.isoformat() if next_time else None
+            payload["snoozed_until_home_name"] = runner.assignee_name(
+                reminder.snoozed_until_home
+            )
             payload["assignee_name"] = runner.assignee_name(reminder.assignee)
             payload["substitute_for_name"] = runner.assignee_name(
                 reminder.substitute_for
@@ -785,9 +862,13 @@ def draft_rule(data: dict[str, Any]) -> Rule:
     return Rule.from_dict(validate_rule(data))
 
 
-def lookahead_window(rule: Rule | None = None) -> tuple[datetime, datetime]:
+def lookahead_window(
+    rule: Rule | None = None, days: int | None = None
+) -> tuple[datetime, datetime]:
     """Start of today until the rule's calendar look-ahead (UTC)."""
     now = dt_util.utcnow()
     tz = dt_util.get_default_time_zone()
     start = local_instant(now.astimezone(tz).date(), 0, tz)
-    return start, now + timedelta(days=rule.lookahead_days if rule else LOOKAHEAD_DAYS)
+    return start, now + timedelta(
+        days=days or (rule.lookahead_days if rule else LOOKAHEAD_DAYS)
+    )

@@ -95,7 +95,7 @@
     },
     "snooze": {
       "name": "Später erinnern",
-      "description": "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Entweder 'duration' oder 'until' angeben. Ohne 'rule': alle offenen Erinnerungen.",
+      "description": "Erinnert später noch einmal: offene Erinnerungen werden wieder „geplant“ und erinnern erneut, wenn die Dauer um ist oder zur angegebenen Uhrzeit (sofern sie nicht vorher verfallen). Eines von 'duration', 'until' oder 'until_home' angeben. Ohne 'rule': alle offenen Erinnerungen.",
       "fields": {
         "rule": {
           "name": "Regel",
@@ -112,6 +112,10 @@
         "until": {
           "name": "Bis",
           "description": "Uhrzeit, z. B. 07:00 (das nächste Mal, dass sie erreicht wird)."
+        },
+        "until_home": {
+          "name": "Bis zu Hause",
+          "description": "Personen-Entität: erinnert, sobald diese Person zu Hause ist (ist sie es schon: nach dem Weggehen und Heimkommen), spätestens kurz vor dem Verfall."
         }
       }
     },
@@ -242,6 +246,10 @@
         "yaml": {
           "name": "YAML",
           "description": "Eine Regel (Objekt) oder eine Liste von Regeln."
+        },
+        "dry_run": {
+          "name": "Probelauf",
+          "description": "Nur prüfen und melden, was angelegt würde; speichert nichts."
         }
       }
     },

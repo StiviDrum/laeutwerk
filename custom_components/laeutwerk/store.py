@@ -26,6 +26,8 @@ class StoredData(TypedDict):
     history: dict[str, list[dict[str, Any]]]
     # rule templates saved by the user (added in 1.3)
     templates: list[dict[str, Any]]
+    # event log, newest first (added in 1.5)
+    events: list[dict[str, Any]]
 
 
 _REMOVED_TEXTS = (
@@ -86,6 +88,7 @@ class _VersionedStore(Store[StoredData]):
             "reminders": dict(old_data.get("reminders", {})),
             "history": dict(old_data.get("history", {})),
             "templates": templates,
+            "events": list(old_data.get("events", [])),
         }
 
 
@@ -102,11 +105,18 @@ class LaeutwerkStore:
         """Load stored data (empty layout when nothing is stored)."""
         data = await self._store.async_load()
         if not data:
-            return {"rules": [], "reminders": {}, "history": {}, "templates": []}
+            return {
+                "rules": [],
+                "reminders": {},
+                "history": {},
+                "templates": [],
+                "events": [],
+            }
         data.setdefault("rules", [])
         data.setdefault("reminders", {})
         data.setdefault("history", {})
         data.setdefault("templates", [])
+        data.setdefault("events", [])
         return data
 
     def async_schedule_save(self, data_func: Callable[[], StoredData]) -> None:

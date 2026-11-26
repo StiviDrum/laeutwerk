@@ -9,10 +9,13 @@ NAME: Final = "Läutwerk"
 
 STORAGE_KEY: Final = "laeutwerk"
 STORAGE_VERSION: Final = 1
-STORAGE_MINOR_VERSION: Final = 4
+STORAGE_MINOR_VERSION: Final = 5
 
 # Finished reminders kept per rule (history in the card and diagnostics).
 HISTORY_MAX: Final = 50
+
+# Event log entries kept (all rules, newest first; added in 1.5).
+EVENTS_MAX: Final = 1000
 
 CARD_FILENAME: Final = "laeutwerk-card.js"
 CARD_URL_BASE: Final = "/laeutwerk_static"

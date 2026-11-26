@@ -95,7 +95,7 @@
     },
     "snooze": {
       "name": "Snooze",
-      "description": "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give either 'duration' or 'until'. Without 'rule': all open reminders.",
+      "description": "Reminds again later: open reminders become planned again and remind once more when the duration is over or at the given time (unless they expire first). Give one of 'duration', 'until' or 'until_home'. Without 'rule': all open reminders.",
       "fields": {
         "rule": {
           "name": "Rule",
@@ -112,6 +112,10 @@
         "until": {
           "name": "Until",
           "description": "Time of day, e.g. 07:00 (the next time it is reached)."
+        },
+        "until_home": {
+          "name": "Until home",
+          "description": "Person entity: remind once this person is home (if home now: after leaving and coming back), at the latest shortly before the reminder expires."
         }
       }
     },
@@ -242,6 +246,10 @@
         "yaml": {
           "name": "YAML",
           "description": "One rule (mapping) or a list of rules."
+        },
+        "dry_run": {
+          "name": "Dry run",
+          "description": "Only check and report what would be created; saves nothing."
         }
       }
     },
