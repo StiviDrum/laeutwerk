@@ -440,7 +440,7 @@ export function stageColor(rule: Rule, stage: number | undefined): string | null
   return rule.escalation?.[stage - 1]?.color ?? STAGE_COLORS[(stage - 1) % STAGE_COLORS.length];
 }
 
-function entityIdsIn(node: unknown, found: string[]): void {
+export function entityIdsIn(node: unknown, found: string[]): void {
   if (Array.isArray(node)) {
     node.forEach((item) => entityIdsIn(item, found));
   } else if (node && typeof node === "object") {

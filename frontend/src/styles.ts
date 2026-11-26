@@ -318,6 +318,11 @@ export const shared = css`
   input[type="number"] {
     width: 84px;
   }
+  /* Unit selects of the duration builders: fit the longest unit on phones. */
+  .dur select {
+    flex: 1 0 112px;
+    min-width: 112px;
+  }
   input[type="time"] {
     width: 128px;
     padding: 0 8px;

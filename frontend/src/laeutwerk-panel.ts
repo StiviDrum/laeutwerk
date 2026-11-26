@@ -5,6 +5,14 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { relativeDay } from "./format";
+import {
+  fetchPreview90,
+  healthOf,
+  matchPayload,
+  worst,
+  type HealthItem,
+  type Preview90,
+} from "./health";
 import { localizer, type Localizer, type StringKey } from "./localize";
 import {
   PANEL_TABS,
@@ -22,7 +30,11 @@ import type { HomeAssistant, Rule, RuleEvent } from "./types";
 import { defineElements } from "./register";
 import { CARD_VERSION } from "./version";
 
-const TAB_KEYS: Record<PanelTab, StringKey> = { overview: "tab_overview", rules: "tab_rules" };
+const TAB_KEYS: Record<PanelTab, StringKey> = {
+  overview: "tab_overview",
+  rules: "tab_rules",
+  health: "tab_health",
+};
 
 export class LaeutwerkPanel extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -41,6 +53,8 @@ export class LaeutwerkPanel extends LitElement {
       return false;
     }
   })();
+  @state() private _health90: Record<string, Preview90 | undefined> = {};
+  private _healthLoaded = false;
   @state() private _toast?: { text: string; undo?: () => void };
   @state() private _tool?: "export" | "import";
   @state() private _toolText = "";
@@ -113,6 +127,8 @@ export class LaeutwerkPanel extends LitElement {
     } else if (!ruleId && this._editing && !this._editing.key.startsWith("new:")) {
       this._editing = undefined;
     }
+    if (tab === "health" && this._rules && !this._healthLoaded) void this._loadHealth();
+    if (tab !== "health") this._healthLoaded = false;
     if (tab === "rules" && !this._editorsReady && !this._editorsLoading) {
       this._editorsLoading = true;
       import("./editors")
@@ -123,6 +139,63 @@ export class LaeutwerkPanel extends LitElement {
           this._error = String(e);
         });
     }
+  }
+
+  private async _loadHealth(): Promise<void> {
+    const hass = this.hass;
+    if (!hass || !this._rules) return;
+    this._healthLoaded = true;
+    const next: Record<string, Preview90 | undefined> = {};
+    await Promise.all(
+      this._rules
+        .filter((r) => r.id && r.sources?.length && !r.start_triggers?.length && !r.interval)
+        .map(async (r) => {
+          try {
+            next[r.id!] = await fetchPreview90(hass, matchPayload(r));
+          } catch {
+            /* event based checks are skipped for this rule */
+          }
+        }),
+    );
+    this._health90 = next;
+  }
+
+  private _healthText(item: HealthItem): string {
+    return this._l.t(`health_${item.code}` as StringKey, item.params);
+  }
+
+  private _renderHealth(): TemplateResult {
+    const l = this._l;
+    if (this._error) return html`<div class="message error">${this._error}</div>`;
+    if (!this.hass || !this._rules) return html`<div class="message">${l.t("loading")}</div>`;
+    const hass = this.hass;
+    const rows = this._rules
+      .map((rule) => ({ rule, items: healthOf(rule, hass, this._health90[rule.id ?? ""]) }))
+      .filter((x) => x.items.length);
+    return html`<div class="healthtab">
+      <h2>${l.t("health_title")}</h2>
+      ${rows.length === 0 ? html`<div class="message">${l.t("health_none")}</div>` : nothing}
+      ${rows.map(
+        ({ rule, items }) =>
+          html`<section class="hgroup">
+            <button class="hrule" @click=${() => this._select(rule)}>
+              <span class="dot" style=${rule.color ? `background:${rule.color}` : ""}>
+                <ha-icon icon=${rule.icon || "mdi:bell-outline"}></ha-icon>
+              </span>
+              <span class="name">${rule.name}</span>
+            </button>
+            ${items.map(
+              (item) =>
+                html`<button class="hitem h-${item.severity}" @click=${() => this._select(rule)}>
+                  <ha-icon
+                    icon=${item.severity === "info" ? "mdi:information-outline" : "mdi:alert-circle-outline"}
+                  ></ha-icon>
+                  ${this._healthText(item)}
+                </button>`,
+            )}
+          </section>`,
+      )}
+    </div>`;
   }
 
   private _go(tab: PanelTab, ruleId = ""): void {
@@ -326,7 +399,15 @@ export class LaeutwerkPanel extends LitElement {
           )}
         </nav>
       </header>
-      <main>${tab === "rules" ? this._renderRules() : this._renderOverview()}</main>
+      <main>
+        ${
+          tab === "rules"
+            ? this._renderRules()
+            : tab === "health"
+              ? this._renderHealth()
+              : this._renderOverview()
+        }
+      </main>
       ${
         this._toast
           ? html`<div class="toast" role="status">
@@ -462,6 +543,15 @@ export class LaeutwerkPanel extends LitElement {
               <span class="name">${rule.name}</span>
               <span class="sub">${status}</span>
             </span>
+            ${(() => {
+              const w = worst(healthOf(rule, this.hass));
+              return w === "error" || w === "warning"
+                ? html`<span
+                    class="hbadge h-${w}"
+                    title=${l.t(`health_badge_${w}` as StringKey)}
+                  ></span>`
+                : nothing;
+            })()}
           </button>
           <button
             class="switch"
@@ -543,6 +633,69 @@ export class LaeutwerkPanel extends LitElement {
   static styles = [
     tokens,
     shared,
+    css`
+      .healthtab {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .hgroup {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid var(--lw-border);
+        border-radius: 18px;
+      }
+      .hrule,
+      .hitem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 0 8px;
+        border: none;
+        background: none;
+        color: var(--lw-text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        border-radius: 12px;
+      }
+      .hrule {
+        font-weight: 600;
+      }
+      .hitem {
+        font-size: 14px;
+      }
+      .hitem.h-error ha-icon,
+      .hbadge.h-error {
+        color: var(--lw-danger);
+        background: var(--lw-danger);
+      }
+      .hitem.h-warning ha-icon {
+        color: #ffb300;
+      }
+      .hitem.h-info ha-icon {
+        color: var(--lw-text-2);
+      }
+      .hitem ha-icon {
+        background: none !important;
+      }
+      .hbadge {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        flex: none;
+        margin-right: 8px;
+      }
+      .hbadge.h-warning {
+        background: #ffb300;
+      }
+    `,
     css`
       :host {
         display: flex;

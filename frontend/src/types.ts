@@ -241,7 +241,18 @@ export interface TitleSuggestion {
   matched: boolean;
 }
 
+export interface PreviewPass {
+  at: string;
+  event_id: string;
+  kind: "first" | "repeat" | "stage";
+  nr: number;
+  stage: number | null;
+  signals: string[];
+  sample?: boolean;
+}
+
 export interface PreviewResult {
+  passes?: PreviewPass[];
   titles?: TitleSuggestion[];
   events: UpcomingEvent[];
   total_events: number;

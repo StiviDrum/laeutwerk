@@ -7,6 +7,7 @@ import { pickColor } from "./color-picker";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { History } from "./history";
+import { fetchPreview90, healthOf, worst, type Preview90 } from "./health";
 import { durationField, expertOnly, timespecField } from "./builder-ui";
 import {
   formatDuration,
@@ -65,6 +66,7 @@ import type {
   KeywordRow,
   Badge,
   MatchMode,
+  PreviewPass,
   PreviewResult,
   PersonInfo,
   Rotation,
@@ -114,6 +116,13 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _rule!: Rule;
   @state() private _preview?: PreviewResult;
   @state() private _previewError?: string;
+  @state() private _passes?: PreviewPass[];
+  @state() private _passesError?: string;
+  @state() private _health90?: Preview90;
+  @state() private _testMsg?: { text: string; error?: boolean };
+  private _insightsTimer?: number;
+  private _testTimer?: number;
+  private _health90Key = "";
   @state() private _error?: string;
   @state() private _saving = false;
   @state() private _signal?: { index: number; signal: Signal };
@@ -235,6 +244,8 @@ export class LaeutwerkRuleEditor extends LitElement {
     document.removeEventListener("keydown", this._outside);
     document.removeEventListener("keydown", this._keys);
     window.clearTimeout(this._previewTimer);
+    window.clearTimeout(this._insightsTimer);
+    window.clearTimeout(this._testTimer);
     window.clearTimeout(this._draftTimer);
     window.clearTimeout(this._yamlTimer);
   }
@@ -350,21 +361,58 @@ export class LaeutwerkRuleEditor extends LitElement {
     if (this._problems.length) this._problems = ruleProblems(this._forSaving(this._rule), this._l);
     this._storeDraft();
     if (preview) this._schedulePreview(500);
+    else if (keys.length) this._scheduleInsights(500);
   }
 
   private _schedulePreview(delay: number): void {
     window.clearTimeout(this._previewTimer);
     this._previewTimer = window.setTimeout(() => void this._loadPreview(), delay);
+    this._scheduleInsights(delay);
   }
 
-  private async _loadPreview(): Promise<void> {
-    if (!this.hass || !this._rule?.sources.length || this._custom) {
-      this._preview = undefined;
+  private _scheduleInsights(delay: number): void {
+    if (!this._pipeline) return;
+    window.clearTimeout(this._insightsTimer);
+    this._insightsTimer = window.setTimeout(() => void this._loadInsights(), delay);
+  }
+
+  /** Next trigger passes of the unsaved draft and 90 days of events for the health check. */
+  private async _loadInsights(): Promise<void> {
+    const hass = this.hass;
+    if (!hass || !this._rule) return;
+    const draft = { ...clone(this._forSaving(this._rule)), status: undefined };
+    try {
+      const res = await hass.callWS<{ passes?: PreviewPass[] }>({
+        type: "laeutwerk/preview",
+        rule: draft,
+        limit: 1,
+        passes: 5,
+      });
+      this._passes = res.passes ?? [];
+      this._passesError = undefined;
+    } catch (err) {
+      this._passes = undefined;
+      this._passesError = errorText(err);
+    }
+    if (this._custom || !this._rule.sources.length) {
+      this._health90 = undefined;
       return;
     }
+    try {
+      const payload = this._matchPayload();
+      const key = JSON.stringify([payload.sources, payload.filter]);
+      if (key === this._health90Key && this._health90) return;
+      const found = await fetchPreview90(hass, payload);
+      this._health90 = found;
+      this._health90Key = key;
+    } catch {
+      this._health90 = undefined;
+    }
+  }
+
+  /** Only what decides the matches: other steps may be half filled in. */
+  private _matchPayload(): Record<string, unknown> {
     const rule = clone(this._rule);
-    // Only what decides the matches: other steps may be half filled in and
-    // must not turn the preview into an error.
     const season = rule.activation?.season;
     const preview: Record<string, unknown> = {
       sources: rule.sources,
@@ -382,6 +430,15 @@ export class LaeutwerkRuleEditor extends LitElement {
       acknowledge: validTagAcks(rule),
     };
     if (season?.from && season?.to) preview.activation = { season };
+    return preview;
+  }
+
+  private async _loadPreview(): Promise<void> {
+    if (!this.hass || !this._rule?.sources.length || this._custom) {
+      this._preview = undefined;
+      return;
+    }
+    const preview = this._matchPayload();
     try {
       const result = await this.hass.callWS<PreviewResult>({
         type: "laeutwerk/preview",
@@ -695,6 +752,21 @@ export class LaeutwerkRuleEditor extends LitElement {
               >`
             : nothing
         }
+        ${(() => {
+          const items = this._health();
+          const w = worst(items);
+          return w === "error" || w === "warning"
+            ? html`<span
+                class="pill-status h-${w}"
+                title=${items
+                  .filter((i) => i.severity === w)
+                  .map((i) => l.t(`health_${i.code}` as StringKey, i.params))
+                  .join("\n")}
+                ><ha-icon icon="mdi:alert-circle-outline"></ha-icon
+                >${l.t(`health_badge_${w}` as StringKey)}</span
+              >`
+            : nothing;
+        })()}
         <span class="grow"></span>
         <button
           class="iconbtn"
@@ -737,6 +809,11 @@ export class LaeutwerkRuleEditor extends LitElement {
             this._menuOpen
               ? html`<div class="menu" role="menu">
                   ${r.id ? menuItem("mdi:content-copy", l.t("duplicate"), () => void this._duplicate()) : nothing}
+                  ${menuItem(
+                    "mdi:bell-ring-outline",
+                    l.t("test_all"),
+                    () => void this._testSignals(r.signals.filter((x) => x.enabled)),
+                  )}
                   ${menuItem("mdi:code-braces", l.t("as_yaml"), () => this._openYaml())}
                   ${r.id ? menuItem("mdi:export", l.t("export"), () => void this._export()) : nothing}
                   ${
@@ -774,6 +851,7 @@ export class LaeutwerkRuleEditor extends LitElement {
         </button>
       </div>
       ${this._notice ? html`<div class="hint">${this._notice}</div>` : nothing} ${this._draftBox()}
+      ${this._testMsg ? html`<div class="hint ${this._testMsg.error ? "error" : ""}">${this._testMsg.text}</div>` : nothing}
       ${this._messages()} ${this._yamlOpen ? this._yamlView() : nothing}
       <div class="cols" ?hidden=${this._yamlOpen}>
         <div class="col">
@@ -782,13 +860,73 @@ export class LaeutwerkRuleEditor extends LitElement {
         </div>
         <div class="col">
           ${this._colHead(2, "col_times", "col_times_help")} ${this._stepWhen()} ${this._stepAck()}
-          ${this._stepDetails()} ${this._stepAdvanced()}
+          ${this._stepDetails()} ${this._stepAdvanced()} ${this._firesCard()}
         </div>
         <div class="col wide">
           ${this._colHead(3, "step_signals", "help_signals")} ${this._stepSignals()}
         </div>
       </div>
     </div>`;
+  }
+
+  private async _testSignals(signals: Signal[]): Promise<void> {
+    const hass = this.hass;
+    if (!hass || !signals.length) return;
+    const draft = { ...clone(this._forSaving(this._rule)), status: undefined };
+    window.clearTimeout(this._testTimer);
+    try {
+      for (const signal of signals) {
+        await hass.callWS({ type: "laeutwerk/test_signal", signal: clone(signal), rule: draft });
+      }
+      this._testMsg = { text: this._l.t("tests_sent", { n: String(signals.length) }) };
+    } catch (err) {
+      this._testMsg = { text: this._l.t("test_failed", { error: errorText(err) }), error: true };
+    }
+    this._testTimer = window.setTimeout(() => (this._testMsg = undefined), 6000);
+  }
+
+  private _health() {
+    return healthOf(this._rule, this.hass, this._health90);
+  }
+
+  private _firesCard(): TemplateResult {
+    const l = this._l;
+    const tz = this.hass?.config?.time_zone;
+    const now = new Date();
+    const byId = new Map(this._rule.signals.map((sig) => [sig.id, sig]));
+    return html`<section class="fires">
+      <div class="colh">${l.t("next_fires")}</div>
+      ${
+        this._passesError
+          ? html`<div class="hint error">${this._passesError}</div>`
+          : !this._passes
+            ? nothing
+            : this._passes.length === 0
+              ? html`<div class="hint">${l.t("fire_none")}</div>`
+              : this._passes.map((p) => {
+                  const kind =
+                    p.kind === "first"
+                      ? l.t("fire_first")
+                      : p.kind === "stage"
+                        ? l.t("fire_stage", { n: String(p.stage ?? p.nr) })
+                        : l.t("fire_repeat", { n: String(p.nr) });
+                  return html`<div class="fire">
+                    <span class="when">${relativeDayTime(p.at, now, l, tz)}</span>
+                    <span class="grow">${kind}</span>
+                    ${p.sample ? html`<span class="pill-status">${l.t("fire_sample")}</span>` : nothing}
+                    ${p.signals.map((id) => {
+                      const sig = byId.get(id);
+                      return sig
+                        ? html`<ha-icon
+                            .icon=${SIGNAL_ICONS[sig.type]}
+                            title=${signalTitle(sig, l, this._names)}
+                          ></ha-icon>`
+                        : nothing;
+                    })}
+                  </div>`;
+                })
+      }
+    </section>`;
   }
 
   private _openYaml(): void {
@@ -1669,6 +1807,14 @@ export class LaeutwerkRuleEditor extends LitElement {
                   </span>
                 </button>
                 <button
+                  class="iconbtn"
+                  aria-label=${l.t("test_now")}
+                  title=${`${l.t("test_now")} – ${l.t("test_tip")}`}
+                  @click=${() => void this._testSignals([s])}
+                >
+                  <ha-icon icon="mdi:play-circle-outline"></ha-icon>
+                </button>
+                <button
                   class="switch"
                   role="switch"
                   aria-checked=${s.enabled}
@@ -2509,6 +2655,40 @@ export class LaeutwerkRuleEditor extends LitElement {
       .pill-status.s-reminded {
         background: var(--lw-accent);
         color: var(--lw-on-accent);
+      }
+      .pill-status.h-error {
+        background: color-mix(in srgb, var(--lw-danger) 22%, transparent);
+        color: var(--lw-danger);
+      }
+      .pill-status.h-warning {
+        background: color-mix(in srgb, #ffb300 22%, transparent);
+        color: var(--lw-text);
+      }
+      .pill-status ha-icon {
+        --mdc-icon-size: 14px;
+        margin-right: 4px;
+      }
+      .fires {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px;
+        border: 1px solid var(--lw-border);
+        border-radius: 18px;
+      }
+      .fire {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        min-height: 32px;
+      }
+      .fire .when {
+        font-weight: 600;
+      }
+      .fire ha-icon {
+        --mdc-icon-size: 18px;
+        color: var(--lw-text-2);
       }
       .menuwrap {
         position: relative;

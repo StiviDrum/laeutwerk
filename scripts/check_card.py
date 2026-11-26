@@ -697,6 +697,34 @@ async def main() -> None:
                 print("panel round trip:", roundtrip)
                 if '"identical":true' not in str(roundtrip):
                     raise SystemExit("round trip changed the stored rules")
+                # Stage 2: health check finds a missing entity and an unused
+                # keyword; the live preview shows the next passes.
+                health = await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const ws = (m) => p.hass.callWS(m);"
+                    " try { await ws({type: 'laeutwerk/rules/delete', rule_id: 'hc_test'}); } catch (e) {}"
+                    " await ws({type: 'laeutwerk/rules/create', rule: {id: 'hc_test', name: 'Health-Test',"
+                    "  sources: ['calendar.abfallkalender'], filter: {all_day: true, keywords: {columns: [],"
+                    "  rows: [{match: 'Papier'}, {match: 'Sperrmüll'}]}}, reminders: [{at: '-1d 17:00'}],"
+                    "  repeat: {every: 60, max: 2}, escalation: [{after: '20:00'}],"
+                    "  signals: [{id: 'lampe', type: 'light_signal', entities: ['light.gibts_nicht'],"
+                    "   pattern: {effect: 'blink', count: 3}}]}});"
+                    " await new Promise(r => setTimeout(r, 2000));"
+                    " history.pushState(null, '', '/laeutwerk/health');"
+                    " window.dispatchEvent(new CustomEvent('location-changed'));"
+                    " await new Promise(r => setTimeout(r, 6000));"
+                    " const txt = p.shadowRoot.textContent.replace(/\\s+/g, ' ');"
+                    " history.pushState(null, '', '/laeutwerk/rules/hc_test');"
+                    " window.dispatchEvent(new CustomEvent('location-changed'));"
+                    " await new Promise(r => setTimeout(r, 4000));"
+                    " const ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
+                    " const prev = ed ? ed.shadowRoot.textContent.replace(/\\s+/g, ' ') : '';"
+                    " const i = prev.indexOf('Nächste 5');"
+                    " return JSON.stringify({missing: txt.includes('light.gibts_nicht'),"
+                    "  keyword: txt.includes('Sperrmüll'), preview: i >= 0 ? prev.slice(i, i + 260) : 'no preview'}) })()"
+                )
+                print("health + preview:", health)
+                await cdp.shot("panel_health_rule", full=False)
         finally:
             proc.terminate()
 
