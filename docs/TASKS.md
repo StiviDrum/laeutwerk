@@ -407,11 +407,11 @@ Etappen (feiner als in der Anweisung):
 - [x] 1b 3-Spalten-Pipeline (Quelle · Zeitpunkte/Bedingungen · Signale), schmal 3→2→1
 - [x] 1c Lücken der Baukästen, Undo/Redo, YAML-Expertenansicht, Duplizieren/Aktiv/Löschen/Import/Export-Knöpfe, Rundlauf-Test
 - [x] 2 Vorschau (Backend fertig: `passes`, `days`; validate + import dry_run) (Backend erweitert `laeutwerk/preview` um Wiederholungen/Stufen), „Jetzt testen“, Health-Check
-- [ ] 3 Verlauf (Backend fertig: `laeutwerk/events`, Store 1.5) (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
+- [x] 3 Verlauf (Backend fertig: `laeutwerk/events`, Store 1.5) (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
 - Erkenntnisse Etappe 1: Rundlauf mit Stevens drei Live-Regeln (in der Testinstanz importiert, danach gelöscht) identisch. Editor bekam 3 Spalten erst, als die Regel-Liste zur Leiste einklappt (bei 1440 px blieben sonst ~780 px). Offen: Einheiten-Auswahl bei „frühestens nach“ zu schmal („Stu“).
 - Erkenntnisse Etappe 2: im echten Frontend geprüft (Regel `hc_test`: fehlende Entität + Stichwort „Sperrmüll“ gemeldet; Vorschau 17:00 / 18:00 / 19:00 Wiederholung / 20:00 Stufe 1 stimmt mit Einstellung überein). Stichwort-Prüfung kostet je Stichwort einen Vorschau-Aufruf (MAX_PREVIEW 10).
 - [ ] 4 Assistent, Vorlagen, Satz-Ansicht, Woche
-- [ ] 5 Schlummern bis zuhause (Backend fertig: snooze `until_home`; fehlt Menüeintrag in der Karte)
+- [x] 5 Schlummern bis zuhause (Backend + Menüeintrag, mit Etappe 3 ausgeliefert; Person = die mit `user_id` des angemeldeten Benutzers)
 
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku

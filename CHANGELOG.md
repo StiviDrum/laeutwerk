@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.3] - 2026-11-26 (beta)
+
+### Added
+- Panel tabs "Verlauf" (event log with filters, tiles per rule, timeline) and
+  a new "Übersicht" (open now, next reminder, done/missed in 7 days, hints,
+  next 14 days). History per rule in the editor.
+- "Später erinnern" menu: 10/30 min, 1/3 h, tonight 18:00, tomorrow 07:00,
+  until a time, and "until I'm home again" (the reminder rests until your
+  person entity comes home; at the latest shortly before it expires).
+
+### Changed
+- The card only shows status and acknowledging; editing happens in the panel
+  ("Bearbeiten" / "Neue Regel" open it). Done reminders stay visible for 72 h.
+
 ## [0.12.0-beta.2] - 2026-11-26 (beta)
 
 ### Added
