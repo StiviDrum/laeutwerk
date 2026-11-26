@@ -14,11 +14,14 @@ export const tokens = css`
     --lw-ok: var(--success-color, #4ad295);
     --lw-danger: var(--error-color, #ff5a6e);
     --lw-radius-card: var(--ha-card-border-radius, 26px);
+    --lw-solid-hard: #fafafa;
     font-family: var(--ha-font-family-body, inherit);
     color: var(--lw-text);
   }
   /* Dark themes: monochrome accent like the mockup / Bubble Card. */
+  /* Opaque base for sticky elements: translucent theme colours layered over a hard colour. */
   :host([dark]) {
+    --lw-solid-hard: #111114;
     --lw-accent: var(--primary-text-color, #f5f5f7);
     --lw-on-accent: var(--primary-background-color, #0b0b0d);
   }

@@ -165,6 +165,7 @@ export class LaeutwerkRuleEditor extends LitElement {
   private _draftTimer?: number;
 
   protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("hass")) this.toggleAttribute("dark", !!this.hass?.themes?.darkMode);
     if (changed.has("rule") && this.rule) {
       const copy = clone(this.rule);
       delete copy.status;
@@ -2708,14 +2709,14 @@ export class LaeutwerkRuleEditor extends LitElement {
       }
       .ehead {
         position: sticky;
-        top: 0;
+        top: var(--lw-sticky-top, 0px);
         z-index: 3;
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 10px;
         padding: 8px 0;
-        background: var(--lw-bg);
+        background: linear-gradient(var(--lw-bg), var(--lw-bg)), var(--lw-solid-hard);
       }
       .ename {
         font-size: 18px;
@@ -2790,9 +2791,19 @@ export class LaeutwerkRuleEditor extends LitElement {
         min-width: 220px;
         padding: 6px;
         border-radius: 16px;
-        background: var(--lw-surface);
+        /* Opaque in glass themes too. */
+        background:
+          linear-gradient(var(--lw-surface), var(--lw-surface)),
+          linear-gradient(var(--lw-bg), var(--lw-bg)), var(--lw-solid-hard);
         border: 1px solid var(--lw-border, var(--lw-surface-2));
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+      /* Narrow: the header wraps and the menu button sits on the left. */
+      @container (max-width: 699px) {
+        .menu {
+          left: 0;
+          right: auto;
+        }
       }
       .menuitem {
         display: flex;
@@ -2919,6 +2930,11 @@ export class LaeutwerkRuleEditor extends LitElement {
         flex-direction: column;
         width: max-content;
         min-width: 100%;
+        isolation: isolate;
+      }
+      .kwrow > :not(.stick) {
+        position: relative;
+        z-index: 0;
       }
       .kwrow {
         display: flex;
@@ -2940,7 +2956,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       .stick {
         position: sticky;
         left: 0;
-        z-index: 1;
+        z-index: 2;
         width: 176px;
         flex-shrink: 0;
         box-sizing: border-box;
@@ -2950,7 +2966,9 @@ export class LaeutwerkRuleEditor extends LitElement {
         padding: 2px 8px 2px 6px;
         border-right: 1px solid var(--lw-border);
         /* Solid copy of the panel colour, so scrolled cells do not show through. */
-        background: linear-gradient(var(--lw-surface), var(--lw-surface)), var(--lw-bg);
+        background:
+          linear-gradient(var(--lw-surface), var(--lw-surface)),
+          linear-gradient(var(--lw-bg), var(--lw-bg)), var(--lw-solid-hard);
         box-shadow: 6px 0 6px -6px rgba(0, 0, 0, 0.35);
       }
       .hcell.stick {

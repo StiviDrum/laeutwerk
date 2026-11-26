@@ -73,6 +73,7 @@ export class LaeutwerkPanel extends LitElement {
   @state() private _editing?: { key: string; rule: Rule };
   private _unsub?: Promise<() => void>;
   private _ro?: ResizeObserver;
+  private _barRo?: ResizeObserver;
   private _editorsLoading = false;
   private _newPath?: string;
 
@@ -92,12 +93,18 @@ export class LaeutwerkPanel extends LitElement {
     super.connectedCallback();
     this._ro = new ResizeObserver(() => (this._width = this.clientWidth));
     this._ro.observe(this);
+    this._barRo = new ResizeObserver((e) =>
+      this.style.setProperty("--lw-sticky-top", `${e[0].target.getBoundingClientRect().height}px`),
+    );
+    const bar = this.renderRoot?.querySelector(".bar");
+    if (bar) this._barRo.observe(bar);
     if (this.hass && !this._unsub) this._subscribe();
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._ro?.disconnect();
+    this._barRo?.disconnect();
     const unsub = this._unsub;
     this._unsub = undefined;
     unsub?.then((fn) => fn()).catch(() => undefined);
@@ -118,6 +125,11 @@ export class LaeutwerkPanel extends LitElement {
       this._unsub = undefined;
       this._error = String((err as { message?: string })?.message ?? err);
     });
+  }
+
+  protected firstUpdated(): void {
+    const bar = this.renderRoot.querySelector(".bar");
+    if (bar) this._barRo?.observe(bar);
   }
 
   protected willUpdate(changed: PropertyValues): void {
@@ -762,12 +774,17 @@ export class LaeutwerkPanel extends LitElement {
         flex-wrap: wrap;
         min-height: 56px;
         padding: 4px 12px;
-        background: var(--app-header-background-color, var(--lw-bg));
+        background:
+          linear-gradient(
+            var(--app-header-background-color, var(--lw-bg)),
+            var(--app-header-background-color, var(--lw-bg))
+          ),
+          var(--lw-solid-hard);
         color: var(--app-header-text-color, var(--lw-text));
         border-bottom: 1px solid var(--lw-border);
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 4;
       }
       .title {
         font-size: 20px;
@@ -799,6 +816,7 @@ export class LaeutwerkPanel extends LitElement {
         color: var(--lw-text);
       }
       main {
+        isolation: isolate;
         flex: 1;
         padding: 16px;
         box-sizing: border-box;
