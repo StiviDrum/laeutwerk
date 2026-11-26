@@ -38,10 +38,10 @@ const cleanChunks = {
 const dev = !!process.env.ROLLUP_WATCH;
 
 export default {
-  input: "src/laeutwerk-card.ts",
+  input: { "laeutwerk-card": "src/laeutwerk-card.ts", "laeutwerk-panel": "src/laeutwerk-panel.ts" },
   output: {
     dir: "../custom_components/laeutwerk/frontend",
-    entryFileNames: "laeutwerk-card.js",
+    entryFileNames: "[name].js",
     chunkFileNames: "chunk-[name]-[hash].js",
     format: "es",
     sourcemap: false,

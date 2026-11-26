@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, DATA_PANELS
 from homeassistant.core import HomeAssistant
 import pytest
 
@@ -61,3 +61,36 @@ async def test_missing_bundle_only_warns(
     assert not any(
         u.startswith(CARD_URL_BASE) for u in hass.data[DATA_EXTRA_MODULE_URL].urls
     )
+
+
+async def test_panel_registered_removed_and_reloaded(
+    hass: HomeAssistant, card_bundle: Path
+) -> None:
+    (card_bundle.parent / "laeutwerk-panel.js").write_text("console.log('panel');")
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    panel = hass.data[DATA_PANELS]["laeutwerk"]
+    assert panel.require_admin is True
+    assert panel.sidebar_title == "Läutwerk"
+    assert panel.sidebar_icon == "mdi:bell-ring-outline"
+    custom = panel.config["_panel_custom"]
+    assert custom["name"] == "laeutwerk-panel"
+    assert custom["module_url"].startswith(f"{CARD_URL_BASE}/laeutwerk-panel.js?v=")
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert "laeutwerk" in hass.data[DATA_PANELS]
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert "laeutwerk" not in hass.data[DATA_PANELS]
+
+
+async def test_missing_panel_bundle_skips_panel(
+    hass: HomeAssistant, card_bundle: Path
+) -> None:
+    await _setup(hass)
+    assert "laeutwerk" not in hass.data.get(DATA_PANELS, {})

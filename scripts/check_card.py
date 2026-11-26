@@ -38,7 +38,10 @@ SHELL = (
     Path.home()
     / ".cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/headless_shell"
 )
-LIBS = os.environ.get("LAEUTWERK_CHROME_LIBS", "")
+_DEFAULT_LIBS = Path.home() / ".cache/laeutwerk-chrome-libs/usr/lib/x86_64-linux-gnu"
+LIBS = os.environ.get("LAEUTWERK_CHROME_LIBS") or (
+    str(_DEFAULT_LIBS) if _DEFAULT_LIBS.is_dir() else ""
+)
 
 
 async def tokens(session: aiohttp.ClientSession) -> dict:
@@ -631,6 +634,34 @@ async def main() -> None:
                 )
                 print("trigger mode:", mode)
                 await cdp.shot("trigger")
+                # Admin panel (UI rework): rule list, open a rule, browser back.
+                await cdp.call("Page.navigate", url=f"{HA}/laeutwerk/rules")
+                await asyncio.sleep(8)
+                await cdp.js(FIND)
+                panel = await cdp.js(
+                    "(() => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " if (!p) return 'no panel';"
+                    " return JSON.stringify({hscroll: document.documentElement.scrollWidth"
+                    "  > innerWidth + 1, rows: p.shadowRoot.querySelectorAll('[data-rule]').length}) })()"
+                )
+                print("panel:", panel)
+                await cdp.shot("panel_list", full=False)
+                opened = await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const row = p && p.shadowRoot.querySelector('[data-rule]');"
+                    " if (!row) return 'no row'; row.click();"
+                    " await new Promise(r => setTimeout(r, 3000));"
+                    " const ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
+                    " return JSON.stringify({path: location.pathname, editor: !!ed,"
+                    "  hscroll: document.documentElement.scrollWidth > innerWidth + 1}) })()"
+                )
+                print("panel rule opened:", opened)
+                await cdp.shot("panel_editor", full=False)
+                back = await cdp.js(
+                    "(async () => { history.back(); await new Promise(r => setTimeout(r, 1500));"
+                    " return location.pathname })()"
+                )
+                print("panel after back:", back)
         finally:
             proc.terminate()
 

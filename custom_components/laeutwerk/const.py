@@ -16,6 +16,9 @@ HISTORY_MAX: Final = 50
 
 CARD_FILENAME: Final = "laeutwerk-card.js"
 CARD_URL_BASE: Final = "/laeutwerk_static"
+PANEL_FILENAME: Final = "laeutwerk-panel.js"
+PANEL_ELEMENT: Final = "laeutwerk-panel"
+PANEL_URL_PATH: Final = "laeutwerk"
 
 SIGNAL_RULE_STATUS: Final = "laeutwerk_rule_status_{}"
 
