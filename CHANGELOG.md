@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.5] - 2026-11-26 (beta)
+
+### Fixed
+- Panel editor: the header no longer slides over the tab bar while scrolling;
+  sticky header, keyword column and menu stay opaque in translucent (glass)
+  themes; the editor menu no longer opens off-screen on phones.
+
 ## [0.12.0-beta.4] - 2026-11-26 (beta)
 
 ### Added
