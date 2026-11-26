@@ -58,6 +58,7 @@ import {
 import type { Localizer, StringKey } from "./localize";
 import { helpTip } from "./help-tip";
 import { editKeywordLook } from "./keyword-look";
+import { SENTENCE_STEP, ruleTokens } from "./rule-sentence";
 import { shared, tokens } from "./styles";
 import type {
   Acknowledge,
@@ -136,6 +137,8 @@ export class LaeutwerkRuleEditor extends LitElement {
   @state() private _notice?: string;
   /** Steps that are open; new rules are filled in step by step (guided). */
   @state() private _open = new Set<number>();
+  /** Header toggle: "Satz" shows the rule as a sentence instead of the pipeline columns. */
+  @state() private _sentence = false;
   @state() private _guided = false;
   @state() private _mode: SourceMode = "calendar";
   /** Persons with their phones (to show push targets by person). */
@@ -768,6 +771,18 @@ export class LaeutwerkRuleEditor extends LitElement {
             : nothing;
         })()}
         <span class="grow"></span>
+        <span class="seg" role="group">
+          ${([false, true] as const).map(
+            (sentence) =>
+              html`<button
+                class="segbtn"
+                aria-pressed=${this._sentence === sentence}
+                @click=${() => (this._sentence = sentence)}
+              >
+                ${l.t(sentence ? "view_sentence" : "view_pipeline")}
+              </button>`,
+          )}
+        </span>
         <button
           class="iconbtn"
           aria-label=${l.t("undo")}
@@ -853,7 +868,8 @@ export class LaeutwerkRuleEditor extends LitElement {
       ${this._notice ? html`<div class="hint">${this._notice}</div>` : nothing} ${this._draftBox()}
       ${this._testMsg ? html`<div class="hint ${this._testMsg.error ? "error" : ""}">${this._testMsg.text}</div>` : nothing}
       ${this._messages()} ${this._yamlOpen ? this._yamlView() : nothing}
-      <div class="cols" ?hidden=${this._yamlOpen}>
+      ${this._sentence && !this._yamlOpen ? this._sentenceView() : nothing}
+      <div class="cols" ?hidden=${this._yamlOpen || this._sentence}>
         <div class="col">
           ${this._colHead(1, "col_source", "col_source_help")} ${this._stepCalendar()}
           ${this._custom ? nothing : this._stepEvents()}
@@ -872,6 +888,34 @@ export class LaeutwerkRuleEditor extends LitElement {
         </div>
       </div>
     </div>`;
+  }
+
+  private _sentenceView(): TemplateResult {
+    const l = this._l;
+    const names = (id: string) =>
+      (this.hass?.states[id]?.attributes.friendly_name as string | undefined) ?? id;
+    return html`<section class="panel sentence">
+      <div class="hint">${l.t("sentence_hint")}</div>
+      <p class="sent">
+        ${ruleTokens(this._forSaving(this._rule), l, names).map((t) =>
+          t.key
+            ? html`<button class="spc" @click=${() => void this._jump(SENTENCE_STEP[t.key!])}>
+                ${t.text}
+              </button>`
+            : t.text,
+        )}
+      </p>
+    </section>`;
+  }
+
+  /** Back to the pipeline, with the group of a sentence piece open and in view. */
+  private async _jump(step: number): Promise<void> {
+    this._sentence = false;
+    this._open = new Set([...this._open, step]);
+    await this.updateComplete;
+    this.renderRoot
+      .querySelector(`section[data-step="${step}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   private async _testSignals(signals: Signal[]): Promise<void> {
@@ -2621,6 +2665,37 @@ export class LaeutwerkRuleEditor extends LitElement {
     tokens,
     shared,
     css`
+      .seg {
+        display: inline-flex;
+        border-radius: 999px;
+        background: var(--lw-surface);
+        padding: 2px;
+      }
+      .segbtn {
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: transparent;
+      }
+      .segbtn[aria-pressed="true"] {
+        background: var(--lw-accent);
+        color: var(--lw-on-accent, var(--text-primary-color, #fff));
+      }
+      .sent {
+        line-height: 2.4;
+        margin: 0;
+        font-size: 16px;
+      }
+      .spc {
+        display: inline;
+        min-height: 36px;
+        padding: 4px 10px;
+        margin: 0 1px;
+        border-radius: 999px;
+        background: var(--lw-surface-2);
+        color: inherit;
+        font: inherit;
+      }
       /* Pipeline layout (panel): sticky header + 3 columns, container-query responsive. */
       :host([layout="pipeline"]) {
         display: block;

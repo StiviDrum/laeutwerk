@@ -26,6 +26,7 @@ import {
 import "./laeutwerk-card";
 import { LaeutwerkHistory } from "./panel-history";
 import { LaeutwerkOverview } from "./panel-overview";
+import { LaeutwerkWeek } from "./panel-week";
 import { applyRuleEvent } from "./rule-events";
 import { shared, tokens } from "./styles";
 import type { HomeAssistant, Rule, RuleEvent } from "./types";
@@ -34,6 +35,7 @@ import { CARD_VERSION } from "./version";
 
 const TAB_KEYS: Record<PanelTab, StringKey> = {
   overview: "tab_overview",
+  week: "tab_week",
   rules: "tab_rules",
   history: "tab_history",
   health: "tab_health",
@@ -131,7 +133,11 @@ export class LaeutwerkPanel extends LitElement {
         this._editing = undefined;
         this._picking = true;
       }
-    } else this._newPath = undefined;
+    } else if (this._newPath !== undefined) {
+      // Left "/rules/new" by navigation: close the chooser it opened.
+      this._newPath = undefined;
+      this._picking = false;
+    }
     if (
       tab === "rules" &&
       ruleId &&
@@ -424,7 +430,9 @@ export class LaeutwerkPanel extends LitElement {
               ? this._renderHealth()
               : tab === "history"
                 ? this._renderHistory()
-                : this._renderOverview()
+                : tab === "week"
+                  ? this._renderWeek()
+                  : this._renderOverview()
         }
       </main>
       ${
@@ -456,6 +464,16 @@ export class LaeutwerkPanel extends LitElement {
       .rules=${this._rules}
       @navigate=${(e: CustomEvent<PanelTab>) => this._go(e.detail)}
     ></laeutwerk-overview>`;
+  }
+
+  private _renderWeek(): TemplateResult {
+    if (!this.hass || !this._rules) return html`<div class="message">${this._l.t("loading")}</div>`;
+    return html`<laeutwerk-week
+      .hass=${this.hass}
+      .localize=${this._l}
+      .rules=${this._rules}
+      @open-rule=${(e: CustomEvent<string>) => this._go("rules", e.detail)}
+    ></laeutwerk-week>`;
   }
 
   private _renderHistory(): TemplateResult {
@@ -622,16 +640,20 @@ export class LaeutwerkPanel extends LitElement {
     if (!this._editorsReady) return html`<div class="message">${l.t("loading")}</div>`;
     if (this._tool) return this._renderTool();
     if (this._picking) {
-      return html`<laeutwerk-template-picker
+      return html`<laeutwerk-new-rule
         .hass=${this.hass}
         .localize=${l}
-        @pick=${(e: CustomEvent<{ rule: Rule }>) => {
+        @pick=${(e: CustomEvent<Rule>) => {
           this._picking = false;
-          this._editing = { key: `new:${Date.now()}`, rule: e.detail.rule };
+          this._editing = { key: `new:${Date.now()}`, rule: e.detail };
+        }}
+        @created=${(e: CustomEvent<Rule>) => {
+          this._picking = false;
+          this._go("rules", e.detail.id ?? "");
         }}
         @imported=${() => (this._picking = false)}
         @cancel=${() => (this._picking = false)}
-      ></laeutwerk-template-picker>`;
+      ></laeutwerk-new-rule>`;
     }
     if (!this._editing) return html`<div class="message">${l.t("panel_pick")}</div>`;
     return html`<laeutwerk-rule-editor
@@ -957,5 +979,6 @@ defineElements([
   ["laeutwerk-panel", LaeutwerkPanel],
   ["laeutwerk-overview", LaeutwerkOverview],
   ["laeutwerk-history", LaeutwerkHistory],
+  ["laeutwerk-week", LaeutwerkWeek],
 ]);
 console.info(`%c LÄUTWERK-PANEL %c ${CARD_VERSION} `, "background:#222;color:#fff", "");

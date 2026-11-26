@@ -227,6 +227,8 @@ export interface RuleTemplate {
   description: string;
   builtin: boolean;
   rule: Partial<Rule>;
+  /** Entities the user must pick before the template is usable. */
+  needs?: { path: string; domain: string; label: string; same_as?: string }[];
 }
 
 export interface RuleEvent {

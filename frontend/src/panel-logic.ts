@@ -1,9 +1,9 @@
 /** Pure helpers of the panel: URL state and rule list filtering. */
 import type { Rule } from "./types";
 
-export type PanelTab = "overview" | "rules" | "history" | "health";
+export type PanelTab = "overview" | "week" | "rules" | "history" | "health";
 /** Tab ids in display order; later stages append (week). */
-export const PANEL_TABS: PanelTab[] = ["overview", "rules", "history", "health"];
+export const PANEL_TABS: PanelTab[] = ["overview", "week", "rules", "history", "health"];
 
 export interface PanelRoute {
   tab: PanelTab;
@@ -23,6 +23,7 @@ export function parsePanelPath(path: string | undefined): PanelRoute {
     }
     return { tab: "rules", ruleId: id };
   }
+  if (parts[0] === "week") return { tab: "week", ruleId: "" };
   if (parts[0] === "history") return { tab: "history", ruleId: "" };
   if (parts[0] === "health") return { tab: "health", ruleId: "" };
   return { tab: "overview", ruleId: "" };
@@ -30,6 +31,7 @@ export function parsePanelPath(path: string | undefined): PanelRoute {
 
 export function panelPath(tab: PanelTab, ruleId = ""): string {
   if (tab === "rules") return ruleId ? `/rules/${encodeURIComponent(ruleId)}` : "/rules";
+  if (tab === "week") return "/week";
   if (tab === "history") return "/history";
   if (tab === "health") return "/health";
   return "/overview";

@@ -655,9 +655,14 @@ export function ruleFromTemplate(template: { rule: Partial<Rule> }): Rule {
   };
 }
 
+/** Trigger rule: has start triggers, or an empty list while no calendar/interval is set. */
+export const isTriggerRule = (rule: Rule): boolean =>
+  !!rule.start_triggers &&
+  (rule.start_triggers.length > 0 || (!rule.sources.length && !rule.interval));
+
 /** Whether a rule can be saved (name, a time, and a source or an interval). */
 export function ruleComplete(rule: Rule): boolean {
-  if (rule.start_triggers) return !!(rule.name.trim() && rule.start_triggers.length);
+  if (isTriggerRule(rule)) return !!(rule.name.trim() && rule.start_triggers?.length);
   return !!(rule.name.trim() && rule.reminders.length && (rule.sources.length || rule.interval));
 }
 
@@ -744,7 +749,7 @@ export function stepSummary(
       return parts.join(" · ");
     }
     case 3: {
-      if (rule.start_triggers) {
+      if (isTriggerRule(rule)) {
         const rp = rule.repeat;
         if (rp === "none") return l.t("repeat_once");
         return (
@@ -783,7 +788,7 @@ export function stepSummary(
             ? `${l.t("expire_event_day")} ${day[1]}`
             : expire;
       return [
-        rule.bundle && !rule.start_triggers ? l.t("sum_bundled") : "",
+        rule.bundle && !isTriggerRule(rule) ? l.t("sum_bundled") : "",
         `${l.t("expire")}: ${exp}`,
       ]
         .filter(Boolean)
@@ -811,8 +816,8 @@ export interface Problem {
 export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
   const problems: Problem[] = [];
   if (!rule.name.trim()) problems.push({ step: 1, text: l.t("err_name") });
-  if (rule.start_triggers) {
-    if (!rule.start_triggers.length) problems.push({ step: 1, text: l.t("err_trigger") });
+  if (isTriggerRule(rule)) {
+    if (!rule.start_triggers?.length) problems.push({ step: 1, text: l.t("err_trigger") });
   } else if (!rule.sources.length && !rule.interval) {
     problems.push({ step: 1, text: l.t("err_source") });
   }
@@ -823,7 +828,7 @@ export function ruleProblems(rule: Rule, l: Localizer): Problem[] {
   if (names.some((n) => !n) || new Set(names).size !== names.length) {
     problems.push({ step: 2, text: l.t("err_columns") });
   }
-  if (!rule.reminders.length && !rule.start_triggers) {
+  if (!rule.reminders.length && !isTriggerRule(rule)) {
     problems.push({ step: 3, text: l.t("err_time") });
   }
   rule.signals.forEach((s) => {

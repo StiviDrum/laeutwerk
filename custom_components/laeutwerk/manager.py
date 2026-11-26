@@ -517,7 +517,7 @@ class LaeutwerkManager:
         builtin = [
             {**t, "builtin": True} for t in builtin_templates(self.hass.config.language)
         ]
-        return builtin + [{**t, "builtin": False} for t in self.templates]
+        return builtin + [{"needs": [], **t, "builtin": False} for t in self.templates]
 
     def save_template(
         self, name: str, rule: dict[str, Any], description: str = ""

@@ -673,16 +673,24 @@ async def main() -> None:
                     "(async () => { "
                     + OPEN
                     + " await go('/laeutwerk/rules/new', 3000);"
+                    " const nr = window.__find(p.shadowRoot, 'laeutwerk-new-rule');"
+                    " if (nr) { nr.shadowRoot.querySelectorAll('button.tile')[1].click();"
+                    "  await new Promise(r => setTimeout(r, 500)); }"
                     " let pk; for (let i = 0; i < 40 && !pk; i++) {"
                     "  pk = window.__find(p.shadowRoot, 'laeutwerk-template-picker');"
                     "  if (!pk) await new Promise(r => setTimeout(r, 200)); }"
                     " if (!pk) return 'no picker';"
                     " await new Promise(r => setTimeout(r, 1000));"
-                    " return [...pk.shadowRoot.querySelectorAll('.tpl .name')].map(n => n.textContent) })()"
+                    " const names = [...pk.shadowRoot.querySelectorAll('.tpl .name')].map(n => n.textContent);"
+                    " const muell = [...pk.shadowRoot.querySelectorAll('button.tpl')]"
+                    "  .find(b => b.textContent.includes('Müll'));"
+                    " if (muell) { muell.click(); await new Promise(r => setTimeout(r, 1500)); }"
+                    " const asks = pk.shadowRoot.querySelectorAll('laeutwerk-field, ha-selector, ha-entity-picker').length;"
+                    " return [...names, 'needs:' + asks] })()"
                 )
                 print("templates:", templates)
                 await cdp.shot("templates", full=False)
-                if not isinstance(templates, list) or not templates:
+                if not isinstance(templates, list) or templates[-1] == "needs:0":
                     raise SystemExit(f"template picker empty: {templates}")
                 # (d) History tab lists events; acknowledge the check reminder first.
                 hist = await cdp.js(
@@ -787,6 +795,51 @@ async def main() -> None:
                 ) or '"missing":true' not in str(health):
                     raise SystemExit("health check or live preview of passes missing")
                 await cdp.shot("panel_health_rule", full=False)
+                # Stage 4: chooser + assistant, templates with needs, sentence
+                # view, week tab.
+                st4 = await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const go = async (u, ms) => { history.pushState(null, '', u);"
+                    "  window.dispatchEvent(new CustomEvent('location-changed'));"
+                    "  await new Promise(r => setTimeout(r, ms)); };"
+                    " const txt = (n) => n ? n.shadowRoot.textContent.replace(/\\s+/g, ' ') : '';"
+                    " const out = {};"
+                    " await go('/laeutwerk/rules/new', 4000);"
+                    " const nr = window.__find(p.shadowRoot, 'laeutwerk-new-rule');"
+                    " out.chooser = nr ? [...nr.shadowRoot.querySelectorAll('button.tile')].length : 0;"
+                    " if (nr) { nr.shadowRoot.querySelector('button.tile').click();"
+                    "  await new Promise(r => setTimeout(r, 1500));"
+                    "  const t = txt(nr); const i = t.indexOf('So würde');"
+                    "  out.wizard = i >= 0 ? t.slice(i, i + 160) : 'no sentence';"
+                    "  out.pickers = nr.shadowRoot.querySelectorAll('laeutwerk-field').length; }"
+                    " await go('/laeutwerk/week', 6000);"
+                    " const wk = window.__find(p.shadowRoot, 'laeutwerk-week');"
+                    " out.week = txt(wk).slice(0, 200);"
+                    " out.weekItems = wk ? wk.shadowRoot.querySelectorAll('.day button, .day .item, .item').length : 0;"
+                    " out.hscroll = document.documentElement.scrollWidth > innerWidth + 1;"
+                    " await go('/laeutwerk/rules/muell', 4000);"
+                    " const ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
+                    " out.path = location.pathname; out.editor = !!ed;"
+                    " if (!ed) return JSON.stringify(out);"
+                    " const btn = [...ed.shadowRoot.querySelectorAll('button')].find(b => /^(Satz|Sentence)$/.test(b.textContent.trim()));"
+                    " if (btn) { btn.click(); await new Promise(r => setTimeout(r, 800));"
+                    "  const s = ed.shadowRoot.querySelector('.sentence');"
+                    "  out.sentence = s ? s.textContent.replace(/\\s+/g, ' ').slice(0, 300) : 'none';"
+                    "  out.pieces = s ? s.querySelectorAll('button').length : 0; }"
+                    " return JSON.stringify(out) })()"
+                )
+                print("stage 4:", st4)
+                await cdp.shot("panel_sentence", full=False)
+                st4j = json.loads(st4)
+                if not (
+                    st4j.get("weekItems") and st4j.get("pieces") and st4j.get("editor")
+                ):
+                    raise SystemExit(
+                        f"stage 4: week empty or sentence without pieces: {st4}"
+                    )
+                for k in ('"chooser":4', "So würde", '"hscroll":false'):
+                    if k not in str(st4):
+                        raise SystemExit(f"stage 4 check failed: {k}")
                 await cdp.js(
                     "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
                     " for (const id of ['chk_hist', 'hc_test', 'rt_service'])"

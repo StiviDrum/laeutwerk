@@ -14,6 +14,7 @@ from custom_components.laeutwerk.schema import validate_rule
 from custom_components.laeutwerk.templates import (
     builtin_templates,
     export_yaml,
+    fill_needs,
     parse_rules_yaml,
 )
 
@@ -39,18 +40,27 @@ async def manager(hass: HomeAssistant) -> LaeutwerkManager:
 def test_builtin_templates_are_valid_rules(language: str) -> None:
     templates = builtin_templates(language)
     assert [t["id"] for t in templates] == [
-        "builtin_muell",
-        "builtin_geburtstag",
-        "builtin_wartung",
-        "builtin_medikamente",
+        f"builtin_{name}"
+        for name in (
+            "muell",
+            "waesche",
+            "medikament",
+            "fenster",
+            "tuer",
+            "geburtstag",
+            "filter",
+        )
     ]
     for template in templates:
-        rule = {**template["rule"], "id": "x"}
-        if not rule.get("interval"):
-            rule["sources"] = ["calendar.x"]
+        values = {need["path"]: f"{need['domain']}.dummy" for need in template["needs"]}
+        rule = {**fill_needs(template["rule"], template["needs"], values), "id": "x"}
         validate_rule(rule)
+        assert not any(n["path"] == n.get("same_as") for n in template["needs"])
     assert builtin_templates("de")[0]["name"] == "Müll rausstellen"
     assert builtin_templates("en-GB")[0]["name"] == "Put out the bins"
+    assert builtin_templates("de")[3]["needs"][1]["same_as"] == (
+        "/start_triggers/0/entity_id"
+    )
 
 
 def test_yaml_round_trip() -> None:
@@ -110,7 +120,7 @@ async def test_own_templates(hass: HomeAssistant, manager: LaeutwerkManager) -> 
     assert "sources" not in template["rule"]
     assert "id" not in template["rule"]
     listed = manager.list_templates()
-    assert [t["builtin"] for t in listed] == [True] * 4 + [False]
+    assert [t["builtin"] for t in listed] == [True] * 7 + [False]
     assert listed[-1]["rule"]["filter"]["keywords"]["columns"] == [
         "tonne",
         "farbe",
@@ -121,7 +131,7 @@ async def test_own_templates(hass: HomeAssistant, manager: LaeutwerkManager) -> 
     with pytest.raises(vol.Invalid):
         manager.save_template("kaputt", {"name": "x", "reminders": []})
     manager.delete_template("user_meine_tonnen")
-    assert len(manager.list_templates()) == 4
+    assert len(manager.list_templates()) == 7
 
 
 async def test_websocket(
@@ -141,12 +151,13 @@ async def test_websocket(
         return await ws.receive_json()
 
     listed = await send("templates/list")
-    assert len(listed["result"]["templates"]) == 4
+    assert len(listed["result"]["templates"]) == 7
+    assert all("needs" in t for t in listed["result"]["templates"])
     saved = await send("templates/save", name="Tonnen", rule_id="muell")
     assert saved["result"]["id"] == "user_tonnen"
     unsaved = await send("templates/save", name="Neu", rule=kult61_rule())
     assert unsaved["success"]
-    assert len((await send("templates/list"))["result"]["templates"]) == 6
+    assert len((await send("templates/list"))["result"]["templates"]) == 9
     assert (await send("templates/delete", template_id="user_neu"))["success"]
     assert (await send("templates/delete", template_id="nope"))["error"]["code"] == (
         "home_assistant_error"

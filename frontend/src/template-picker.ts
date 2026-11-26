@@ -4,7 +4,8 @@
  */
 import { LitElement, css, html, nothing, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { emptyRule, ruleFromTemplate } from "./format";
+import { ruleFromTemplate } from "./format";
+import { applyNeeds, askedNeeds, type TemplateNeed } from "./rule-build";
 import type { Localizer } from "./localize";
 import { shared, tokens } from "./styles";
 import type { HomeAssistant, Rule, RuleTemplate } from "./types";
@@ -17,9 +18,13 @@ function errorText(err: unknown): string {
 export class LaeutwerkTemplatePicker extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public localize!: Localizer;
+  /** "templates" = built-in and own templates, "import" = paste YAML. */
+  @property() public mode: "templates" | "import" = "templates";
   @state() private _templates?: RuleTemplate[];
+  /** Template waiting for the entities it needs. */
+  @state() private _asking?: { rule: Rule; needs: TemplateNeed[] };
+  @state() private _answers: Record<string, string> = {};
   @state() private _error?: string;
-  @state() private _import = false;
   @state() private _yaml = "";
   @state() private _busy = false;
 
@@ -39,6 +44,14 @@ export class LaeutwerkTemplatePicker extends LitElement {
       this._templates = [];
       this._error = errorText(err);
     }
+  }
+
+  private _choose(t: RuleTemplate): void {
+    const needs: TemplateNeed[] = t.needs ?? [];
+    const rule = ruleFromTemplate(t);
+    if (!askedNeeds(needs).length) return this._pick(applyNeeds(rule, needs, {}));
+    this._answers = {};
+    this._asking = { rule, needs };
   }
 
   private _pick(rule: Rule): void {
@@ -69,26 +82,82 @@ export class LaeutwerkTemplatePicker extends LitElement {
     }
   }
 
-  protected render(): TemplateResult {
+  private _renderNeeds(): TemplateResult {
+    const l = this.localize;
+    const { rule, needs } = this._asking!;
+    const asked = askedNeeds(needs);
+    return html`<div class="page">
+      <div class="separator">${l.t("tpl_needs_title")}<span class="line"></span></div>
+      <div class="hint">${l.t("tpl_needs_hint")}</div>
+      ${asked.map(
+        (n) =>
+          html`<laeutwerk-field
+            .hass=${this.hass}
+            .localize=${l}
+            .label=${n.label}
+            .selector=${{ entity: { domain: n.domain } }}
+            .value=${this._answers[n.path] ?? ""}
+            @value-changed=${(e: CustomEvent<{ value: unknown }>) =>
+              (this._answers = { ...this._answers, [n.path]: String(e.detail.value ?? "") })}
+          ></laeutwerk-field>`,
+      )}
+      <div class="actions">
+        <button class="pill outline" @click=${() => (this._asking = undefined)}>
+          ${l.t("back")}
+        </button>
+        <button
+          class="pill primary"
+          ?disabled=${asked.some((n) => !this._answers[n.path])}
+          @click=${() => this._pick(applyNeeds(rule, needs, this._answers))}
+        >
+          ${l.t("tpl_continue")}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  private _renderImport(): TemplateResult {
     const l = this.localize;
     return html`<div class="page">
-      <div class="separator">${l.t("templates_title")}<span class="line"></span></div>
+      <div class="separator">${l.t("import_yaml")}<span class="line"></span></div>
+      <div class="hint">${l.t("import_hint")}</div>
+      <textarea
+        class="yaml"
+        spellcheck="false"
+        .value=${this._yaml}
+        @input=${(e: Event) => (this._yaml = (e.target as HTMLTextAreaElement).value)}
+      ></textarea>
+      ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+      <div class="actions">
+        <button class="pill outline" @click=${() => this.dispatchEvent(new CustomEvent("cancel"))}>
+          ${l.t("back")}
+        </button>
+        <button
+          class="pill primary"
+          ?disabled=${this._busy || !this._yaml.trim()}
+          @click=${this._doImport}
+        >
+          ${l.t("import_button")}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  protected render(): TemplateResult {
+    const l = this.localize;
+    if (this.mode === "import") return this._renderImport();
+    if (this._asking) return this._renderNeeds();
+    return html`<div class="page">
+      <div class="separator">${l.t("new_template")}<span class="line"></span></div>
       <div class="hint">${l.t("templates_hint")}</div>
       <div class="list">
-        <button class="tpl" @click=${() => this._pick(emptyRule())}>
-          <span class="icon small"><ha-icon icon="mdi:plus"></ha-icon></span>
-          <span class="grow text">
-            <span class="name">${l.t("template_empty")}</span>
-            <span class="sub">${l.t("template_empty_hint")}</span>
-          </span>
-        </button>
         ${
           this._templates === undefined
             ? html`<div class="hint">${l.t("loading")}</div>`
             : this._templates.map(
                 (t) =>
                   html`<div class="row">
-                    <button class="tpl grow" @click=${() => this._pick(ruleFromTemplate(t))}>
+                    <button class="tpl grow" @click=${() => this._choose(t)}>
                       <span
                         class="icon small"
                         style=${
@@ -121,35 +190,10 @@ export class LaeutwerkTemplatePicker extends LitElement {
               )
         }
       </div>
-      ${
-        this._import
-          ? html`<div class="panel">
-              <div class="step">${l.t("import_yaml")}</div>
-              <div class="hint">${l.t("import_hint")}</div>
-              <textarea
-                class="yaml"
-                spellcheck="false"
-                .value=${this._yaml}
-                @input=${(e: Event) => (this._yaml = (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-              <button
-                class="pill primary"
-                ?disabled=${this._busy || !this._yaml.trim()}
-                @click=${this._doImport}
-              >
-                ${l.t("import_button")}
-              </button>
-            </div>`
-          : html`<div class="wrap">
-              <button class="chip dashed" @click=${() => (this._import = true)}>
-                <ha-icon icon="mdi:import"></ha-icon>${l.t("import_yaml")}
-              </button>
-            </div>`
-      }
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
       <div class="actions">
         <button class="pill outline" @click=${() => this.dispatchEvent(new CustomEvent("cancel"))}>
-          ${l.t("cancel")}
+          ${l.t("back")}
         </button>
       </div>
     </div>`;
