@@ -322,259 +322,53 @@ async def main() -> None:
                 )
                 print("acknowledge days ahead:", early)
                 await cdp.shot("overview")
-                # Open the editor for the first rule.
+                # Reminder for the snooze/history checks: a trigger rule that we
+                # start (service) – it shows up as an open reminder in the card.
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " c._editing = c._rules[0]; await c.updateComplete;"
-                    # 0.9.0: the editors are a lazily loaded chunk – wait for it.
-                    " for (let i = 0; i < 50 && !c.shadowRoot.querySelector("
-                    "  'laeutwerk-rule-editor'); i++) await new Promise(r => setTimeout(r, 100));"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " await e.updateComplete;"
-                    " e._open = new Set([1, 2, 3, 4, 5, 6, 7]); return true })()"
+                    " try { await c.hass.callWS({type: 'laeutwerk/rules/delete', rule_id: 'chk_hist'}); } catch (e) {}"
+                    " await c.hass.callService('laeutwerk', 'create_rule', {config: {id: 'chk_hist',"
+                    "  name: 'Check Verlauf', start_triggers: [{trigger: 'state', entity_id: 'input_boolean.lampe', to: 'on'}],"
+                    "  signals: [{id: 'push', type: 'notify', audience: 'all', title: 'T', message: 'M', send_on: 'first'}],"
+                    "  expire: '+32h'}});"
+                    " await new Promise(r => setTimeout(r, 2500));"
+                    " await c.hass.callService('laeutwerk', 'start', {rule: 'chk_hist'});"
+                    " await new Promise(r => setTimeout(r, 3000)); return true })()"
                 )
-                await asyncio.sleep(4)
-                await cdp.shot("editor")
-                # 0.9.2: only one step open – tapping a step header closes the rest.
-                accordion = await cdp.js(
+                # (a) The card has no rule editor and no template picker any more.
+                no_editor = await cdp.js(
+                    "(() => { const find = (root, sel, out = []) => {"
+                    "  root.querySelectorAll(sel).forEach(x => out.push(x));"
+                    "  root.querySelectorAll('*').forEach(x => x.shadowRoot && find(x.shadowRoot, sel, out));"
+                    "  return out; };"
+                    " return find(document, 'laeutwerk-rule-editor').length"
+                    "  + find(document, 'laeutwerk-template-picker').length })()"
+                )
+                print("card has no editor/picker:", no_editor == 0)
+                if no_editor:
+                    raise SystemExit("the card still contains a rule editor or picker")
+                # (c) "Später" opens the snooze menu with presets.
+                later = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const heads = e.shadowRoot.querySelectorAll('button.step.head');"
-                    " heads[4].click(); await e.updateComplete;"
-                    " heads[4].click(); await e.updateComplete;"
-                    " const open = [...e.shadowRoot.querySelectorAll('button.step.head')]"
-                    "  .filter(h => h.getAttribute('aria-expanded') === 'true').length;"
-                    " heads[4].scrollIntoView(); return open })()"
+                    " const b = [...c.shadowRoot.querySelectorAll('.actions button.pill.outline')][0];"
+                    " if (!b) return 'no open reminder / Später button';"
+                    " b.click(); await c.updateComplete; await new Promise(r => setTimeout(r, 600));"
+                    " const m = c.shadowRoot.querySelector('laeutwerk-snooze-menu');"
+                    " if (!m) return 'no snooze menu';"
+                    " await m.updateComplete;"
+                    " const n = m.shadowRoot.querySelectorAll('button.pill').length;"
+                    " m.scrollIntoView({block: 'center'});"
+                    " return 'presets:' + n })()"
                 )
-                print("steps open after tapping step 5:", accordion)
-                await cdp.shot("step5", full=False)
-                await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " e._open = new Set([1, 2, 3, 4, 5, 6, 7]); await e.updateComplete;"
-                    " return true })()"
-                )
-                # Keyword table close-up, a help tip and the suggestion list.
-                await cdp.js(
-                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const sec = e.shadowRoot.querySelectorAll('section')[1];"
-                    " sec.scrollIntoView(); return true })()"
-                )
-                await asyncio.sleep(1)
-                await cdp.shot("keywords")
-                tip = await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    # The tip in the keyword table header (0.8.1: must not be covered).
-                    " const t = e.shadowRoot.querySelector('.kwtable laeutwerk-help-tip')"
-                    "  || e.shadowRoot.querySelector('laeutwerk-help-tip');"
-                    " if (!t) return 'no help tip'; t.scrollIntoView({block: 'center'});"
-                    " await new Promise(r => setTimeout(r, 400));"
-                    " const b = t.shadowRoot.querySelector('button') || t;"
-                    " b.click(); await new Promise(r => setTimeout(r, 400));"
-                    # The bubble sits on <body>; it must be the topmost element.
-                    " const tip = window.__find(document, '[role=tooltip]');"
-                    " if (!tip) return 'no bubble';"
-                    " const r = tip.getBoundingClientRect();"
-                    " tip.style.pointerEvents = 'auto';"
-                    " const root = tip.getRootNode();"
-                    " const top = root.elementFromPoint(r.left + 20, r.top + r.height / 2);"
-                    " tip.style.pointerEvents = 'none';"
-                    " return (top === tip ? 'on top: ' : 'COVERED: ') + tip.textContent.slice(0, 60) })()"
-                )
-                print("help tip:", tip)
-                # 0.10.0: HA's card editor is a modal <dialog> (browser top layer).
-                # A help tip inside such a dialog must still be on top.
-                modal = await cdp.js(
-                    "(async () => { const d = document.createElement('dialog');"
-                    " d.style.cssText = 'width:300px;height:200px';"
-                    " const tip = document.createElement('laeutwerk-help-tip');"
-                    " tip.text = 'Hilfe im Dialog'; d.appendChild(tip);"
-                    " document.body.appendChild(d); d.showModal();"
-                    " await tip.updateComplete; await new Promise(r => setTimeout(r, 200));"
-                    " (tip.shadowRoot.querySelector('button') || tip).click();"
-                    " await new Promise(r => setTimeout(r, 300));"
-                    " const b = [...(document.querySelector('home-assistant')?.shadowRoot || document).querySelectorAll('[role=tooltip]')]"
-                    "  .find(x => x.textContent.includes('Hilfe im Dialog'));"
-                    " if (!b) { window.__modal = d; return 'no bubble'; }"
-                    # A modal makes the rest of the page inert, so hit-testing can't
-                    # see the bubble; what counts is that it is open in the top layer.
-                    " const ok = b.matches(':popover-open');"
-                    " window.__modal = d; return ok ? 'in top layer (above modal)' : 'NOT in top layer' })()"
-                )
-                print("help tip in modal dialog:", modal)
-                await cdp.shot("modal_tip", full=False)
-                await cdp.js(
-                    "(() => { const d = window.__modal; if (d) { d.close(); d.remove(); }"
-                    " return true })()"
-                )
-                await cdp.shot("helptip", full=False)
-                await cdp.js(
-                    "(() => { document.body.dispatchEvent(new PointerEvent('pointerdown',"
-                    " {bubbles: true, composed: true})); document.body.click(); return true })()"
-                )
-                # Headline previews (0.8.1): one under each field.
-                previews = await cdp.js(
-                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const sec = e.shadowRoot.querySelectorAll('section')[5];"
-                    " return [...sec.querySelectorAll('.preview, .muted')]"
-                    "  .map(x => x.textContent.trim().replace(/\\s+/g, ' ')) })()"
-                )
-                print("headline previews:", previews)
-                suggest = await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const s = [...e.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
-                    "  .find(x => x.shadowRoot.querySelector('input,textarea'));"
-                    " if (!s) return 'no suggest field'; s.scrollIntoView({block: 'center'});"
-                    " const i = s.shadowRoot.querySelector('input,textarea'); i.focus();"
-                    " i.value = '{w'; i.setSelectionRange(2, 2);"
-                    " i.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
-                    " await new Promise(r => setTimeout(r, 500));"
-                    " const root = s.shadowRoot; const items = [...root.querySelectorAll('li, .item, [role=option]')];"
-                    " return items.map(x => x.textContent.trim()) })()"
-                )
-                print("suggestions for '{w':", suggest)
-                await cdp.shot("suggest")
-                await cdp.js(
-                    "(() => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const s = [...e.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
-                    "  .find(x => x.shadowRoot.querySelector('input,textarea'));"
-                    " if (s) { const i = s.shadowRoot.querySelector('input,textarea');"
-                    "  i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); i.blur(); }"
-                    " return true })()"
-                )
-                # Own colour picker (0.7.6): open it from the rule colour,
-                # tap the wheel, check the value, then cancel.
-                picked = await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const f = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
-                    "  .find(x => x.selector && x.selector.color_rgb);"
-                    " f.scrollIntoView();"
-                    " f.shadowRoot.querySelector('.colorbtn, .pick').click();"
-                    " await new Promise(r => setTimeout(r, 500));"
-                    " const p = window.__find(document, 'laeutwerk-color-popup');"
-                    " if (!p) return 'no popup';"
-                    " const w = p.shadowRoot.querySelector('.wheel').getBoundingClientRect();"
-                    " const opts = {bubbles: true, pointerId: 1, clientX: w.right - 4,"
-                    "  clientY: w.top + w.height / 2};"
-                    " p.shadowRoot.querySelector('.wheel').dispatchEvent(new PointerEvent('pointerdown', opts));"
-                    " await p.updateComplete; return p._hex })()"
-                )
-                print("colour picker, right edge of the wheel:", picked)
-                await cdp.shot("colorpicker")
-                await cdp.js(
-                    "(() => { const p = window.__find(document, 'laeutwerk-color-popup');"
-                    " p.shadowRoot.querySelector('.pill.outline').click(); return true })()"
-                )
-                # Keyword table cell: the popup must not be clipped by the table.
+                print("later -> snooze menu:", later)
+                await cdp.shot("snooze_menu", full=False)
+                if not later.startswith("presets:") or int(later.split(":")[1]) < 2:
+                    raise SystemExit(f"snooze menu check failed: {later}")
                 await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    # 0.8.0: tap the keyword's round icon -> icon + colour popup.
-                    " const b = e.shadowRoot.querySelector('.kwrow:not(.head) .lookbtn');"
-                    " if (!b) return false; b.scrollIntoView({block: 'center'}); b.click();"
-                    " await new Promise(r => setTimeout(r, 800)); return true })()"
+                    " c._laterFor = undefined; await c.updateComplete; return true })()"
                 )
-                await asyncio.sleep(1)
-                await cdp.shot("keyword_look")
-                await cdp.js(
-                    "(async () => { const k = window.__find(document, 'laeutwerk-keyword-look');"
-                    " if (!k) return false;"
-                    " const f = k.shadowRoot.querySelectorAll('laeutwerk-field')[1];"
-                    " f.shadowRoot.querySelector('.colorbtn, .pick').click(); return true })()"
-                )
-                await asyncio.sleep(1)
-                await cdp.shot("colorpicker_keyword")
-                await cdp.js(
-                    "(() => { const p = window.__find(document, 'laeutwerk-color-popup');"
-                    " if (p) p.shadowRoot.querySelector('.pill.outline').click();"
-                    " const k = window.__find(document, 'laeutwerk-keyword-look');"
-                    " if (k) k.shadowRoot.querySelector('.pill.outline').click(); return true })()"
-                )
-                # Open the second signal (opportunity trigger) in the signal editor.
-                await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " const r = c._rules[0];"
-                    " e._signal = { index: 0, signal: JSON.parse(JSON.stringify("
-                    "   Object.assign({}, r.signals[0], {when: {opportunity: [{trigger: 'state',"
-                    "   entity_id: 'light.stehleuchte', to: 'on'}], manual_only: true},"
-                    "   conditions: [{condition: 'state', entity_id: 'input_boolean.steven_home', state: 'on'}]})))};"
-                    " await e.updateComplete;"
-                    # Sections are collapsible (0.7.5): open the ones with HA editors.
-                    " const se = window.__find(document, 'laeutwerk-signal-editor');"
-                    " se._openSec = new Set(['when', 'only_if', 'what', 'texts']);"
-                    " await se.updateComplete; return true })()"
-                )
-                await asyncio.sleep(5)
-                info = await cdp.js(
-                    "(() => { const c = window.__find(document, 'laeutwerk-signal-editor');"
-                    " const fields = [...c.shadowRoot.querySelectorAll('laeutwerk-field')];"
-                    " return fields.map(f => f.shadowRoot.querySelector('ha-selector') ? 'ha-selector' :"
-                    " (f.shadowRoot.querySelector('textarea,input') ? 'fallback' : 'empty')) })()"
-                )
-                print("signal editor fields:", info)
-                await cdp.shot("signal")
-                # Regression (0.6.1): edits must survive Home Assistant state
-                # changes (the card re-renders the editor on every hass update).
-                await cdp.js(
-                    "(() => { const se = window.__find(document, 'laeutwerk-signal-editor');"
-                    # Texts sit in suggestion fields (0.8.0); fall back to a plain textarea.
-                    " const sf = [...se.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
-                    "  .find(x => x.multiline);"
-                    " const ta = sf ? sf.shadowRoot.querySelector('textarea')"
-                    "  : se.shadowRoot.querySelector('textarea');"
-                    " ta.value = 'EDIT SURVIVES';"
-                    " ta.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
-                    " return true })()"
-                )
-                for value in range(3):
-                    async with session.post(
-                        f"{HA}/api/states/sensor.laeutwerk_check",
-                        json={"state": str(value)},
-                        headers={"Authorization": f"Bearer {tok['access_token']}"},
-                    ):
-                        pass
-                    await asyncio.sleep(1)
-                kept = await cdp.js(
-                    "(() => { const se = window.__find(document, 'laeutwerk-signal-editor');"
-                    " return se._sig.message })()"
-                )
-                print("edit kept after state changes:", kept == "EDIT SURVIVES")
-                if kept != "EDIT SURVIVES":
-                    raise SystemExit("edits were reset by state changes")
-                # Template picker (new rule) and the "advanced" step.
-                templates = await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " c._editing = undefined; c._picking = true; await c.updateComplete;"
-                    " await new Promise(r => setTimeout(r, 1500));"
-                    " const p = c.shadowRoot.querySelector('laeutwerk-template-picker');"
-                    " return [...p.shadowRoot.querySelectorAll('.tpl .name')].map(n => n.textContent) })()"
-                )
-                print("templates:", templates)
-                await cdp.shot("templates")
-                advanced = await cdp.js(
-                    "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " c._picking = false; c._editing = Object.assign({}, c._rules[0], {"
-                    "  escalation: [{after: '2h'}], assignee: {persons: [], rotation: 'fixed'}});"
-                    " await c.updateComplete; await new Promise(r => setTimeout(r, 2500));"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " e._open = new Set([7]); await e.updateComplete;"
-                    " await new Promise(r => setTimeout(r, 1500));"
-                    " const sec = e.shadowRoot.querySelectorAll('section')[6];"
-                    " sec.scrollIntoView();"
-                    " return [...sec.querySelectorAll('laeutwerk-field')].map(f =>"
-                    "  f.shadowRoot.querySelector('ha-selector') ? 'ha-selector' : 'fallback') })()"
-                )
-                print("advanced step fields:", advanced)
-                await cdp.shot("advanced")
-                # Compact card (0.10.1): its dialog must get Home Assistant's
-                # context, else pickers and the trigger editor stay empty.
+                # Compact card: dialog lists every rule with a switch, no editor inside.
                 compact = await cdp.js(
                     "(async () => { const find = (root, sel, out = []) => {"
                     "  root.querySelectorAll(sel).forEach(x => out.push(x));"
@@ -585,28 +379,12 @@ async def main() -> None:
                     " await card._openDialog(); await new Promise(r => setTimeout(r, 800));"
                     " const d = find(document, 'laeutwerk-task-dialog')[0];"
                     " if (!d) return 'no dialog';"
-                    # 0.11.1: every rule in the dialog has its on/off switch.
                     " await d.updateComplete;"
                     " const switches = d.shadowRoot.querySelectorAll('[role=switch]').length;"
-                    " d._editing = JSON.parse(JSON.stringify(card._rules[0])); d._page = 'edit';"
-                    " await d.updateComplete; await new Promise(r => setTimeout(r, 1500));"
-                    " const e = d.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " e._open = new Set([1]); await e.updateComplete;"
-                    " await new Promise(r => setTimeout(r, 2500));"
-                    " const ent = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
-                    "  .find(f => f.selector && f.selector.entity);"
-                    " const picker = !!(ent && window.__find(ent.shadowRoot, 'ha-generic-picker'));"
-                    " e._setMode('trigger'); await e.updateComplete;"
-                    " await new Promise(r => setTimeout(r, 2500));"
-                    " const trg = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
-                    "  .find(f => f.selector && f.selector.trigger);"
-                    " const trigger = !!(trg && window.__find(trg.shadowRoot, 'ha-automation-trigger'));"
-                    # 0.11.2: HA's automation editor texts ("config" fragment) are loaded.
-                    " const texts = !!(trg && trg.hass.localize("
-                    "  'ui.panel.config.automation.editor.triggers.add'));"
-                    " return JSON.stringify({picker, trigger, texts, switches, rules: card._rules.length}) })()"
+                    " const editors = find(document, 'laeutwerk-rule-editor').length;"
+                    " return JSON.stringify({switches, editors, rules: card._rules.length}) })()"
                 )
-                print("compact dialog editor:", compact)
+                print("compact dialog:", compact)
                 await cdp.shot("compact_dialog", full=False)
                 await cdp.js(
                     "(() => { const find = (root, sel, out = []) => {"
@@ -617,25 +395,34 @@ async def main() -> None:
                     " return true })()"
                 )
                 info = json.loads(compact) if compact.startswith("{") else {}
-                if not info.get("texts"):
-                    raise SystemExit(
-                        "compact dialog: HA automation editor texts missing"
-                    )
+                if not info:
+                    raise SystemExit(f"compact dialog: {compact}")
                 if info.get("switches", 0) < info.get("rules", 1):
                     raise SystemExit("compact dialog: rule switches missing")
-                if '"picker":true' not in str(compact):
-                    raise SystemExit("compact dialog: source picker not rendered")
-                # Trigger source (0.9.0): step 1 in trigger mode, all steps open.
-                mode = await cdp.js(
+                if info.get("editors"):
+                    raise SystemExit("compact dialog: contains a rule editor")
+                # (b) Admin "Bearbeiten" / "Neue Regel" navigate into the panel.
+                nav = await cdp.js(
                     "(async () => { const c = window.__find(document, 'laeutwerk-card');"
-                    " const e = c.shadowRoot.querySelector('laeutwerk-rule-editor');"
-                    " e._setMode('trigger'); e._open = new Set([1, 2, 3, 4, 5, 6, 7]);"
-                    " await e.updateComplete; await new Promise(r => setTimeout(r, 2000));"
-                    " window.scrollTo(0, 0);"
-                    " return [e._mode, e._rule.expire] })()"
+                    " const out = {};"
+                    " const edit = c.shadowRoot.querySelector('.rulebtn');"
+                    " if (edit) { edit.click(); await new Promise(r => setTimeout(r, 400));"
+                    "  out.edit = location.pathname; history.back();"
+                    "  await new Promise(r => setTimeout(r, 800)); }"
+                    " const add = [...c.shadowRoot.querySelectorAll('button.chip')]"
+                    "  .find(b => b.querySelector('ha-icon[icon=\"mdi:plus\"]'));"
+                    " if (add) { add.click(); await new Promise(r => setTimeout(r, 400));"
+                    "  out.add = location.pathname; }"
+                    " return JSON.stringify(out) })()"
                 )
-                print("trigger mode:", mode)
-                await cdp.shot("trigger")
+                print("admin navigation:", nav)
+                nav_d = json.loads(nav)
+                if not str(nav_d.get("edit", "")).startswith("/laeutwerk/rules/") or (
+                    nav_d.get("add") != "/laeutwerk/rules/new"
+                ):
+                    raise SystemExit(
+                        f"admin actions do not navigate into the panel: {nav}"
+                    )
                 # Admin panel (UI rework): rule list, open a rule, browser back.
                 await cdp.call("Page.navigate", url=f"{HA}/laeutwerk/rules")
                 await asyncio.sleep(8)
@@ -664,8 +451,279 @@ async def main() -> None:
                     " return location.pathname })()"
                 )
                 print("panel after back:", back)
+                # Rule editor in the panel (pipeline layout): same checks as before.
+                OPEN = (
+                    "const p = window.__find(document, 'laeutwerk-panel');"
+                    " const go = async (path, ms = 3500) => {"
+                    "  history.pushState(null, '', path);"
+                    "  window.dispatchEvent(new CustomEvent('location-changed'));"
+                    "  await new Promise(r => setTimeout(r, ms)); };"
+                    " const getEd = async () => { let ed;"
+                    "  for (let i = 0; i < 60 && !ed; i++) {"
+                    "   ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
+                    "   if (!ed) await new Promise(r => setTimeout(r, 200)); }"
+                    "  if (ed) await ed.updateComplete; return ed; };"
+                )
+                first_rule = await cdp.js(
+                    "(() => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const r = p._rules.find(x => (x.signals || []).length >= 1 && x.sources"
+                    "  && x.filter && x.filter.keywords && x.filter.keywords.rows.length);"
+                    " return (r || p._rules[0]).id })()"
+                )
+                opened = await cdp.js(
+                    "(async () => { "
+                    + OPEN
+                    + f" await go('/laeutwerk/rules/{first_rule}', 4500);"
+                    " const ed = await getEd(); if (!ed) return 'no editor';"
+                    " ed._open = new Set([1, 2, 3, 4, 5, 6, 7]); await ed.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 2500));"
+                    " return ed.layout })()"
+                )
+                print("panel editor layout:", opened)
+                if opened != "pipeline":
+                    raise SystemExit(f"panel editor not found: {opened}")
+                await cdp.shot("editor", full=False)
+                # Keyword table, icons, help tip.
+                kw = await cdp.js(
+                    "(async () => { " + OPEN + " const ed = await getEd();"
+                    " const rows = ed.shadowRoot.querySelectorAll('.kwrow:not(.head)').length;"
+                    " const looks = ed.shadowRoot.querySelectorAll('.kwrow:not(.head) .lookbtn').length;"
+                    " const sec = ed.shadowRoot.querySelector('section[data-step=\"2\"]');"
+                    " if (sec) sec.scrollIntoView(); return JSON.stringify({rows, looks, sec: !!sec}) })()"
+                )
+                print("keyword table:", kw)
+                await asyncio.sleep(1)
+                await cdp.shot("keywords", full=False)
+                tip = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const t = e.shadowRoot.querySelector('.kwtable laeutwerk-help-tip')"
+                    "  || e.shadowRoot.querySelector('laeutwerk-help-tip');"
+                    " if (!t) return 'no help tip'; t.scrollIntoView({block: 'center'});"
+                    " await new Promise(r => setTimeout(r, 400));"
+                    " const b = t.shadowRoot.querySelector('button') || t;"
+                    " b.click(); await new Promise(r => setTimeout(r, 400));"
+                    " const tip = window.__find(document, '[role=tooltip]');"
+                    " if (!tip) return 'no bubble';"
+                    " const r = tip.getBoundingClientRect();"
+                    " tip.style.pointerEvents = 'auto';"
+                    " const root = tip.getRootNode();"
+                    " const top = root.elementFromPoint(r.left + 20, r.top + r.height / 2);"
+                    " tip.style.pointerEvents = 'none';"
+                    " return (top === tip ? 'on top: ' : 'COVERED: ') + tip.textContent.slice(0, 60) })()"
+                )
+                print("help tip:", tip)
+                await cdp.shot("helptip", full=False)
+                await cdp.js(
+                    "(() => { document.body.dispatchEvent(new PointerEvent('pointerdown',"
+                    " {bubbles: true, composed: true})); document.body.click(); return true })()"
+                )
+                # Modal dialog (HA card editor): a help tip inside must be in the top layer.
+                modal = await cdp.js(
+                    "(async () => { const d = document.createElement('dialog');"
+                    " d.style.cssText = 'width:300px;height:200px';"
+                    " const tip = document.createElement('laeutwerk-help-tip');"
+                    " tip.text = 'Hilfe im Dialog'; d.appendChild(tip);"
+                    " document.body.appendChild(d); d.showModal();"
+                    " await tip.updateComplete; await new Promise(r => setTimeout(r, 200));"
+                    " (tip.shadowRoot.querySelector('button') || tip).click();"
+                    " await new Promise(r => setTimeout(r, 300));"
+                    " const b = [...(document.querySelector('home-assistant')?.shadowRoot || document).querySelectorAll('[role=tooltip]')]"
+                    "  .find(x => x.textContent.includes('Hilfe im Dialog'));"
+                    " const ok = b && b.matches(':popover-open'); d.close(); d.remove();"
+                    " return b ? (ok ? 'in top layer (above modal)' : 'NOT in top layer') : 'no bubble' })()"
+                )
+                print("help tip in modal dialog:", modal)
+                previews = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const sec = e.shadowRoot.querySelector('section[data-step=\"6\"]');"
+                    " if (!sec) return 'no step 6';"
+                    " return [...sec.querySelectorAll('.preview, .muted')]"
+                    "  .map(x => x.textContent.trim().replace(/\\s+/g, ' ')) })()"
+                )
+                print("headline previews:", previews)
+                suggest = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const s = [...e.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
+                    "  .find(x => x.shadowRoot.querySelector('input,textarea'));"
+                    " if (!s) return 'no suggest field'; s.scrollIntoView({block: 'center'});"
+                    " const i = s.shadowRoot.querySelector('input,textarea'); i.focus();"
+                    " i.value = '{w'; i.setSelectionRange(2, 2);"
+                    " i.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
+                    " await new Promise(r => setTimeout(r, 500));"
+                    " const items = [...s.shadowRoot.querySelectorAll('li, .item, [role=option]')];"
+                    " const out = items.map(x => x.textContent.trim());"
+                    " i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); i.blur();"
+                    " return out })()"
+                )
+                print("suggestions for '{w':", suggest)
+                picked = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const f = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(x => x.selector && x.selector.color_rgb);"
+                    " if (!f) return 'no colour field'; f.scrollIntoView();"
+                    " f.shadowRoot.querySelector('.colorbtn, .pick').click();"
+                    " await new Promise(r => setTimeout(r, 500));"
+                    " const pp = window.__find(document, 'laeutwerk-color-popup');"
+                    " if (!pp) return 'no popup';"
+                    " const w = pp.shadowRoot.querySelector('.wheel').getBoundingClientRect();"
+                    " const opts = {bubbles: true, pointerId: 1, clientX: w.right - 4,"
+                    "  clientY: w.top + w.height / 2};"
+                    " pp.shadowRoot.querySelector('.wheel').dispatchEvent(new PointerEvent('pointerdown', opts));"
+                    " await pp.updateComplete; const hex = pp._hex;"
+                    " pp.shadowRoot.querySelector('.pill.outline').click(); return hex })()"
+                )
+                print("colour picker, right edge of the wheel:", picked)
+                look = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const b = e.shadowRoot.querySelector('.kwrow:not(.head) .lookbtn');"
+                    " if (!b) return 'no look button'; b.scrollIntoView({block: 'center'}); b.click();"
+                    " await new Promise(r => setTimeout(r, 800));"
+                    " const k = window.__find(document, 'laeutwerk-keyword-look');"
+                    " if (!k) return 'no popup';"
+                    " const f = k.shadowRoot.querySelectorAll('laeutwerk-field')[1];"
+                    " const pk = f && f.shadowRoot.querySelector('.colorbtn, .pick'); if (pk) pk.click();"
+                    " await new Promise(r => setTimeout(r, 800));"
+                    " const popup = !!window.__find(document, 'laeutwerk-color-popup');"
+                    " const cp = window.__find(document, 'laeutwerk-color-popup');"
+                    " if (cp) cp.shadowRoot.querySelector('.pill.outline').click();"
+                    " k.shadowRoot.querySelector('.pill.outline').click();"
+                    " return 'popup ok, colour popup: ' + popup })()"
+                )
+                print("keyword look popup:", look)
+                # Signal editor: opportunity trigger + condition, then the
+                # "edit survives hass updates" regression.
+                sig = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " const r = e._rule;"
+                    " e._signal = { index: 0, signal: JSON.parse(JSON.stringify("
+                    "   Object.assign({}, r.signals[0], {when: {opportunity: [{trigger: 'state',"
+                    "   entity_id: 'light.stehleuchte', to: 'on'}], manual_only: true},"
+                    "   conditions: [{condition: 'state', entity_id: 'input_boolean.steven_home', state: 'on'}]})))};"
+                    " await e.updateComplete;"
+                    " let se; for (let i = 0; i < 50 && !se; i++) {"
+                    "  se = window.__find(e.shadowRoot, 'laeutwerk-signal-editor');"
+                    "  if (!se) await new Promise(r => setTimeout(r, 200)); }"
+                    " if (!se) return 'no signal editor';"
+                    " se._openSec = new Set(['when', 'only_if', 'what', 'texts']);"
+                    " await se.updateComplete; await new Promise(r => setTimeout(r, 4500));"
+                    " const fields = [...se.shadowRoot.querySelectorAll('laeutwerk-field')];"
+                    " return fields.map(f => f.shadowRoot.querySelector('ha-selector') ? 'ha-selector' :"
+                    " (f.shadowRoot.querySelector('textarea,input') ? 'fallback' : 'empty')) })()"
+                )
+                print("signal editor fields:", sig)
+                await cdp.shot("signal", full=False)
+                await cdp.js(
+                    "(() => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const se = window.__find(p.shadowRoot, 'laeutwerk-signal-editor');"
+                    " const sf = [...se.shadowRoot.querySelectorAll('laeutwerk-suggest')]"
+                    "  .find(x => x.multiline);"
+                    " const ta = sf ? sf.shadowRoot.querySelector('textarea')"
+                    "  : se.shadowRoot.querySelector('textarea');"
+                    " ta.value = 'EDIT SURVIVES';"
+                    " ta.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
+                    " return true })()"
+                )
+                for value in range(3):
+                    async with session.post(
+                        f"{HA}/api/states/sensor.laeutwerk_check",
+                        json={"state": str(value)},
+                        headers={"Authorization": f"Bearer {tok['access_token']}"},
+                    ):
+                        pass
+                    await asyncio.sleep(1)
+                kept = await cdp.js(
+                    "(() => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const se = window.__find(p.shadowRoot, 'laeutwerk-signal-editor');"
+                    " return se ? se._sig.message : 'no signal editor' })()"
+                )
+                print("edit kept after state changes:", kept == "EDIT SURVIVES")
+                if kept != "EDIT SURVIVES":
+                    raise SystemExit(f"edits were reset by state changes: {kept}")
+                # Advanced step (escalation / assignee) and trigger mode.
+                advanced = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " e._signal = undefined; e._open = new Set([7]); await e.updateComplete;"
+                    " await new Promise(r => setTimeout(r, 2000));"
+                    " const sec = e.shadowRoot.querySelector('section[data-step=\"7\"]');"
+                    " if (!sec) return 'no step 7'; sec.scrollIntoView();"
+                    " return [...sec.querySelectorAll('laeutwerk-field')].map(f =>"
+                    "  f.shadowRoot.querySelector('ha-selector') ? 'ha-selector' : 'fallback') })()"
+                )
+                print("advanced step fields:", advanced)
+                await cdp.shot("advanced", full=False)
+                mode = await cdp.js(
+                    "(async () => { " + OPEN + " const e = await getEd();"
+                    " e._setMode('trigger'); e._open = new Set([1, 2, 3, 4, 5, 6, 7]);"
+                    " await e.updateComplete; await new Promise(r => setTimeout(r, 2500));"
+                    " const trg = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(f => f.selector && f.selector.trigger);"
+                    " const trigger = !!(trg && window.__find(trg.shadowRoot, 'ha-automation-trigger'));"
+                    " const texts = !!(trg && trg.hass.localize("
+                    "  'ui.panel.config.automation.editor.triggers.add'));"
+                    " const ent = [...e.shadowRoot.querySelectorAll('laeutwerk-field')]"
+                    "  .find(f => f.selector && f.selector.entity);"
+                    " return JSON.stringify({mode: e._mode, trigger, texts, picker: !!ent}) })()"
+                )
+                print("trigger mode:", mode)
+                await cdp.shot("trigger", full=False)
+                if '"trigger":true' not in mode or '"texts":true' not in mode:
+                    raise SystemExit(f"trigger editor in the panel incomplete: {mode}")
+                # Template picker on /laeutwerk/rules/new.
+                templates = await cdp.js(
+                    "(async () => { "
+                    + OPEN
+                    + " await go('/laeutwerk/rules/new', 3000);"
+                    " let pk; for (let i = 0; i < 40 && !pk; i++) {"
+                    "  pk = window.__find(p.shadowRoot, 'laeutwerk-template-picker');"
+                    "  if (!pk) await new Promise(r => setTimeout(r, 200)); }"
+                    " if (!pk) return 'no picker';"
+                    " await new Promise(r => setTimeout(r, 1000));"
+                    " return [...pk.shadowRoot.querySelectorAll('.tpl .name')].map(n => n.textContent) })()"
+                )
+                print("templates:", templates)
+                await cdp.shot("templates", full=False)
+                if not isinstance(templates, list) or not templates:
+                    raise SystemExit(f"template picker empty: {templates}")
+                # (d) History tab lists events; acknowledge the check reminder first.
+                hist = await cdp.js(
+                    "(async () => { "
+                    + OPEN
+                    + " try { await p.hass.callService('laeutwerk',"
+                    "  'acknowledge', {rule: 'chk_hist'}); } catch (e) {}"
+                    " await new Promise(r => setTimeout(r, 1500));"
+                    " await go('/laeutwerk/history', 4000);"
+                    " const h = window.__find(p.shadowRoot, 'laeutwerk-history');"
+                    " if (!h) return 'no history tab';"
+                    " await new Promise(r => setTimeout(r, 1500));"
+                    " const n = h.shadowRoot.querySelectorAll('.ev').length;"
+                    " const txt = h.shadowRoot.textContent.replace(/\\s+/g, ' ');"
+                    " return JSON.stringify({events: n, hscroll: document.documentElement.scrollWidth > innerWidth + 1,"
+                    "  mine: txt.includes('Check Verlauf')}) })()"
+                )
+                print("history tab:", hist)
+                await cdp.shot("panel_history", full=False)
+                if not hist.startswith("{") or json.loads(hist)["events"] < 1:
+                    raise SystemExit(f"history tab shows no events: {hist}")
+                # (e) Overview tab shows tiles.
+                tiles = await cdp.js(
+                    "(async () => { " + OPEN + " await go('/laeutwerk', 4000);"
+                    " const o = window.__find(p.shadowRoot, 'laeutwerk-overview');"
+                    " if (!o) return 'no overview';"
+                    " return o.shadowRoot.querySelectorAll('.tile').length })()"
+                )
+                print("overview tiles:", tiles)
+                await cdp.shot("panel_overview", full=False)
+                if not isinstance(tiles, int) or tiles < 3:
+                    raise SystemExit(f"overview tiles missing: {tiles}")
                 # Round trip (UI rework acceptance): open every rule in the panel,
                 # save it unchanged, the export must stay byte-identical.
+                await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " p._picking = false; p._tool = undefined;"
+                    " history.pushState(null, '', '/laeutwerk/rules');"
+                    " window.dispatchEvent(new CustomEvent('location-changed'));"
+                    " await new Promise(r => setTimeout(r, 3000)); return true })()"
+                )
                 roundtrip = await cdp.js(
                     "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
                     " const ws = (m) => p.hass.callWS(m);"
@@ -719,12 +777,22 @@ async def main() -> None:
                     " await new Promise(r => setTimeout(r, 4000));"
                     " const ed = window.__find(p.shadowRoot, 'laeutwerk-rule-editor');"
                     " const prev = ed ? ed.shadowRoot.textContent.replace(/\\s+/g, ' ') : '';"
-                    " const i = prev.indexOf('Nächste 5');"
+                    " const i = prev.indexOf('Nächste Treffer');"
                     " return JSON.stringify({missing: txt.includes('light.gibts_nicht'),"
                     "  keyword: txt.includes('Sperrmüll'), preview: i >= 0 ? prev.slice(i, i + 260) : 'no preview'}) })()"
                 )
                 print("health + preview:", health)
+                if "Nächste 5 Auslösungen" not in str(
+                    health
+                ) or '"missing":true' not in str(health):
+                    raise SystemExit("health check or live preview of passes missing")
                 await cdp.shot("panel_health_rule", full=False)
+                await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " for (const id of ['chk_hist', 'hc_test', 'rt_service'])"
+                    "  try { await p.hass.callWS({type: 'laeutwerk/rules/delete', rule_id: id}); } catch (e) {}"
+                    " return true })()"
+                )
         finally:
             proc.terminate()
 

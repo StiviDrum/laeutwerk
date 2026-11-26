@@ -1,6 +1,6 @@
 /**
- * laeutwerk-panel: sidebar panel with tabs. Overview embeds the card; Rules
- * shows a rule list next to the existing rule editor (UI rework, stage 1a).
+ * laeutwerk-panel: sidebar panel with tabs: overview, rules (list + pipeline
+ * editor), history and health (UI rework).
  */
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -23,7 +23,9 @@ import {
   type PanelRoute,
   type PanelTab,
 } from "./panel-logic";
-import { LaeutwerkCard } from "./laeutwerk-card";
+import "./laeutwerk-card";
+import { LaeutwerkHistory } from "./panel-history";
+import { LaeutwerkOverview } from "./panel-overview";
 import { applyRuleEvent } from "./rule-events";
 import { shared, tokens } from "./styles";
 import type { HomeAssistant, Rule, RuleEvent } from "./types";
@@ -33,6 +35,7 @@ import { CARD_VERSION } from "./version";
 const TAB_KEYS: Record<PanelTab, StringKey> = {
   overview: "tab_overview",
   rules: "tab_rules",
+  history: "tab_history",
   health: "tab_health",
 };
 
@@ -67,9 +70,9 @@ export class LaeutwerkPanel extends LitElement {
   /** Snapshot handed to the editor (never the live rule: it would reset the editor). */
   @state() private _editing?: { key: string; rule: Rule };
   private _unsub?: Promise<() => void>;
-  private _card?: LaeutwerkCard;
   private _ro?: ResizeObserver;
   private _editorsLoading = false;
+  private _newPath?: string;
 
   private get _l(): Localizer {
     return localizer(this.hass?.locale?.language ?? this.hass?.language);
@@ -121,7 +124,21 @@ export class LaeutwerkPanel extends LitElement {
       if (!this._unsub && this.isConnected) this._subscribe();
     }
     const { tab, ruleId } = this._route;
-    if (tab === "rules" && ruleId && this._rules && this._editing?.key !== ruleId) {
+    // "/rules/new" (from the card): open the template picker once per visit.
+    if (tab === "rules" && ruleId === "new") {
+      if (this._newPath !== this.route?.path) {
+        this._newPath = this.route?.path;
+        this._editing = undefined;
+        this._picking = true;
+      }
+    } else this._newPath = undefined;
+    if (
+      tab === "rules" &&
+      ruleId &&
+      ruleId !== "new" &&
+      this._rules &&
+      this._editing?.key !== ruleId
+    ) {
       const rule = this._rules.find((r) => r.id === ruleId);
       if (rule) this._editing = { key: ruleId, rule: structuredClone(rule) };
     } else if (!ruleId && this._editing && !this._editing.key.startsWith("new:")) {
@@ -405,7 +422,9 @@ export class LaeutwerkPanel extends LitElement {
             ? this._renderRules()
             : tab === "health"
               ? this._renderHealth()
-              : this._renderOverview()
+              : tab === "history"
+                ? this._renderHistory()
+                : this._renderOverview()
         }
       </main>
       ${
@@ -430,12 +449,22 @@ export class LaeutwerkPanel extends LitElement {
   }
 
   private _renderOverview(): TemplateResult {
-    if (!this._card) {
-      this._card = document.createElement("laeutwerk-card") as LaeutwerkCard;
-      this._card.setConfig({ type: "custom:laeutwerk-card", view: "overview" });
-    }
-    this._card.hass = this.hass;
-    return html`<div class="overview">${this._card}</div>`;
+    if (!this.hass || !this._rules) return html`<div class="message">${this._l.t("loading")}</div>`;
+    return html`<laeutwerk-overview
+      .hass=${this.hass}
+      .localize=${this._l}
+      .rules=${this._rules}
+      @navigate=${(e: CustomEvent<PanelTab>) => this._go(e.detail)}
+    ></laeutwerk-overview>`;
+  }
+
+  private _renderHistory(): TemplateResult {
+    if (!this.hass || !this._rules) return html`<div class="message">${this._l.t("loading")}</div>`;
+    return html`<laeutwerk-history
+      .hass=${this.hass}
+      .localize=${this._l}
+      .rules=${this._rules}
+    ></laeutwerk-history>`;
   }
 
   private _renderRules(): TemplateResult {
@@ -924,6 +953,9 @@ export class LaeutwerkPanel extends LitElement {
   ];
 }
 
-void LaeutwerkCard;
-defineElements([["laeutwerk-panel", LaeutwerkPanel]]);
+defineElements([
+  ["laeutwerk-panel", LaeutwerkPanel],
+  ["laeutwerk-overview", LaeutwerkOverview],
+  ["laeutwerk-history", LaeutwerkHistory],
+]);
 console.info(`%c LÄUTWERK-PANEL %c ${CARD_VERSION} `, "background:#222;color:#fff", "");

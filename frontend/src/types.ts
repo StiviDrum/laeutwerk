@@ -102,6 +102,8 @@ export interface Reminder {
   acknowledged_by: string | null;
   acknowledged_via: string | null;
   snoozed_until: string | null;
+  snoozed_until_home?: string | null;
+  snoozed_until_home_name?: string | null;
   next_reminder_at?: string | null;
   assignee?: string | null;
   assignee_name?: string | null;
@@ -290,7 +292,7 @@ export interface HomeAssistant {
   language?: string;
   config?: { time_zone?: string };
   themes?: { darkMode?: boolean };
-  user?: { is_admin?: boolean; name?: string };
+  user?: { id?: string; is_admin?: boolean; name?: string };
   connection: HassConnection;
   loadFragmentTranslation?(fragment: string): Promise<unknown>;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
@@ -302,4 +304,29 @@ export interface HomeAssistant {
     notifyOnError?: boolean,
     returnResponse?: boolean,
   ): Promise<unknown>;
+}
+
+export type LogKind =
+  | "reminded"
+  | "repeated"
+  | "escalated"
+  | "snoozed"
+  | "acknowledged"
+  | "missed"
+  | "reopened"
+  | "signal_sent"
+  | "signal_skipped";
+
+/** One entry of the event log (`laeutwerk/events`). */
+export interface LogEvent {
+  ts: string;
+  rule_id: string;
+  reminder_id: string;
+  kind: LogKind;
+  nr?: number;
+  stage?: number;
+  signal_id?: string;
+  person?: string;
+  via?: string;
+  detail?: string;
 }

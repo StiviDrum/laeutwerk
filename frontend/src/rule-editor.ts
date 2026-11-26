@@ -861,6 +861,11 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="col">
           ${this._colHead(2, "col_times", "col_times_help")} ${this._stepWhen()} ${this._stepAck()}
           ${this._stepDetails()} ${this._stepAdvanced()} ${this._firesCard()}
+          <laeutwerk-rule-history
+            .hass=${this.hass}
+            .localize=${l}
+            .ruleId=${this._rule.id ?? ""}
+          ></laeutwerk-rule-history>
         </div>
         <div class="col wide">
           ${this._colHead(3, "step_signals", "help_signals")} ${this._stepSignals()}

@@ -18,6 +18,8 @@ describe("panel route", () => {
     expect(parsePanelPath(panelPath("rules", "a b")).ruleId).toBe("a b");
     expect(panelPath("rules")).toBe("/rules");
     expect(panelPath("overview")).toBe("/overview");
+    expect(parsePanelPath("/history").tab).toBe("history");
+    expect(panelPath("history")).toBe("/history");
   });
 });
 

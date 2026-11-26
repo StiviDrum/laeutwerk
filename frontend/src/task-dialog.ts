@@ -10,6 +10,7 @@ import {
   doneTasks,
   finishedLine,
   openStatus,
+  snoozedText,
   relativeDay,
   relativeDayTime,
   liveHeadline,
@@ -21,6 +22,8 @@ import {
 import { badgeIcon, badgeIconStyles } from "./badge-icon";
 import { confirmAction } from "./confirm-dialog";
 import type { Localizer } from "./localize";
+import { goPanel } from "./panel-logic";
+import type { SnoozeData } from "./snooze";
 import { shared, tokens } from "./styles";
 import type { HomeAssistant, Rule } from "./types";
 
@@ -40,8 +43,6 @@ export class LaeutwerkTaskDialog extends LitElement {
   public select(id: string): void {
     this._selected = id;
   }
-  @state() private _page: "task" | "pick" | "edit" = "task";
-  @state() private _editing?: Rule;
   @state() private _busy = false;
   @state() private _error?: string;
   @state() private _laterOpen = false;
@@ -141,8 +142,7 @@ export class LaeutwerkTaskDialog extends LitElement {
     if (ok) this._selected = undefined;
   }
 
-  private async _later(task: Task, choice: "1h" | "3h" | "morning"): Promise<void> {
-    const when = choice === "morning" ? { until: "07:00" } : { duration: choice };
+  private async _later(task: Task, when: SnoozeData): Promise<void> {
     const ok = await this._call("snooze", {
       rule: task.rule.id,
       reminder_id: task.reminder.id,
@@ -153,30 +153,7 @@ export class LaeutwerkTaskDialog extends LitElement {
 
   protected render(): TemplateResult {
     const l = this._l;
-    let body: TemplateResult;
-    if (this._page === "pick") {
-      body = html`<laeutwerk-template-picker
-        .hass=${this.hass}
-        .localize=${l}
-        @pick=${(e: CustomEvent<{ rule: Rule }>) => {
-          this._editing = e.detail.rule;
-          this._page = "edit";
-        }}
-        @imported=${() => this.close()}
-        @cancel=${() => (this._page = "task")}
-      ></laeutwerk-template-picker>`;
-    } else if (this._page === "edit" && this._editing) {
-      body = html`<laeutwerk-rule-editor
-        .hass=${this.hass}
-        .localize=${l}
-        .rule=${this._editing}
-        @saved=${() => this.close()}
-        @deleted=${() => this.close()}
-        @cancel=${() => (this._page = "task")}
-      ></laeutwerk-rule-editor>`;
-    } else {
-      body = this._taskPage();
-    }
+    const body = this._taskPage();
     return html`<div class="backdrop" @click=${() => this.close()}></div>
       <div class="sheet" role="dialog" aria-modal="true" aria-label=${l.t("title")}>
         <div class="grabber"></div>
@@ -206,11 +183,13 @@ export class LaeutwerkTaskDialog extends LitElement {
                     ${
                       task.open
                         ? openStatus(task.reminder, now, l, tz)
-                        : task.reminder.next_reminder_at
-                          ? l.t("reminder_at", {
-                              when: relativeDayTime(task.reminder.next_reminder_at, now, l, tz),
-                            })
-                          : relativeDay(task.reminder.start, now, l, tz)
+                        : snoozedText(task.reminder, now, l, tz)
+                          ? snoozedText(task.reminder, now, l, tz)
+                          : task.reminder.next_reminder_at
+                            ? l.t("reminder_at", {
+                                when: relativeDayTime(task.reminder.next_reminder_at, now, l, tz),
+                              })
+                            : relativeDay(task.reminder.start, now, l, tz)
                     }
                   </div>
                 </div>
@@ -219,24 +198,13 @@ export class LaeutwerkTaskDialog extends LitElement {
               ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
               ${
                 this._laterOpen && task.open
-                  ? html`<div class="later">
-                      ${(
-                        [
-                          ["1h", "later_1h"],
-                          ["3h", "later_3h"],
-                          ["morning", "later_morning"],
-                        ] as const
-                      ).map(
-                        ([choice, key]) =>
-                          html`<button
-                            class="pill outline"
-                            ?disabled=${this._busy}
-                            @click=${() => this._later(task, choice)}
-                          >
-                            ${l.t(key)}
-                          </button>`,
-                      )}
-                    </div>`
+                  ? html`<laeutwerk-snooze-menu
+                      .hass=${this.hass}
+                      .localize=${l}
+                      ?busy=${this._busy}
+                      @snooze=${(e: CustomEvent<SnoozeData>) => this._later(task, e.detail)}
+                      @cancel=${() => (this._laterOpen = false)}
+                    ></laeutwerk-snooze-menu>`
                   : nothing
               }
               <div class="actions">
@@ -332,8 +300,8 @@ export class LaeutwerkTaskDialog extends LitElement {
                       <button
                         class="row grow rulebtn"
                         @click=${() => {
-                          this._editing = rule;
-                          this._page = "edit";
+                          this.close();
+                          goPanel(`/rules/${encodeURIComponent(rule.id ?? "")}`);
                         }}
                       >
                         ${badgeIcon(rule, true)}
@@ -359,7 +327,13 @@ export class LaeutwerkTaskDialog extends LitElement {
                     </div>`,
                 )}
               </div>
-              <button class="chip dashed new" @click=${() => (this._page = "pick")}>
+              <button
+                class="chip dashed new"
+                @click=${() => {
+                  this.close();
+                  goPanel("/rules/new");
+                }}
+              >
                 <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
               </button>`
           : nothing

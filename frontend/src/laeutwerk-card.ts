@@ -10,6 +10,8 @@ import {
   assigneeText,
   buildOverview,
   doneLabel,
+  snoozedText,
+  statusPill,
   canReopen,
   finishedLine,
   formatDate,
@@ -26,7 +28,10 @@ import {
 import { LaeutwerkConfirm, confirmAction } from "./confirm-dialog";
 import { localizer, type Localizer, type StringKey } from "./localize";
 import { defineElements } from "./register";
-import type { LaeutwerkTaskDialog } from "./task-dialog";
+import { goPanel } from "./panel-logic";
+import { LaeutwerkSnoozeMenu } from "./snooze-menu";
+import type { SnoozeData } from "./snooze";
+import { LaeutwerkTaskDialog } from "./task-dialog";
 import { applyRuleEvent } from "./rule-events";
 import { shared, tokens } from "./styles";
 import type {
@@ -61,7 +66,6 @@ export class LaeutwerkCard extends LitElement {
   @state() private _search = "";
   private _toastTimer?: number;
   private _dialog?: LaeutwerkTaskDialog;
-  private _dialogLoading = false;
   private _filtered?: { rules: Rule[]; only: string[]; result: Rule[] };
   private _memo?: {
     rules: Rule[];
@@ -70,13 +74,6 @@ export class LaeutwerkCard extends LitElement {
     overview: ReturnType<typeof buildOverview>;
     date: string;
   };
-  /** Rule open in the editor (new rule: without id). */
-  @state() private _editing?: Rule;
-  /** Template picker for a new rule is open. */
-  @state() private _picking = false;
-  /** The lazy editor chunk is loaded and its elements are defined. */
-  @state() private _editorsReady = false;
-  private _editorsLoading = false;
   @state() private _now = new Date();
   /** History of the rule shown with view: rule. */
   @state() private _history?: HistoryEntry[];
@@ -141,8 +138,6 @@ export class LaeutwerkCard extends LitElement {
     if (changed.size !== 1 || !changed.has("hass")) return true;
     const old = changed.get("hass") as HomeAssistant | undefined;
     if (!old || !this.hass) return true;
-    // The editor's entity / trigger pickers need the current states.
-    if (this._editing) return true;
     return (
       old.locale?.language !== this.hass.locale?.language ||
       old.language !== this.hass.language ||
@@ -151,22 +146,7 @@ export class LaeutwerkCard extends LitElement {
     );
   }
 
-  /** Load the editor chunk on first use (resolves once its elements exist). */
-  private _loadEditors(): Promise<void> {
-    return import("./editors").then((m) => {
-      this._editorsReady = true;
-      return m.ready;
-    });
-  }
-
   protected willUpdate(changed: PropertyValues): void {
-    if ((this._editing || this._picking) && !this._editorsReady && !this._editorsLoading) {
-      this._editorsLoading = true;
-      this._loadEditors().catch((e) => {
-        this._editorsLoading = false;
-        this._error = String(e);
-      });
-    }
     if (changed.has("hass") && this.hass) {
       this.toggleAttribute("dark", !!this.hass.themes?.darkMode);
       if (!this._unsub && this.isConnected) this._subscribe();
@@ -332,9 +312,8 @@ export class LaeutwerkCard extends LitElement {
     }
   }
 
-  private async _later(reminder: Reminder, choice: "1h" | "3h" | "morning"): Promise<void> {
+  private async _later(reminder: Reminder, when: SnoozeData): Promise<void> {
     this._laterFor = undefined;
-    const when = choice === "morning" ? { until: "07:00" } : { duration: choice };
     const ok = await this._call(`${reminder.id}-later`, "snooze", {
       rule: reminder.rule_id,
       reminder_id: reminder.id,
@@ -375,38 +354,6 @@ export class LaeutwerkCard extends LitElement {
       </ha-card>`;
     }
     if (!this._rules) return html`<ha-card><div class="message">${l.t("loading")}</div></ha-card>`;
-    if ((this._picking || this._editing) && !this._editorsReady) {
-      return html`<ha-card><div class="message">${l.t("loading")}</div></ha-card>`;
-    }
-    if (this._picking) {
-      return html`<ha-card>
-        <laeutwerk-template-picker
-          .hass=${this.hass}
-          .localize=${l}
-          @pick=${(e: CustomEvent<{ rule: Rule }>) => {
-            this._picking = false;
-            this._editing = e.detail.rule;
-          }}
-          @imported=${() => (this._picking = false)}
-          @cancel=${() => (this._picking = false)}
-        ></laeutwerk-template-picker>
-      </ha-card>`;
-    }
-    if (this._editing) {
-      return html`<ha-card>
-        <laeutwerk-rule-editor
-          .hass=${this.hass}
-          .localize=${l}
-          .rule=${this._editing}
-          @saved=${() => {
-            this._editing = undefined;
-            this._showToast(l.t("saved"));
-          }}
-          @deleted=${() => (this._editing = undefined)}
-          @cancel=${() => (this._editing = undefined)}
-        ></laeutwerk-rule-editor>
-      </ha-card>`;
-    }
     if (this._config.compact) return this._renderCompact();
     if (this._config.view === "rule") return this._renderRuleView();
     return this._renderOverview();
@@ -599,36 +546,19 @@ export class LaeutwerkCard extends LitElement {
         </div>
       </button>
       <div class="row meta">
+        ${this._pill(reminder)}
         <span class="chip">${openStatus(reminder, this._now, l, tz)}</span>
       </div>
       ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
       ${
         choosing
-          ? html`<div class="later">
-              ${(
-                [
-                  ["1h", "later_1h"],
-                  ["3h", "later_3h"],
-                  ["morning", "later_morning"],
-                ] as const
-              ).map(
-                ([choice, key]) =>
-                  html`<button
-                    class="pill outline"
-                    ?disabled=${!!this._busy}
-                    @click=${() => this._later(reminder, choice)}
-                  >
-                    ${l.t(key)}
-                  </button>`,
-              )}
-              <button
-                class="mini"
-                aria-label=${l.t("cancel")}
-                @click=${() => (this._laterFor = undefined)}
-              >
-                <ha-icon icon="mdi:close"></ha-icon>
-              </button>
-            </div>`
+          ? html`<laeutwerk-snooze-menu
+              .hass=${this.hass}
+              .localize=${l}
+              ?busy=${!!this._busy}
+              @snooze=${(e: CustomEvent<SnoozeData>) => this._later(reminder, e.detail)}
+              @cancel=${() => (this._laterFor = undefined)}
+            ></laeutwerk-snooze-menu>`
           : html`<div class="actions">
               <button
                 class="pill outline"
@@ -651,11 +581,18 @@ export class LaeutwerkCard extends LitElement {
     </div>`;
   }
 
+  private _pill(reminder: Reminder): TemplateResult {
+    const kind = statusPill(reminder);
+    return html`<span class="chip ${kind === "due" ? "accent" : ""}"
+      >${this._l.t(`pill_${kind}` as StringKey)}</span
+    >`;
+  }
+
   private _upcomingRow(rule: Rule, reminder: Reminder): TemplateResult {
     const l = this._l;
     const tz = this._tz;
-    const next = reminder.snoozed_until
-      ? l.t("snoozed_until", { when: relativeDayTime(reminder.snoozed_until, this._now, l, tz) })
+    const next = snoozedText(reminder, this._now, l, tz)
+      ? snoozedText(reminder, this._now, l, tz)
       : reminder.next_reminder_at
         ? l.t("reminder_at", { when: relativeDayTime(reminder.next_reminder_at, this._now, l, tz) })
         : "";
@@ -666,6 +603,7 @@ export class LaeutwerkCard extends LitElement {
           <div class="name">${reminder.titles.join(" + ")}</div>
           <div class="sub">${next}</div>
         </div>
+        ${this._pill(reminder)}
         <span class="when">${relativeDay(reminder.start, this._now, l, tz)}</span>
       </button>
       ${this._details === reminder.id ? this._detailsOf(rule, reminder) : nothing}
@@ -685,6 +623,7 @@ export class LaeutwerkCard extends LitElement {
             </div>
             <div class="sub">${finishedLine(reminder, this._now, l, this._tz)}</div>
           </div>
+          ${this._pill(reminder)}
         </button>
         ${
           canReopen(reminder, this._now)
@@ -713,7 +652,7 @@ export class LaeutwerkCard extends LitElement {
         ${l.t("section_rules")}<span class="line"></span>
         ${
           this._isAdmin
-            ? html`<button class="chip" @click=${() => (this._picking = true)}>
+            ? html`<button class="chip" @click=${() => goPanel("/rules/new")}>
                 <ha-icon icon="mdi:plus"></ha-icon>
                 ${l.t("add_rule")}
               </button>`
@@ -766,7 +705,10 @@ export class LaeutwerkCard extends LitElement {
           }
           const errors = Object.keys(rule.status?.errors ?? {}).length;
           return html`<div class="row item">
-            <button class="rulebtn grow" @click=${() => (this._editing = rule)}>
+            <button
+              class="rulebtn grow"
+              @click=${() => goPanel(`/rules/${encodeURIComponent(rule.id ?? "")}`)}
+            >
               ${this._icon(rule, true)}
               <span class="grow text">
                 <span class="name"
@@ -891,14 +833,7 @@ export class LaeutwerkCard extends LitElement {
   }
 
   /** The task dialog lives at <body> level (not clipped by the grid cell). */
-  private async _openDialog(selectId?: string): Promise<void> {
-    if (this._dialog || this._dialogLoading) return;
-    this._dialogLoading = true;
-    try {
-      await this._loadEditors();
-    } finally {
-      this._dialogLoading = false;
-    }
+  private _openDialog(selectId?: string): void {
     if (this._dialog) return;
     const dialog = document.createElement("laeutwerk-task-dialog") as LaeutwerkTaskDialog;
     dialog.hass = this.hass;
@@ -1171,6 +1106,8 @@ export { CARD_VERSION };
 void defineElements([
   ["laeutwerk-card", LaeutwerkCard],
   ["laeutwerk-confirm", LaeutwerkConfirm],
+  ["laeutwerk-snooze-menu", LaeutwerkSnoozeMenu],
+  ["laeutwerk-task-dialog", LaeutwerkTaskDialog],
 ]);
 
 declare global {

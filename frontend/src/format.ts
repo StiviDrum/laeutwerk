@@ -235,7 +235,7 @@ export interface Overview {
 export function buildOverview(
   rules: Rule[],
   now: Date,
-  timeZone?: string,
+  _timeZone?: string,
   only?: string[],
 ): Overview {
   const result: Overview = { open: [], upcoming: [], done: [] };
@@ -245,11 +245,8 @@ export function buildOverview(
       const item = { rule, reminder };
       if (reminder.state === "reminded") result.open.push(item);
       else if (reminder.state === "planned") result.upcoming.push(item);
-      else if (
-        (reminder.finished_at && dayDiff(new Date(reminder.finished_at), now, timeZone) === 0) ||
-        canReopen(reminder, now)
-      ) {
-        // Finished today, or done ahead and still undoable (event not over).
+      else if (wasRecent(reminder, now) || canReopen(reminder, now)) {
+        // Finished within the last 72 h, or done ahead and still undoable (event not over).
         result.done.push(item);
       }
     }
@@ -259,8 +256,7 @@ export function buildOverview(
   result.open.sort(byStart);
   result.upcoming.sort(byStart);
   // Today's first (newest on top), then the ones done ahead by event date.
-  const today = (r: Reminder) =>
-    !!r.finished_at && dayDiff(new Date(r.finished_at), now, timeZone) === 0;
+  const today = (r: Reminder) => wasRecent(r, now);
   result.done.sort((a, b) => {
     const ta = today(a.reminder) && !isAhead(a.reminder, now);
     const tb = today(b.reminder) && !isAhead(b.reminder, now);
@@ -269,6 +265,41 @@ export function buildOverview(
     return a.reminder.start.localeCompare(b.reminder.start);
   });
   return result;
+}
+
+export const DONE_VISIBLE_MS = 72 * 3600_000;
+
+/** Finished (done / missed) within the last 72 hours. */
+export function wasRecent(reminder: Reminder, now: Date): boolean {
+  return (
+    !!reminder.finished_at &&
+    now.getTime() - new Date(reminder.finished_at).getTime() < DONE_VISIBLE_MS
+  );
+}
+
+export type StatusPill = "planned" | "due" | "snoozed" | "done" | "missed";
+
+/** Status pill of a reminder: Geplant, Fällig, Geschlummert, Erledigt, Verpasst. */
+export function statusPill(reminder: Reminder): StatusPill {
+  if (reminder.state === "done" || reminder.state === "missed") return reminder.state;
+  if (reminder.snoozed_until || reminder.snoozed_until_home) return "snoozed";
+  return reminder.state === "reminded" ? "due" : "planned";
+}
+
+/** "schlummert bis 18:00" / "schlummert, bis Steven wieder zuhause ist" ("" if not snoozed). */
+export function snoozedText(
+  reminder: Reminder,
+  now: Date,
+  l: Localizer,
+  timeZone?: string,
+): string {
+  if (reminder.snoozed_until_home) {
+    return l.t("snoozed_home", {
+      name: reminder.snoozed_until_home_name || reminder.snoozed_until_home,
+    });
+  }
+  if (!reminder.snoozed_until) return "";
+  return l.t("snoozed_to", { when: relativeDayTime(reminder.snoozed_until, now, l, timeZone) });
 }
 
 /** Whether an acknowledged reminder can still be reopened (not expired yet). */

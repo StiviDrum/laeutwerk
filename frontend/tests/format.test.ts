@@ -130,7 +130,7 @@ describe("reminder texts", () => {
 });
 
 describe("overview", () => {
-  it("sorts reminders into open, upcoming and done (today only)", () => {
+  it("sorts reminders into open, upcoming and done (72 h)", () => {
     const rules: Rule[] = [
       rule({
         status: {
@@ -143,6 +143,7 @@ describe("overview", () => {
             reminder({ id: "b", state: "planned", start: "2026-11-23T23:00:00Z" }),
             reminder({ id: "c", state: "done", finished_at: "2026-11-16T08:00:00Z" }),
             reminder({ id: "d", state: "done", finished_at: "2026-11-15T08:00:00Z" }),
+            reminder({ id: "f", state: "done", finished_at: "2026-11-10T08:00:00Z" }),
           ],
         },
       }),
@@ -162,7 +163,7 @@ describe("overview", () => {
     const o = buildOverview(rules, NOW, TZ);
     expect(o.open.map((x) => x.reminder.id)).toEqual(["muell__20261117"]);
     expect(o.upcoming.map((x) => x.reminder.id)).toEqual(["e", "b"]);
-    expect(o.done.map((x) => x.reminder.id)).toEqual(["c"]);
+    expect(o.done.map((x) => x.reminder.id)).toEqual(["c", "d"]);
     expect(buildOverview(rules, NOW, TZ, ["kult"]).upcoming.map((x) => x.reminder.id)).toEqual([
       "e",
     ]);
