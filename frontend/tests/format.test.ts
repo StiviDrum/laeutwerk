@@ -584,6 +584,11 @@ describe("0.9.2 helpers", () => {
     expect([...toggleStepOpen(new Set([1]), 3)]).toEqual([3]);
     expect([...toggleStepOpen(new Set([3]), 3)]).toEqual([]);
   });
+  it("pipeline groups toggle independently", async () => {
+    const { toggleGroupOpen } = await import("../src/format");
+    expect([...toggleGroupOpen(new Set([1]), 3)]).toEqual([1, 3]);
+    expect([...toggleGroupOpen(new Set([1, 3]), 3)]).toEqual([1]);
+  });
   it("too_early text from the service response", async () => {
     const { tooEarlyText } = await import("../src/format");
     expect(tooEarlyText({ response: { too_early: "Erst morgen." } })).toBe("Erst morgen.");

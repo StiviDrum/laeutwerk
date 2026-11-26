@@ -39,6 +39,8 @@ SHELL = (
     / ".cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/headless_shell"
 )
 _DEFAULT_LIBS = Path.home() / ".cache/laeutwerk-chrome-libs/usr/lib/x86_64-linux-gnu"
+# Viewport width: 390 (phone, default) or e.g. 1440 for desktop checks.
+WIDTH = int(os.environ.get("LAEUTWERK_WIDTH", "390"))
 LIBS = os.environ.get("LAEUTWERK_CHROME_LIBS") or (
     str(_DEFAULT_LIBS) if _DEFAULT_LIBS.is_dir() else ""
 )
@@ -241,7 +243,7 @@ async def main() -> None:
                 str(SHELL),
                 "--no-sandbox",
                 "--remote-debugging-port=9333",
-                "--window-size=390,1600",
+                f"--window-size={WIDTH},1600",
                 "--hide-scrollbars",
                 "about:blank",
             ],
@@ -268,10 +270,10 @@ async def main() -> None:
                 await cdp.call("Runtime.enable")
                 await cdp.call(
                     "Emulation.setDeviceMetricsOverride",
-                    width=390,
+                    width=WIDTH,
                     height=1600,
                     deviceScaleFactor=1,
-                    mobile=True,
+                    mobile=WIDTH < 600,
                 )
                 await cdp.call("Page.navigate", url=f"{HA}/onboarding.html")
                 await asyncio.sleep(2)

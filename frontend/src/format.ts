@@ -956,6 +956,13 @@ export function toggleStepOpen(open: ReadonlySet<number>, num: number): Set<numb
   return open.has(num) ? new Set([...open].filter((n) => n !== num)) : new Set([num]);
 }
 
+/** Pipeline groups open and close independently of each other. */
+export function toggleGroupOpen(open: ReadonlySet<number>, num: number): Set<number> {
+  const next = new Set(open);
+  if (!next.delete(num)) next.add(num);
+  return next;
+}
+
 /** Text of a "too early" answer of the acknowledge service, if there is one. */
 export function tooEarlyText(result: unknown): string | undefined {
   const r = result as { response?: { too_early?: unknown }; too_early?: unknown } | null;

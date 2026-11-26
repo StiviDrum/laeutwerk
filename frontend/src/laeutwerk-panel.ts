@@ -34,6 +34,15 @@ export class LaeutwerkPanel extends LitElement {
   @state() private _query = "";
   @state() private _width = 0;
   @state() private _picking = false;
+  @state() private _listOpen = (() => {
+    try {
+      return window.localStorage.getItem("laeutwerk-list-open") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  @state() private _toast?: string;
+  private _toastTimer?: number;
   @state() private _editorsReady = false;
   /** Snapshot handed to the editor (never the live rule: it would reset the editor). */
   @state() private _editing?: { key: string; rule: Rule };
@@ -117,6 +126,12 @@ export class LaeutwerkPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private _showToast(text: string): void {
+    this._toast = text;
+    window.clearTimeout(this._toastTimer);
+    this._toastTimer = window.setTimeout(() => (this._toast = undefined), 5000);
+  }
+
   private _closeEditor(): void {
     this._editing = undefined;
     this._go("rules");
@@ -154,6 +169,7 @@ export class LaeutwerkPanel extends LitElement {
         </nav>
       </header>
       <main>${tab === "rules" ? this._renderRules() : this._renderOverview()}</main>
+      ${this._toast ? html`<div class="toast" role="status">${this._toast}</div>` : nothing}
     `;
   }
 
@@ -177,10 +193,47 @@ export class LaeutwerkPanel extends LitElement {
     if (!this.hass || !this._rules) return html`<div class="message">${l.t("loading")}</div>`;
     const detail = !!this._editing || this._picking;
     const narrow = this._isNarrow;
-    return html`<div class="split ${narrow ? "narrow" : ""}">
-      ${narrow && detail ? nothing : this._renderList()}
+    const rail = !narrow && detail && !this._listOpen;
+    return html`<div class="split ${narrow ? "narrow" : ""} ${rail ? "rail" : ""}">
+      ${narrow && detail ? nothing : rail ? this._renderRail() : this._renderList()}
       ${!narrow || detail ? html`<section class="detail">${this._renderDetail()}</section>` : nothing}
     </div>`;
+  }
+
+  private _setListOpen(open: boolean): void {
+    this._listOpen = open;
+    try {
+      window.localStorage.setItem("laeutwerk-list-open", open ? "1" : "0");
+    } catch {
+      /* storage blocked */
+    }
+  }
+
+  private _renderRail(): TemplateResult {
+    const l = this._l;
+    const rules = this._rules ?? [];
+    return html`<aside class="rail-list">
+      <button
+        class="icon-btn"
+        aria-label=${l.t("show_list")}
+        title=${l.t("show_list")}
+        @click=${() => this._setListOpen(true)}
+      >
+        <ha-icon icon="mdi:chevron-right"></ha-icon>
+      </button>
+      ${rules.map(
+        (rule) =>
+          html`<button
+            class="dot railbtn ${rule.id === this._route.ruleId ? "sel" : ""}"
+            title=${rule.name}
+            aria-label=${rule.name}
+            style=${rule.color ? `background:${rule.color}` : ""}
+            @click=${() => this._select(rule)}
+          >
+            <ha-icon icon=${rule.icon || "mdi:bell-outline"}></ha-icon>
+          </button>`,
+      )}
+    </aside>`;
   }
 
   private _renderList(): TemplateResult {
@@ -199,6 +252,17 @@ export class LaeutwerkPanel extends LitElement {
         <button class="primary" @click=${() => (this._picking = true)}>
           <ha-icon icon="mdi:plus"></ha-icon>${l.t("new_rule")}
         </button>
+        ${
+          this._editing && !this._isNarrow
+            ? html`<button
+                class="icon-btn"
+                aria-label=${l.t("hide_list")}
+                @click=${() => this._setListOpen(false)}
+              >
+                <ha-icon icon="mdi:chevron-left"></ha-icon>
+              </button>`
+            : nothing
+        }
       </div>
       ${rules.length === 0 ? html`<div class="message">${l.t("no_rules")}</div>` : nothing}
       ${rules.map((rule) => {
@@ -268,7 +332,15 @@ export class LaeutwerkPanel extends LitElement {
       .hass=${this.hass}
       .localize=${l}
       .rule=${this._editing.rule}
-      @saved=${() => this._closeEditor()}
+      layout="pipeline"
+      @saved=${() => {
+        this._closeEditor();
+        this._showToast(l.t("saved_toast"));
+      }}
+      @duplicated=${(e: CustomEvent<Rule>) => {
+        this._editing = undefined;
+        this._go("rules", e.detail.id ?? "");
+      }}
       @deleted=${() => this._closeEditor()}
       @cancel=${() => this._closeEditor()}
     ></laeutwerk-rule-editor>`;
@@ -343,6 +415,28 @@ export class LaeutwerkPanel extends LitElement {
         grid-template-columns: 340px minmax(0, 1fr);
         gap: 16px;
         align-items: start;
+      }
+      .split.rail {
+        grid-template-columns: 56px minmax(0, 1fr);
+      }
+      .rail-list {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+      }
+      .railbtn {
+        width: 44px;
+        height: 44px;
+        border-radius: 22px;
+        border: 2px solid transparent;
+        background: var(--lw-surface-2);
+        color: var(--lw-text);
+        cursor: pointer;
+      }
+      .railbtn.sel {
+        border-color: var(--lw-accent);
       }
       .split.narrow {
         grid-template-columns: minmax(0, 1fr);
@@ -429,39 +523,20 @@ export class LaeutwerkPanel extends LitElement {
         color: var(--lw-text-2);
         font-size: 13px;
       }
-      .switch {
-        flex: none;
-        position: relative;
-        width: 52px;
-        height: 44px;
-        margin-right: 4px;
+      .row .switch {
+        margin-right: 8px;
       }
-      .switch::before {
-        content: "";
-        position: absolute;
-        left: 4px;
-        right: 4px;
-        top: 10px;
-        height: 24px;
-        border-radius: 12px;
-        background: var(--lw-surface-2);
-      }
-      .switch span {
-        position: absolute;
-        left: 8px;
-        top: 14px;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--lw-text-2);
-        transition: transform 0.15s;
-      }
-      .switch[aria-checked="true"]::before {
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        max-width: calc(100vw - 32px);
+        padding: 12px 18px;
+        border-radius: 22px;
         background: var(--lw-accent);
-      }
-      .switch[aria-checked="true"] span {
-        transform: translateX(20px);
-        background: var(--lw-on-accent);
+        color: var(--lw-on-accent);
+        z-index: 10;
       }
       .message {
         padding: 24px 12px;

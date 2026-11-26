@@ -40,6 +40,7 @@ import {
   sourceModeOf,
   type SourceMode,
   toggleStepOpen,
+  toggleGroupOpen,
   withEarlyMode,
 } from "./format";
 import type { Localizer, StringKey } from "./localize";
@@ -96,6 +97,9 @@ export class LaeutwerkRuleEditor extends LitElement {
   @property({ attribute: false }) public localize!: Localizer;
   /** Rule to edit (a copy is edited); without id it is a new rule. */
   @property({ attribute: false }) public rule!: Rule;
+  /** "steps": accordion (card); "pipeline": three columns with sticky header (panel). */
+  @property() public layout: "steps" | "pipeline" = "steps";
+  @state() private _menuOpen = false;
   @state() private _rule!: Rule;
   @state() private _preview?: PreviewResult;
   @state() private _previewError?: string;
@@ -136,7 +140,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       this._initial = JSON.stringify(copy);
       this._guided = !copy.id;
       this._mode = sourceModeOf(copy);
-      this._open = new Set(copy.id ? [] : [1]);
+      this._open = this._pipeline ? new Set([1, 2, 4]) : new Set(copy.id ? [] : [1]);
       this._draft = this._readDraft();
       this._schedulePreview(0);
     }
@@ -144,6 +148,8 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
+    document.addEventListener("click", this._outside);
+    document.addEventListener("keydown", this._outside);
     if (!this._persons.length && this.hass) {
       this.hass
         .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
@@ -158,8 +164,21 @@ export class LaeutwerkRuleEditor extends LitElement {
     }
   }
 
+  private _outside = (e: Event): void => {
+    if (!this._menuOpen) return;
+    if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
+    if (
+      e.type === "click" &&
+      e.composedPath().some((n) => (n as HTMLElement).classList?.contains("menuwrap"))
+    )
+      return;
+    this._menuOpen = false;
+  };
+
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener("click", this._outside);
+    document.removeEventListener("keydown", this._outside);
     window.clearTimeout(this._previewTimer);
     window.clearTimeout(this._draftTimer);
   }
@@ -247,7 +266,9 @@ export class LaeutwerkRuleEditor extends LitElement {
   }
 
   private _toggleStep(num: number): void {
-    this._open = toggleStepOpen(this._open, num);
+    this._open = this._pipeline
+      ? toggleGroupOpen(this._open, num)
+      : toggleStepOpen(this._open, num);
   }
 
   private _nextStep(num: number): void {
@@ -325,7 +346,7 @@ export class LaeutwerkRuleEditor extends LitElement {
     }
   }
 
-  private _emit(name: "saved" | "cancel" | "deleted", detail?: unknown): void {
+  private _emit(name: "saved" | "cancel" | "deleted" | "duplicated", detail?: unknown): void {
     this.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
@@ -517,26 +538,188 @@ export class LaeutwerkRuleEditor extends LitElement {
 
   protected render() {
     if (!this._rule) return nothing;
-    if (this._signal) {
-      return html`<laeutwerk-signal-editor
-        .hass=${this.hass}
-        .localize=${this._l}
-        .rule=${this._rule}
-        .signal=${this._signal.signal}
-        .sample=${this._preview?.events[0]?.variables ?? {}}
-        .ruleId=${this.rule.id}
-        .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => (e.badges ?? []).map((b) => b.color)))]}
-        @apply=${this._applySignal}
-        @cancel=${() => (this._signal = undefined)}
-        @delete=${this._deleteSignal}
-      ></laeutwerk-signal-editor>`;
-    }
+    if (this._signal && !this._pipeline) return this._signalEditor();
     const l = this._l;
     const valid = ruleComplete(this._forSaving(this._rule));
+    if (this._pipeline) return this._renderPipeline(valid);
     return html`<div class="page">
       <div class="separator">
         ${this._rule.id ? l.t("edit_rule") : l.t("new_rule")}<span class="line"></span>
       </div>
+      ${this._draftBox()} ${this._stepCalendar()} ${this._custom ? nothing : this._stepEvents()}
+      ${this._stepWhen()} ${this._stepSignals()} ${this._stepAck()} ${this._stepDetails()}
+      ${this._stepAdvanced()} ${this._messages()}
+      <div class="row extra">
+        <button class="chip" ?disabled=${!valid} @click=${this._saveTemplate}>
+          <ha-icon icon="mdi:content-save-outline"></ha-icon>${l.t("save_as_template")}
+        </button>
+        ${
+          this._rule.id
+            ? html`<button class="chip" @click=${this._export}>
+                <ha-icon icon="mdi:export"></ha-icon>${l.t("export")}
+              </button>`
+            : nothing
+        }
+        <span class="hint grow">${this._notice ?? ""}</span>
+      </div>
+      ${
+        this._rule.id
+          ? html`<button class="pill danger wide" @click=${this._delete}>
+              ${this._confirmDelete ? l.t("confirm_delete") : l.t("delete_rule")}
+            </button>`
+          : nothing
+      }
+      <div class="actions">
+        <button class="pill outline ${this._confirmCancel ? "danger" : ""}" @click=${this._cancel}>
+          ${this._confirmCancel ? l.t("discard_changes") : l.t("cancel")}
+        </button>
+        <button class="pill primary" ?disabled=${this._saving} @click=${this._save}>
+          ${this._saving ? "…" : l.t("save")}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  private get _pipeline(): boolean {
+    return this.layout === "pipeline";
+  }
+
+  private _signalEditor(): TemplateResult {
+    return html`<laeutwerk-signal-editor
+      .hass=${this.hass}
+      .localize=${this._l}
+      .rule=${this._rule}
+      .signal=${this._signal!.signal}
+      .sample=${this._preview?.events[0]?.variables ?? {}}
+      .ruleId=${this.rule.id}
+      .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => (e.badges ?? []).map((b) => b.color)))]}
+      @apply=${this._applySignal}
+      @cancel=${() => (this._signal = undefined)}
+      @delete=${this._deleteSignal}
+    ></laeutwerk-signal-editor>`;
+  }
+
+  private _colHead(n: number, title: StringKey, help: StringKey): TemplateResult {
+    const l = this._l;
+    return html`<div class="colh">
+      <span class="colnum">${n}</span>${l.t(title)}${helpTip(l, help)}
+    </div>`;
+  }
+
+  private _renderPipeline(valid: boolean): TemplateResult {
+    const l = this._l;
+    const r = this._rule;
+    const state = this.rule.status?.state;
+    const menuItem = (icon: string, label: string, fn: () => void, danger = false) =>
+      html`<button
+        class="menuitem ${danger ? "danger" : ""}"
+        role="menuitem"
+        @click=${() => {
+          fn();
+          if (!danger) this._menuOpen = false;
+        }}
+      >
+        <ha-icon icon=${icon}></ha-icon>${label}
+      </button>`;
+    return html`<div class="pipe">
+      <div class="ehead">
+        <span class="ename">${r.name || (r.id ? l.t("edit_rule") : l.t("new_rule"))}</span>
+        ${
+          state
+            ? html`<span class="pill-status s-${state}"
+                >${l.t(`status_${state}` as StringKey)}</span
+              >`
+            : nothing
+        }
+        <span class="grow"></span>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked=${r.enabled}
+          aria-label=${l.t("rule_active")}
+          @click=${() => this._update({ enabled: !r.enabled })}
+        >
+          <span></span>
+        </button>
+        <div class="menuwrap">
+          <button
+            class="iconbtn"
+            aria-label=${l.t("more_actions")}
+            aria-haspopup="menu"
+            aria-expanded=${this._menuOpen}
+            @click=${() => (this._menuOpen = !this._menuOpen)}
+          >
+            <ha-icon icon="mdi:dots-vertical"></ha-icon>
+          </button>
+          ${
+            this._menuOpen
+              ? html`<div class="menu" role="menu">
+                  ${r.id ? menuItem("mdi:content-copy", l.t("duplicate"), () => void this._duplicate()) : nothing}
+                  ${r.id ? menuItem("mdi:export", l.t("export"), () => void this._export()) : nothing}
+                  ${
+                    valid
+                      ? menuItem(
+                          "mdi:content-save-outline",
+                          l.t("save_as_template"),
+                          () => void this._saveTemplate(),
+                        )
+                      : nothing
+                  }
+                  ${
+                    r.id
+                      ? menuItem(
+                          "mdi:delete-outline",
+                          this._confirmDelete ? l.t("confirm_delete") : l.t("delete_rule"),
+                          () => void this._delete(),
+                          true,
+                        )
+                      : nothing
+                  }
+                </div>`
+              : nothing
+          }
+        </div>
+        <button class="pill outline ${this._confirmCancel ? "danger" : ""}" @click=${this._cancel}>
+          ${this._confirmCancel ? l.t("discard_changes") : l.t("cancel")}
+        </button>
+        <button class="pill primary" ?disabled=${this._saving} @click=${this._save}>
+          ${this._saving ? "…" : l.t("save")}
+        </button>
+      </div>
+      ${this._notice ? html`<div class="hint">${this._notice}</div>` : nothing} ${this._draftBox()}
+      ${this._messages()}
+      <div class="cols">
+        <div class="col">
+          ${this._colHead(1, "col_source", "col_source_help")} ${this._stepCalendar()}
+          ${this._custom ? nothing : this._stepEvents()}
+        </div>
+        <div class="col">
+          ${this._colHead(2, "col_times", "col_times_help")} ${this._stepWhen()} ${this._stepAck()}
+          ${this._stepDetails()} ${this._stepAdvanced()}
+        </div>
+        <div class="col wide">
+          ${this._colHead(3, "step_signals", "help_signals")} ${this._stepSignals()}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  private async _duplicate(): Promise<void> {
+    if (!this.hass || !this._rule.id) return;
+    try {
+      const copy = await this.hass.callWS<Rule>({
+        type: "laeutwerk/rules/duplicate",
+        rule_id: this._rule.id,
+      });
+      this._emit("duplicated", copy);
+    } catch (err) {
+      this._error = this._l.t("failed", { error: errorText(err) });
+    }
+  }
+
+  private _draftBox(): TemplateResult | typeof nothing {
+    const l = this._l;
+    return html`
       ${
         this._draft
           ? html`<div class="panel draft">
@@ -575,8 +758,12 @@ export class LaeutwerkRuleEditor extends LitElement {
             </div>`
           : nothing
       }
-      ${this._stepCalendar()} ${this._custom ? nothing : this._stepEvents()} ${this._stepWhen()}
-      ${this._stepSignals()} ${this._stepAck()} ${this._stepDetails()} ${this._stepAdvanced()}
+    `;
+  }
+
+  private _messages(): TemplateResult {
+    const l = this._l;
+    return html`
       ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
       ${
         this._serverError && !this._serverError.step
@@ -599,35 +786,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             </div>`
           : nothing
       }
-      <div class="row extra">
-        <button class="chip" ?disabled=${!valid} @click=${this._saveTemplate}>
-          <ha-icon icon="mdi:content-save-outline"></ha-icon>${l.t("save_as_template")}
-        </button>
-        ${
-          this._rule.id
-            ? html`<button class="chip" @click=${this._export}>
-                <ha-icon icon="mdi:export"></ha-icon>${l.t("export")}
-              </button>`
-            : nothing
-        }
-        <span class="hint grow">${this._notice ?? ""}</span>
-      </div>
-      ${
-        this._rule.id
-          ? html`<button class="pill danger wide" @click=${this._delete}>
-              ${this._confirmDelete ? l.t("confirm_delete") : l.t("delete_rule")}
-            </button>`
-          : nothing
-      }
-      <div class="actions">
-        <button class="pill outline ${this._confirmCancel ? "danger" : ""}" @click=${this._cancel}>
-          ${this._confirmCancel ? l.t("discard_changes") : l.t("cancel")}
-        </button>
-        <button class="pill primary" ?disabled=${this._saving} @click=${this._save}>
-          ${this._saving ? "…" : l.t("save")}
-        </button>
-      </div>
-    </div>`;
+    `;
   }
 
   private _errorBox(text: string, detail: string): TemplateResult {
@@ -650,13 +809,19 @@ export class LaeutwerkRuleEditor extends LitElement {
     const problems = this._problems.filter((p) => p.step === num);
     const server = this._serverError?.step === num ? this._serverError : undefined;
     const issues = problems.length + (server ? 1 : 0);
+    if (this._pipeline && num === 4) {
+      return html`<section class="panel nohead ${issues ? "has-error" : ""}" data-step=${num}>
+        ${problems.map((p) => html`<div class="error">${p.text}</div>`)}
+        ${server ? this._errorBox(server.text, server.detail) : nothing} ${body}
+      </section>`;
+    }
     const names = (id: string) =>
       (this.hass?.states[id]?.attributes.friendly_name as string | undefined) ?? id;
     return html`<section class="panel ${issues ? "has-error" : ""}" data-step=${num}>
       <button class="step head" aria-expanded=${open} @click=${() => this._toggleStep(num)}>
         <span class="num">${this._custom && num > 2 ? num - 1 : num}</span>
         <span class="grow text">
-          <span>${l.t(title)}</span>
+          <span>${l.t(this._pipeline && num === 1 ? "general" : title)}</span>
           ${
             open
               ? nothing
@@ -671,7 +836,7 @@ export class LaeutwerkRuleEditor extends LitElement {
           ? html`${problems.map((p) => html`<div class="error">${p.text}</div>`)}
             ${server ? this._errorBox(server.text, server.detail) : nothing} ${body}
             ${
-              this._guided && num < 7
+              this._guided && !this._pipeline && num < 7
                 ? html`<button class="pill outline next" @click=${() => this._nextStep(num)}>
                     ${l.t("next_step")}<ha-icon icon="mdi:chevron-down"></ha-icon>
                   </button>`
@@ -1273,38 +1438,51 @@ export class LaeutwerkRuleEditor extends LitElement {
         <div class="divided">
           ${signals.map((s, i) => {
             const color = stageColor(this._rule, s.stage);
-            return html`<div class="sig" style=${color ? `--stage: ${color}` : ""}>
-              <button class="sigmain" @click=${() => this._openSignal(i)}>
-                <span class="icon small ${color ? "staged" : ""}"
-                  ><ha-icon .icon=${SIGNAL_ICONS[s.type]}></ha-icon
-                ></span>
-                <span class="grow">
-                  <span class="name">${signalTitle(s, l, this._names)}</span>
-                  <span class="sub">
-                    ${
-                      color && s.send_on === "stage"
-                        ? html`<span class="stagechip">${l.t("stage_n", { n: s.stage! })}</span>`
-                        : nothing
-                    }
-                    ${signalSummary(s, l)}
-                  </span>
-                </span>
-              </button>
-              <button
-                class="switch"
-                role="switch"
-                aria-checked=${s.enabled}
-                aria-label=${l.t(`type_${s.type}` as StringKey)}
-                @click=${() =>
-                  this._update({
-                    signals: signals.map((x, j) => (j === i ? { ...x, enabled: !x.enabled } : x)),
-                  })}
+            const openHere = this._pipeline && this._signal?.index === i;
+            return html`<div
+                class="sig ${openHere ? "openrow" : ""}"
+                style=${color ? `--stage: ${color}` : ""}
               >
-                <span></span>
-              </button>
-            </div>`;
+                <button
+                  class="sigmain"
+                  @click=${() => (openHere ? (this._signal = undefined) : this._openSignal(i))}
+                >
+                  <span class="icon small ${color ? "staged" : ""}"
+                    ><ha-icon .icon=${SIGNAL_ICONS[s.type]}></ha-icon
+                  ></span>
+                  <span class="grow">
+                    <span class="name">${signalTitle(s, l, this._names)}</span>
+                    <span class="sub">
+                      ${
+                        color && s.send_on === "stage"
+                          ? html`<span class="stagechip">${l.t("stage_n", { n: s.stage! })}</span>`
+                          : nothing
+                      }
+                      ${signalSummary(s, l)}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  class="switch"
+                  role="switch"
+                  aria-checked=${s.enabled}
+                  aria-label=${l.t(`type_${s.type}` as StringKey)}
+                  @click=${() =>
+                    this._update({
+                      signals: signals.map((x, j) => (j === i ? { ...x, enabled: !x.enabled } : x)),
+                    })}
+                >
+                  <span></span>
+                </button>
+              </div>
+              ${openHere ? html`<div class="siginline">${this._signalEditor()}</div>` : nothing}`;
           })}
         </div>
+        ${
+          this._pipeline && this._signal && this._signal.index >= signals.length
+            ? html`<div class="siginline">${this._signalEditor()}</div>`
+            : nothing
+        }
         <div class="wrap">
           ${(["notify", "light_signal", "announce", "action"] as const).map(
             (type) =>
@@ -2094,6 +2272,146 @@ export class LaeutwerkRuleEditor extends LitElement {
     tokens,
     shared,
     css`
+      /* Pipeline layout (panel): sticky header + 3 columns, container-query responsive. */
+      :host([layout="pipeline"]) {
+        display: block;
+        container-type: inline-size;
+      }
+      .pipe {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .ehead {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 8px 0;
+        background: var(--lw-bg);
+      }
+      .ename {
+        font-size: 18px;
+        font-weight: 600;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pill-status {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        background: var(--lw-surface-2);
+        color: var(--lw-text-2);
+      }
+      .pill-status.s-reminded {
+        background: var(--lw-accent);
+        color: var(--lw-on-accent);
+      }
+      .menuwrap {
+        position: relative;
+      }
+      .iconbtn {
+        width: 44px;
+        height: 44px;
+        border: none;
+        border-radius: 22px;
+        background: transparent;
+        color: var(--lw-text);
+        cursor: pointer;
+      }
+      .menu {
+        position: absolute;
+        right: 0;
+        top: 48px;
+        z-index: 5;
+        min-width: 220px;
+        padding: 6px;
+        border-radius: 16px;
+        background: var(--lw-surface);
+        border: 1px solid var(--lw-border, var(--lw-surface-2));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      }
+      .menuitem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 44px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--lw-text);
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+      }
+      .menuitem.danger {
+        color: var(--lw-danger, #db4437);
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .colh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        padding: 4px 2px;
+      }
+      .colnum {
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        background: var(--lw-accent);
+        color: var(--lw-on-accent);
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pipe .step .num {
+        display: none;
+      }
+      .siginline {
+        padding: 8px 0 4px;
+        border-left: 3px solid var(--lw-accent);
+        padding-left: 8px;
+      }
+      .sig.openrow {
+        background: var(--lw-surface-2);
+        border-radius: 14px;
+      }
+      @container (min-width: 700px) {
+        .cols {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .col.wide {
+          grid-column: 1 / -1;
+        }
+      }
+      @container (min-width: 1050px) {
+        .cols {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .col.wide {
+          grid-column: auto;
+        }
+      }
       .page {
         display: flex;
         flex-direction: column;
