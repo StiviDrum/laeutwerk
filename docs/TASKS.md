@@ -389,6 +389,28 @@ Schnittstelle:
 - [x] Karten-Takt 60 s → 15 s (an der Minute ausgerichtet hinkte `{seit}` bis zu 59 s hinterher); geprüft: 75 s → „seit 1 Minute“, 135 s → „seit 2 Minuten“
 - [x] Release v0.11.4
 
+## UI-Umbau: Panel statt Karten-Editor (ab 26.11.2026)
+Grundlage: Stevens Arbeitsanweisung `arbeitsanweisung-ui-umbau-2026-11-26.md` und Mockups in `laeutwerk-mockups/` (beide nur lokal, per `.gitignore` ausgeschlossen – enthalten Haushaltsdaten). Maßgeblich ist `laeutwerk-panel-v2.html`; `…-stichwortkarten.html` ist verworfen.
+
+Entscheidungen Steven (26.11.2026), gehen dem Mockup vor:
+- Variablen weiter als **Vorschläge beim Tippen von `{`**, keine Variablen-Chips.
+- Icon und Farbe eines Stichworts bleiben im **runden Knopf** vor dem Stichwort, keine eigenen Tabellenspalten.
+- Wiederholen/„Kommt bei“ (send_on) bleibt wie in 0.11.
+- Regel-IDs entstehen wie bisher aus dem Namen, **kein `claude_`-Präfix** im Produkt.
+- **Wo HA eigene Editoren hat (Auslöser, Bedingungen, Aktionen, Entitäten, Personen …), werden diese benutzt** – keine Nachbauten wie `cbBuild`/`tplEditor` aus dem Mockup.
+
+Git für den Umbau: je Etappe Branch `claude/ui-panel-etappe-N`, nur der Branch wird gepusht, kein Merge nach `main` ohne Stevens Freigabe. Bugfixes am laufenden 0.11 weiter auf `main` (mit Release), Etappen-Branches ziehen sie nach.
+
+Etappen (feiner als in der Anweisung):
+- [x] 0 Ist-Zustand (in der Antwort an Steven vom 26.11.: Dienste, `laeutwerk/preview`, `test_signal`, Verlauf = 50 abgeschlossene Erinnerungen je Regel, `snooze` mit duration/until, `early` vor der ersten Erinnerung, Stufe = eigener Durchlauf)
+- [ ] 1a Panel-Gerüst (Seitenleiste, nur Admin), Liste + vorhandener Editor in voller Breite
+- [ ] 1b 3-Spalten-Pipeline (Quelle · Zeitpunkte/Bedingungen · Signale), schmal 3→2→1
+- [ ] 1c Lücken der Baukästen, Undo/Redo, YAML-Expertenansicht, Duplizieren/Aktiv/Löschen/Import/Export-Knöpfe, Rundlauf-Test
+- [ ] 2 Vorschau (Backend erweitert `laeutwerk/preview` um Wiederholungen/Stufen), „Jetzt testen“, Health-Check
+- [ ] 3 Verlauf (Backend-Ringpuffer für Ereignisse), Übersicht, Karte nur Status/Quittieren, Schlummer-Presets
+- [ ] 4 Assistent, Vorlagen, Satz-Ansicht, Woche
+- [ ] 5 Schlummern bis zuhause (Backend)
+
 ## 1.0 – Veröffentlichung
 - [ ] README mit Screenshots (hell + dunkel), vollständige Doku
 - [x] Logo/Brand-Assets (Steven fragen) – geliefert 12.11.2026, in 0.7.7 eingebaut

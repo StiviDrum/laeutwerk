@@ -20,3 +20,8 @@ config/*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local hand-over material from Steven's home lab (contains household data) – never commit
+laeutwerk-mockups/
+arbeitsanweisung-*.md
+*:Zone.Identifier
