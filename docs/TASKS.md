@@ -423,3 +423,8 @@ Etappen (feiner als in der Anweisung):
 - Satz-Ansicht: Leerzeichen vor Satzzeichen zwischen den Stücken, „verfällt: Terminende“ → „verfällt am Terminende“, Wiederholung im Gerät-Satz einbinden.
 - Vorlage „Filter wechseln“ verfällt nach 7 Tagen (`never` nur für Auslöser-Regeln erlaubt).
 - README für die Panel-Version überarbeiten, sobald Steven den Merge nach `main` freigibt.
+
+### Variablen aus anderen Integrationen (0.12.0-beta.6, Branch `claude/variable-providers`)
+- [x] Schnittstelle `laeutwerk_variable_providers` (docs/VARIABLE_PROVIDERS.md), ein Wurf pro Durchlauf, Editor-Vorschläge gruppiert, Gesundheits-Hinweis
+- [x] Erstes Plugin **Randowerk** (~/randowerk, github.com/StiviDrum/randowerk, v0.1.0-beta.2): Wortlisten im Optionen-Dialog, Dienst `randowerk.pick`
+- Offen: Randowerk-Repo ist privat → HACS braucht öffentlich (Stevens Entscheidung). Überschrift/Sensor-Attribute bewusst ohne Plugin-Variablen.
