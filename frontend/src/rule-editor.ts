@@ -3,6 +3,7 @@
  * (horizontally scrollable) with live preview, reminder times and repeat,
  * signals, acknowledgement, details. Opens the signal editor as a sub page.
  */
+import { loadProviders, providerExamples } from "./providers";
 import { pickColor } from "./color-picker";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -186,6 +187,7 @@ export class LaeutwerkRuleEditor extends LitElement {
     document.addEventListener("click", this._outside);
     document.addEventListener("keydown", this._outside);
     document.addEventListener("keydown", this._keys);
+    void loadProviders(this.hass).then(() => this.requestUpdate());
     if (!this._persons.length && this.hass) {
       this.hass
         .callWS<{ persons: PersonInfo[] }>({ type: "laeutwerk/persons" })
@@ -715,7 +717,7 @@ export class LaeutwerkRuleEditor extends LitElement {
       .localize=${this._l}
       .rule=${this._rule}
       .signal=${this._signal!.signal}
-      .sample=${this._preview?.events[0]?.variables ?? {}}
+      .sample=${{ ...providerExamples(), ...this._preview?.events[0]?.variables }}
       .ruleId=${this.rule.id}
       .swatches=${[...new Set((this._preview?.events ?? []).flatMap((e) => (e.badges ?? []).map((b) => b.color)))]}
       @apply=${this._applySignal}
@@ -2474,6 +2476,7 @@ export class LaeutwerkRuleEditor extends LitElement {
             ? html`<laeutwerk-suggest
                   .label=${l.t("confirm_message")}
                   .value=${r.confirm.message}
+                  .providers=${true}
                   .variables=${availableVariables(r)}
                   @value-changed=${(e: CustomEvent<{ value: string }>) =>
                     this._update({ confirm: { ...r.confirm!, message: e.detail.value } })}

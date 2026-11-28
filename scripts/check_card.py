@@ -639,6 +639,27 @@ async def main() -> None:
                 print("edit kept after state changes:", kept == "EDIT SURVIVES")
                 if kept != "EDIT SURVIVES":
                     raise SystemExit(f"edits were reset by state changes: {kept}")
+                # Variables of other integrations (e.g. Randowerk) appear as
+                # a group in the signal text suggestions (only if installed).
+                prov = await cdp.js(
+                    "(async () => { const p = window.__find(document, 'laeutwerk-panel');"
+                    " const cat = await p.hass.callWS({type: 'laeutwerk/variables/providers'});"
+                    " if (!cat.providers.length) return 'no providers installed';"
+                    " const se = window.__find(p.shadowRoot, 'laeutwerk-signal-editor');"
+                    " const sf = [...se.shadowRoot.querySelectorAll('laeutwerk-suggest')].find(x => x.multiline);"
+                    " const ta = sf.shadowRoot.querySelector('textarea'); ta.focus();"
+                    " ta.value = '{'; ta.setSelectionRange(1, 1);"
+                    " ta.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true}));"
+                    " await new Promise(r => setTimeout(r, 600));"
+                    " const items = [...sf.shadowRoot.querySelectorAll('li')].map(x => x.textContent.replace(/\\s+/g, ' ').trim());"
+                    " return items.filter(x => /Randowerk|beleidigung|fluch/.test(x)) })()"
+                )
+                print("provider variables in suggestions:", prov)
+                await cdp.shot("provider_suggest", full=False)
+                if isinstance(prov, list) and not any("beleidigung" in x for x in prov):
+                    raise SystemExit(
+                        f"provider variables missing in suggestions: {prov}"
+                    )
                 # Advanced step (escalation / assignee) and trigger mode.
                 advanced = await cdp.js(
                     "(async () => { " + OPEN + " const e = await getEd();"

@@ -2,6 +2,7 @@
  * laeutwerk-panel: sidebar panel with tabs: overview, rules (list + pipeline
  * editor), history and health (UI rework).
  */
+import { loadProviders } from "./providers";
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { relativeDay } from "./format";
@@ -99,6 +100,7 @@ export class LaeutwerkPanel extends LitElement {
     const bar = this.renderRoot?.querySelector(".bar");
     if (bar) this._barRo.observe(bar);
     if (this.hass && !this._unsub) this._subscribe();
+    void loadProviders(this.hass, true).then(() => this.requestUpdate());
   }
 
   public disconnectedCallback(): void {

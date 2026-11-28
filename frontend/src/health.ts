@@ -1,6 +1,7 @@
 /** Pure health check of a rule: what would stop it from working as intended. */
 import { parseTimespec } from "./builders";
-import { entityIdsIn } from "./format";
+import { availableVariables, entityIdsIn } from "./format";
+import { providerNames, unknownVariables } from "./providers";
 import type { HomeAssistant, PreviewResult, Rule, UpcomingEvent } from "./types";
 
 export type HealthSeverity = "error" | "warning" | "info";
@@ -15,7 +16,9 @@ export interface HealthItem {
     | "keyword_unused"
     | "lookahead_short"
     | "no_signals"
-    | "push_no_recipient";
+    | "push_no_recipient"
+    | "unknown_variable"
+    | "headline_provider_variable";
   params: Record<string, string>;
 }
 
@@ -24,6 +27,8 @@ export interface Preview90 {
   events: Pick<UpcomingEvent, "titles" | "days_until">[];
   hits?: Record<string, boolean>;
 }
+
+const SIGNAL_TEXTS = ["title", "message", "text", "text_plural"];
 
 const RANK: Record<HealthSeverity, number> = { error: 0, warning: 1, info: 2 };
 
@@ -128,6 +133,22 @@ export function healthOf(
     if (open && !s.targets?.length && !s.persons?.length)
       items.push({ severity: "error", code: "push_no_recipient", params: { n: String(i + 1) } });
   });
+  const texts = [
+    ...signals
+      .filter((s) => s.enabled)
+      .flatMap((s) =>
+        SIGNAL_TEXTS.map((k) => (s as unknown as Record<string, string | undefined>)[k]),
+      ),
+  ];
+  const known = [...availableVariables(rule, true), "wann", "datum", "uhrzeit"];
+  for (const name of unknownVariables(texts, known))
+    items.push({ severity: "info", code: "unknown_variable", params: { name } });
+  // The backend resolves provider variables only in signal texts, not in the headline.
+  const headlines = [rule.headline, (rule as { headline_plural?: string }).headline_plural];
+  for (const name of unknownVariables(headlines, known, [])) {
+    const code = providerNames().includes(name) ? "headline_provider_variable" : "unknown_variable";
+    items.push({ severity: "info", code, params: { name } });
+  }
   return items.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
 }
 

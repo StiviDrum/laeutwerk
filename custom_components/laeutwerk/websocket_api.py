@@ -26,6 +26,7 @@ from .manager import (
 )
 from .matching import Occurrence, build_occurrences
 from .model import Rule
+from .providers import provider_catalog
 from .signals import person_notify_targets
 from .sources import async_fetch_events
 
@@ -555,6 +556,19 @@ async def ws_import(
     )
 
 
+@websocket_api.websocket_command(
+    {vol.Required("type"): "laeutwerk/variables/providers"}
+)
+@callback
+def ws_variable_providers(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Variables offered by other integrations."""
+    connection.send_result(msg["id"], {"providers": provider_catalog(hass)})
+
+
 @websocket_api.websocket_command({vol.Required("type"): "laeutwerk/persons"})
 @callback
 def ws_persons(
@@ -609,6 +623,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_import,
         ws_validate,
         ws_persons,
+        ws_variable_providers,
         ws_test_signal,
         ws_reorder,
     ):

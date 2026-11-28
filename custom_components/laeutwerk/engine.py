@@ -80,6 +80,7 @@ from .model import (
     Rule,
     Signal,
 )
+from .providers import PassDraw, async_provider_values, provider_context
 from .signals import (
     CLEAR_NOTIFICATION,
     SignalRun,
@@ -881,7 +882,7 @@ class RuleRunner:
         reminder.nr += 1
         self._record("escalated", reminder, nr=reminder.nr, stage=reminder.stage)
         self._fire(EVENT_REMINDED, reminder, reminder_time=f"stage_{reminder.stage}")
-        self._dispatch_now(reminder, reached=True)
+        self._dispatch_now(reminder, reached=True, kind="stage")
         self._run_hook(self._on_reminded, reminder)
 
     def _next_repeat(self, reminder: Reminder) -> datetime | None:
@@ -1097,18 +1098,27 @@ class RuleRunner:
             stage=reminder.stage or None,
         )
         self._fire(EVENT_REMINDED, reminder, reminder_time=reminder_time)
-        self._dispatch_now(reminder, reached=False)
+        self._dispatch_now(
+            reminder,
+            reached=False,
+            kind="repeat" if reminder_time == "repeat" else "first",
+        )
         self._run_hook(self._on_reminded, reminder)
 
-    def _dispatch_now(self, reminder: Reminder, *, reached: bool) -> None:
+    def _dispatch_now(
+        self, reminder: Reminder, *, reached: bool, kind: str = "first"
+    ) -> None:
         """Send the "now" signals that belong to this pass."""
-        for signal in self.rule.signals:
-            if signal.when != WHEN_NOW or not self._sends(
-                signal, reminder, reached=reached
-            ):
-                continue
+        sending = [
+            s
+            for s in self.rule.signals
+            if s.when == WHEN_NOW and self._sends(s, reminder, reached=reached)
+        ]
+        # One draw of provider values per pass, shared by all its signals.
+        draw = PassDraw(kind, [s for s in sending if s.enabled])
+        for signal in sending:
             if signal.enabled:
-                self._dispatch(signal, reminder)
+                self._dispatch(signal, reminder, draw=draw)
             else:
                 self._record(
                     "signal_skipped", reminder, signal_id=signal.id, detail="disabled"
@@ -1133,6 +1143,7 @@ class RuleRunner:
         signal: Signal,
         reminder: Reminder,
         extra: dict[str, str] | None = None,
+        draw: PassDraw | None = None,
     ) -> None:
         """Send a signal unless its limits forbid it (quiet time may defer it)."""
         now = dt_util.utcnow()
@@ -1156,7 +1167,7 @@ class RuleRunner:
         # While it is being sent (a light signal takes seconds) the same
         # signal is not started again, so limits cannot be exceeded.
         self._sending.add(key)
-        self.hass.async_create_task(self._async_send(signal, reminder, extra))
+        self.hass.async_create_task(self._async_send(signal, reminder, extra, draw))
 
     def signal_run(
         self,
@@ -1182,7 +1193,11 @@ class RuleRunner:
         )
 
     async def _async_send(
-        self, signal: Signal, reminder: Reminder, extra: dict[str, str] | None
+        self,
+        signal: Signal,
+        reminder: Reminder,
+        extra: dict[str, str] | None,
+        draw: PassDraw | None = None,
     ) -> None:
         try:
             if not await async_conditions_met(self.hass, signal):
@@ -1195,7 +1210,12 @@ class RuleRunner:
                 reminder.signals_sent.get(signal.id, 0) + 1
             )
             self._on_changed()
+            draw = draw or PassDraw("first", [signal])
             run = self.signal_run(signal, reminder, own_context(), extra)
+            run.variables = {
+                **await draw.async_values(self.hass, self.rule, run.variables),
+                **run.variables,
+            }
             if await async_send_signal(run):
                 self._record("signal_sent", reminder, signal_id=signal.id)
                 self._fire(
@@ -1303,13 +1323,28 @@ class RuleRunner:
         if not confirm or state is None:
             return
         name = by if person else self.assignee_name(recipient)
-        message = render(
-            confirm["message"], {**self.variables(reminder), "person": name or ""}
+        variables = {**self.variables(reminder), "person": name or ""}
+        self.hass.async_create_task(
+            self._async_confirm(state, confirm, variables, reminder.id)
+        )
+
+    async def _async_confirm(
+        self,
+        state: State,
+        confirm: dict[str, Any],
+        variables: dict[str, str],
+        reminder_id: str,
+    ) -> None:
+        extra = await async_provider_values(
+            self.hass,
+            [confirm["message"]],
+            variables,
+            provider_context(self.hass, self.rule, None, "confirm", variables),
         )
         self._push_person(
             state,
-            message,
-            f"laeutwerk_confirm_{reminder.id}",
+            render(confirm["message"], {**extra, **variables}),
+            f"laeutwerk_confirm_{reminder_id}",
             int(confirm.get("clear_after", 10)),
         )
 

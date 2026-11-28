@@ -277,6 +277,22 @@ knows it. The triggers are only listened to while a reminder is open.
 - **Try it:** `laeutwerk.test_signal` sends one signal immediately (`rule` +
   `signal`, or `config` with an unsaved signal).
 
+### Variables from other integrations
+
+Other integrations can provide extra variables. **Randowerk**
+(https://github.com/StiviDrum/randowerk) draws random words from your own
+lists, e.g. `{beleidigung}`.
+
+- They appear in the `{` suggestions of signal texts (push title and message,
+  announcement texts, confirmation push), grouped under the integration's name.
+- All signals of one reminder pass get the same word. Every repeat or stage
+  draws again, and "Test" draws too.
+- They are not replaced in the headline, tag ids or sensor attributes.
+- If the integration is missing, the placeholder stays as text and the health
+  tab shows a hint.
+- Custom action signals receive them as script variables (`{{ beleidigung }}`).
+- Developers: see [docs/VARIABLE_PROVIDERS.md](docs/VARIABLE_PROVIDERS.md).
+
 ### Repeat, snooze and ways to acknowledge
 
 Repeat is `once` or `repeat`: every N minutes (default 60) while the reminder
@@ -629,6 +645,23 @@ Zeit- und Nummern-Variablen: `{seit}` (Zeit seit der ersten Erinnerung, z. B.
 und Erinnerungen nach „Später“). Sie werden bei jedem Senden neu berechnet; ein
 wiederholter Push ersetzt den vorherigen, die angezeigte Wartezeit ist also aktuell.
 In einer Überschrift zählt die Karte `{seit}` live weiter (alle 15 s, im Browser).
+
+## Variablen aus anderen Integrationen
+
+Andere Integrationen können zusätzliche Variablen liefern. **Randowerk**
+(https://github.com/StiviDrum/randowerk) zieht zufällige Wörter aus deinen
+eigenen Listen, z. B. `{beleidigung}`.
+
+- Sie erscheinen in den `{`-Vorschlägen der Signaltexte (Push-Titel und
+  -Nachricht, Ansagetexte, Bestätigungs-Push), gruppiert nach dem Namen der
+  Integration.
+- Alle Signale eines Erinnerungsdurchgangs bekommen dasselbe Wort. Jede
+  Wiederholung und Eskalationsstufe zieht neu, „Test“ zieht ebenfalls.
+- In Überschrift, Tag-IDs und Sensor-Attributen werden sie nicht ersetzt.
+- Fehlt die Integration, bleibt der Platzhalter als Text stehen, und der
+  Reiter „Gesundheit“ zeigt einen Hinweis.
+- Eigene Aktions-Signale erhalten sie als Skriptvariablen (`{{ beleidigung }}`).
+- Für Entwickler: siehe [docs/VARIABLE_PROVIDERS.md](docs/VARIABLE_PROVIDERS.md).
 
 ## NFC-Tag je Tonne
 

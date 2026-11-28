@@ -747,6 +747,7 @@ export class LaeutwerkSignalEditor extends LitElement {
         .label=${label}
         .multiline=${multiline}
         .variables=${this._variableNames()}
+        .providers=${true}
         .value=${String(s[key] ?? "")}
         @value-changed=${(e: CustomEvent<{ value: string }>) => this._set({ [key]: e.detail.value })}
       ></laeutwerk-suggest>

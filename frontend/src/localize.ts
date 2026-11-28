@@ -373,6 +373,8 @@ const en = {
   health_lookahead_short:
     "Look-ahead ({days} days) is not longer than the earliest reminder ({offset} days before).",
   health_no_signals: "No active signal: reminds only in the card.",
+  health_unknown_variable: "Unknown variable {name} – will not be replaced.",
+  health_headline_provider_variable: "Variable {name} is not replaced in the headline.",
   health_push_no_recipient: "Push signal {n} has no recipients.",
   next_fires: "Next 5 triggers",
   fire_first: "First reminder",
@@ -456,7 +458,8 @@ const en = {
     "Skip: the signal is dropped during the quiet time. Catch up: it fires as soon as the quiet time ends.",
   help_restore:
     "Saves the state of the light before the signal and restores it afterwards (on/off, brightness, colour).",
-  help_action_vars: "Variables you can use in your actions: {list}",
+  help_action_vars:
+    "Variables you can use in your actions: {list}. Further variables come from add-on integrations like Randowerk.",
   kw_look_edit: "Icon, colour and delete",
   kw_delete: "Delete keyword",
   kw_reset_icon: "Reset icon",
@@ -1061,6 +1064,8 @@ const de: Strings = {
   health_lookahead_short:
     "Vorausschau ({days} Tage) ist nicht länger als die früheste Erinnerung ({offset} Tage vorher).",
   health_no_signals: "Kein aktives Signal: erinnert nur in der Karte.",
+  health_unknown_variable: "Unbekannte Variable {name} – wird nicht ersetzt.",
+  health_headline_provider_variable: "Variable {name} wird in der Überschrift nicht ersetzt.",
   health_push_no_recipient: "Push-Signal {n} hat keine Empfänger.",
   next_fires: "Nächste 5 Auslösungen",
   fire_first: "Erste Erinnerung",
@@ -1144,7 +1149,8 @@ const de: Strings = {
     "Auslassen: das Signal entfällt in der Ruhezeit. Nachholen: es feuert, sobald die Ruhezeit endet.",
   help_restore:
     "Sichert den Zustand der Lampe vor dem Signal und stellt ihn danach wieder her (an/aus, Helligkeit, Farbe).",
-  help_action_vars: "Variablen, die du in deinen Aktionen nutzen kannst: {list}",
+  help_action_vars:
+    "Variablen, die du in deinen Aktionen nutzen kannst: {list}. Weitere Variablen liefern Zusatz-Integrationen wie Randowerk.",
   kw_look_edit: "Icon, Farbe und Löschen",
   kw_delete: "Stichwort löschen",
   kw_reset_icon: "Icon zurücksetzen",

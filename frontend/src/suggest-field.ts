@@ -9,12 +9,16 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { filterSuggestions, insertVariable, variableQuery } from "./format";
+import { variableSuggestions } from "./providers";
 import { shared, tokens } from "./styles";
 
 export interface SuggestItem {
   value: string;
   /** Shown name (e.g. tag name); the value is shown small beside it. */
   label?: string;
+  /** Group heading (variables of another integration). */
+  group?: string;
+  description?: string;
 }
 
 export class LaeutwerkSuggest extends LitElement {
@@ -23,6 +27,8 @@ export class LaeutwerkSuggest extends LitElement {
   @property() public placeholder = "";
   @property({ type: Boolean }) public multiline = false;
   @property({ attribute: false }) public variables: string[] = [];
+  /** Offer variables of other integrations (only where the backend resolves them). */
+  @property({ type: Boolean }) public providers = false;
   @property({ attribute: false }) public items: SuggestItem[] = [];
   @state() private _shown: SuggestItem[] = [];
   @state() private _variableMode = false;
@@ -77,9 +83,10 @@ export class LaeutwerkSuggest extends LitElement {
       : null;
     this._variableMode = !!this._query;
     if (this._query) {
-      list = filterSuggestions(
-        this.variables.map((value) => ({ value })),
+      list = variableSuggestions(
+        this.variables,
         this._query.query,
+        this.providers ? undefined : [],
       );
     } else if (this.items.length) {
       list = filterSuggestions(this.items, text);
@@ -156,23 +163,30 @@ export class LaeutwerkSuggest extends LitElement {
 
   private _item(item: SuggestItem, i: number): TemplateResult {
     const variables = this._variableMode;
-    return html`<li
-      role="option"
-      aria-selected=${i === this._index}
-      class=${i === this._index ? "sel" : ""}
-      @mousedown=${(e: Event) => e.preventDefault()}
-      @click=${() => this._pick(item)}
-    >
-      ${
-        variables
-          ? html`<span class="var">{${item.value}}</span>`
-          : html`<span>${item.label || item.value}</span>${
-                item.label && item.label !== item.value
-                  ? html`<span class="id">${item.value}</span>`
-                  : nothing
-              }`
-      }
-    </li>`;
+    const head =
+      variables && item.group && item.group !== this._shown[i - 1]?.group
+        ? html`<li class="group" role="presentation">${item.group}</li>`
+        : nothing;
+    return html`${head}
+      <li
+        role="option"
+        aria-selected=${i === this._index}
+        class=${i === this._index ? "sel" : ""}
+        @mousedown=${(e: Event) => e.preventDefault()}
+        @click=${() => this._pick(item)}
+      >
+        ${
+          variables
+            ? html`<span class="var">{${item.value}}</span>${
+                  item.description ? html`<span class="id">${item.description}</span>` : nothing
+                }`
+            : html`<span>${item.label || item.value}</span>${
+                  item.label && item.label !== item.value
+                    ? html`<span class="id">${item.value}</span>`
+                    : nothing
+                }`
+        }
+      </li>`;
   }
 
   protected render(): TemplateResult {
@@ -257,6 +271,12 @@ export class LaeutwerkSuggest extends LitElement {
         align-items: center;
         font-size: 14px;
         cursor: pointer;
+      }
+      li.group {
+        min-height: 28px;
+        font-size: 12px;
+        color: var(--lw-text-2);
+        cursor: default;
       }
       li.sel {
         background: color-mix(in srgb, var(--lw-accent) 16%, transparent);

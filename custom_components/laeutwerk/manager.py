@@ -46,6 +46,7 @@ from .matching import (
     sample_occurrence,
 )
 from .model import STATE_INACTIVE, Reminder, Rule, Signal
+from .providers import PassDraw
 from .schema import (
     async_validate_rule,
     make_rule_id,
@@ -692,9 +693,7 @@ class LaeutwerkManager:
                 end=item.end,
                 events=tuple(item.events),
             )
-            return await async_send_signal(
-                runner.signal_run(signal, test_item, own_context())
-            )
+            return await _async_send_test(runner, signal, test_item)
         assert rule_id is not None
         rule = self.get_rule(rule_id)
         if config is not None:
@@ -725,9 +724,7 @@ class LaeutwerkManager:
             end=item.end,
             events=tuple(item.events),
         )
-        return await async_send_signal(
-            runner.signal_run(signal, test_item, own_context())
-        )
+        return await _async_send_test(runner, signal, test_item)
 
     async def _async_notification_action(self, event: Event[Any]) -> None:
         """Handle a pressed button of a push notification."""
@@ -844,6 +841,19 @@ def _default_interval_start(rule: Rule, old: Rule | None = None) -> None:
         **rule.interval,
         "start": previous or dt_util.now().date().isoformat(),
     }
+
+
+async def _async_send_test(
+    runner: RuleRunner, signal: Signal, item: Occurrence
+) -> bool:
+    """Send a test signal, with values from variable providers."""
+    run = runner.signal_run(signal, item, own_context())
+    draw = PassDraw("test", [signal])
+    run.variables = {
+        **await draw.async_values(runner.hass, runner.rule, run.variables),
+        **run.variables,
+    }
+    return await async_send_signal(run)
 
 
 def draft_rule(data: dict[str, Any]) -> Rule:

@@ -18,6 +18,7 @@ from . import LaeutwerkConfigEntry
 from .const import DOMAIN
 from .issues import rule_action_refs, rule_entity_refs
 from .manager import LaeutwerkManager
+from .providers import provider_catalog
 
 
 def _rule_diagnostics(manager: LaeutwerkManager, rule_id: str) -> dict[str, Any]:
@@ -51,6 +52,14 @@ async def async_get_config_entry_diagnostics(
     return {
         **await _header(hass),
         "rules": [_rule_diagnostics(manager, rule_id) for rule_id in manager.rules],
+        "variable_providers": [
+            {
+                "key": p["key"],
+                "title": p["title"],
+                "variables": [v["name"] for v in p["variables"]],
+            }
+            for p in provider_catalog(hass)
+        ],
         "invalid_rules": manager.invalid_rules,
         "events": manager.events[:50],
     }

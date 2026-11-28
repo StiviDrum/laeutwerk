@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0-beta.6] - 2026-11-28 (beta)
+
+### Added
+- Variables from other integrations (variable provider interface, e.g.
+  Randowerk): suggestions grouped by integration, the same value for all
+  signals of one pass, health hint for unknown variables. New WebSocket
+  command `laeutwerk/variables/providers`; see `docs/VARIABLE_PROVIDERS.md`.
+
 ## [0.12.0-beta.5] - 2026-11-26 (beta)
 
 ### Fixed
